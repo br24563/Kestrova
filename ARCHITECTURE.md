@@ -99,14 +99,17 @@ New component types can be added by:
 
 ## Sign Convention
 
-The project uses the **Cartesian sign convention**:
+The project uses the **optics sign convention** (as used in optical design software like Zemax):
 
 - Light travels from left to right (z-axis)
 - Heights above the optical axis are positive (y-axis)
 - Angles measured counterclockwise from the axis are positive
-- Object distance (s): positive if object is to the left of the lens
-- Image distance (s'): positive if image is to the right of the lens
+- Object distance (s): **NEGATIVE** if object is to the left of the lens
+- Object distance (s): **POSITIVE** if object is to the right of the lens
+- Image distance (s'): **NEGATIVE** if image is to the left of the lens
+- Image distance (s'): **POSITIVE** if image is to the right of the lens
 - Focal length (f): positive for converging lenses, negative for diverging
+- Magnification (m): m = s' / s (negative = inverted)
 
 ## AI Architecture (Future)
 

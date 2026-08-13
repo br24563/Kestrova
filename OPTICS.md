@@ -4,13 +4,15 @@ This document describes the optical conventions, formulas, and assumptions used 
 
 ## Sign Convention
 
-The project uses the **Cartesian sign convention**:
+The project uses the **optics sign convention** (as used in optical design software like Zemax):
 
 - Light travels from left to right along the z-axis.
 - Ray heights above the optical axis (y-axis) are positive.
 - Ray angles measured counterclockwise from the optical axis are positive.
-- Object distance (s): positive if the object is to the **left** of the lens.
-- Image distance (s'): positive if the image is to the **right** of the lens.
+- Object distance (s): **NEGATIVE** if the object is to the **left** of the lens.
+- Object distance (s): **POSITIVE** if the object is to the **right** of the lens.
+- Image distance (s'): **NEGATIVE** if the image is to the **left** of the lens.
+- Image distance (s'): **POSITIVE** if the image is to the **right** of the lens.
 - Focal length (f): positive for **converging** lenses, negative for **diverging** lenses.
 
 ## Unit System
@@ -26,28 +28,38 @@ The project uses the **Cartesian sign convention**:
 ### Thin Lens Equation
 
 ```
-1/f = 1/s + 1/s'
+1/f = 1/s' - 1/s
 ```
 
 Where:
 - f = focal length
-- s = object distance (positive if object is to the left)
-- s' = image distance (positive if image is to the right)
+- s = object distance (NEGATIVE if object is to the left)
+- s' = image distance (POSITIVE if image is to the right)
 
 Solved for image distance:
 ```
-s' = f * s / (s - f)
+s' = f * s / (s + f)
+```
+
+Example: Object at 2f to the left (s = -2f), image at 2f to the right (s' = +2f):
+```
+1/f = 1/(2f) - 1/(-2f) = 1/(2f) + 1/(2f) = 1/f  ✓
 ```
 
 ### Magnification
 
 ```
-m = -s' / s
+m = s' / s
 ```
 
 - Negative magnification means the image is **inverted**.
 - |m| > 1 means the image is **larger** than the object.
 - |m| < 1 means the image is **smaller** than the object.
+
+Example: Object at 2f to the left, image at 2f to the right:
+```
+m = (2f) / (-2f) = -1  ✓ (inverted, same size)
+```
 
 ### F-number
 

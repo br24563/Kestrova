@@ -6,10 +6,13 @@ paraxial (small-angle) approximation. Rays are traced through thin
 lenses systems step by step, recording the ray path at each optical
 element.
 
-Sign convention (Cartesian):
+Sign convention (optics, used in optical design software):
     - Light travels from left to right (z-axis).
     - Ray height (y): positive above the optical axis.
     - Ray angle (theta): positive if ray goes upward.
+    - Object distance (s): NEGATIVE if object is to the LEFT of the lens.
+    - Image distance (s'): NEGATIVE if image is to the LEFT of the lens.
+    - Image distance (s'): POSITIVE if image is to the RIGHT of the lens.
     - Focal length: positive for converging lenses.
 
 All values are in SI base units (meters, radians).
@@ -143,6 +146,8 @@ def generate_rays(
 
     for i, y_ap in enumerate(heights):
         # Ray angle: from object point to aperture height
+        # The object distance s is negative (object to the left of the lens)
+        # in the optics sign convention, but the geometric distance is positive.
         theta = (y_ap - h) / d_obj_to_lens
 
         # Determine ray type
@@ -290,6 +295,10 @@ def calculate_paraxial_image_position(system: OpticalSystem) -> float:
     For a system of thin lenses, the image is found by sequentially
     applying the thin lens equation at each lens.
 
+    Sign convention (optics):
+        - Object distance s is NEGATIVE if the object is to the LEFT.
+        - Image distance s' is POSITIVE if the image is to the RIGHT.
+
     Args:
         system: The optical system.
 
@@ -305,21 +314,23 @@ def calculate_paraxial_image_position(system: OpticalSystem) -> float:
 
     for comp in components:
         if isinstance(comp, ThinLens):
-            # Object distance from this lens
-            s = comp.position - current_pos  # positive if object is to the left
+            # Object distance from this lens (optics convention)
+            # s < 0 if object is to the LEFT of the lens
+            s = current_pos - comp.position
 
             if abs(s) < 1e-15:
                 # Object is at the lens
                 continue
 
             # Image distance from this lens
-            s_prime = comp.focal_length * s / (s - comp.focal_length)
+            # 1/f = 1/s' - 1/s  =>  s' = f * s / (s + f)
+            s_prime = comp.focal_length * s / (s + comp.focal_length)
 
             # Update current position
             current_pos = comp.position + s_prime
             # Update current height (for off-axis objects)
             if abs(s) > 1e-15:
-                m = -s_prime / s
+                m = s_prime / s
                 current_height = current_height * m
 
     return current_pos
@@ -330,6 +341,10 @@ def calculate_paraxial_image_height(system: OpticalSystem) -> float:
     Calculate the paraxial image height for the optical system.
 
     Uses the magnification of each lens to compute the final image height.
+
+    Sign convention (optics):
+        - Object distance s is NEGATIVE if the object is to the LEFT.
+        - Magnification m = s' / s (negative = inverted).
 
     Args:
         system: The optical system.
@@ -345,11 +360,11 @@ def calculate_paraxial_image_height(system: OpticalSystem) -> float:
 
     for comp in components:
         if isinstance(comp, ThinLens):
-            s = comp.position - current_pos
+            s = current_pos - comp.position
             if abs(s) < 1e-15:
                 continue
-            s_prime = comp.focal_length * s / (s - comp.focal_length)
-            m = -s_prime / s
+            s_prime = comp.focal_length * s / (s + comp.focal_length)
+            m = s_prime / s
             current_height = current_height * m
             current_pos = comp.position + s_prime
 

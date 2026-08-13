@@ -20,6 +20,8 @@ import { ComponentEditor } from "./components/ComponentEditor";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { SpotDiagram } from "./components/SpotDiagram";
 
+const STORAGE_KEY = "ai-optical-design-engineer-system";
+
 function App() {
   // Application state
   const [system, setSystem] = useState<OpticalSystem | null>(null);
@@ -28,6 +30,7 @@ function App() {
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   // Load the default system on mount
   useEffect(() => {
@@ -151,6 +154,52 @@ function App() {
     }
   };
 
+  // Reorder a component (move up or down in the list)
+  const reorderComponent = (id: string, direction: "up" | "down") => {
+    if (!system) return;
+    const index = system.components.findIndex((c) => c.id === id);
+    if (index === -1) return;
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= system.components.length) return;
+
+    const newComponents = [...system.components];
+    [newComponents[index], newComponents[newIndex]] = [newComponents[newIndex], newComponents[index]];
+    setSystem({ ...system, components: newComponents });
+  };
+
+  // Save the current system to localStorage
+  const saveSystem = () => {
+    if (!system) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(system));
+      setSaveMessage("System saved!");
+      setTimeout(() => setSaveMessage(null), 2000);
+    } catch (err) {
+      setSaveMessage("Failed to save system");
+      setTimeout(() => setSaveMessage(null), 2000);
+    }
+  };
+
+  // Load a saved system from localStorage
+  const loadSavedSystem = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        setSaveMessage("No saved system found");
+        setTimeout(() => setSaveMessage(null), 2000);
+        return;
+      }
+      const parsed = JSON.parse(saved) as OpticalSystem;
+      setSystem(parsed);
+      setSelectedComponentId(parsed.components[0]?.id ?? null);
+      setSaveMessage("System loaded!");
+      setTimeout(() => setSaveMessage(null), 2000);
+    } catch (err) {
+      setSaveMessage("Failed to load system");
+      setTimeout(() => setSaveMessage(null), 2000);
+    }
+  };
+
   // Get the selected component
   const selectedComponent = system?.components.find(
     (c) => c.id === selectedComponentId,
@@ -184,10 +233,31 @@ function App() {
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-optical-700 to-optical-800 text-white p-4 shadow-md">
-        <h1 className="text-2xl font-bold">AI Optical Design Engineer</h1>
-        <p className="text-sm opacity-80">
-          Local-first optical design and ray-tracing simulator
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">AI Optical Design Engineer</h1>
+            <p className="text-sm opacity-80">
+              Local-first optical design and ray-tracing simulator
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={saveSystem}
+              className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onClick={loadSavedSystem}
+              className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
+            >
+              Load
+            </button>
+            {saveMessage && (
+              <span className="text-xs bg-white/20 px-2 py-1 rounded">{saveMessage}</span>
+            )}
+          </div>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -205,6 +275,7 @@ function App() {
             onUpdateAnalysisSettings={updateAnalysisSettings}
             onAddLens={addLens}
             onRemoveComponent={removeComponent}
+            onReorderComponent={reorderComponent}
           />
         </div>
 
