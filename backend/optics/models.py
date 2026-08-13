@@ -4,12 +4,14 @@ Data models for the optical design engine.
 All models use Pydantic v2 for type safety, validation, and JSON
 serialization. The models are independent of any UI framework.
 
-Sign convention (Cartesian):
+Sign convention (optics, used in optical design software):
     - Light travels from left to right (z-axis).
     - Heights above the optical axis are positive (y-axis).
     - Angles measured counterclockwise from the axis are positive.
-    - Object distance: positive if object is to the left of the lens.
-    - Image distance: positive if image is to the right of the lens.
+    - Object distance (s): NEGATIVE if object is to the LEFT of the lens.
+    - Object distance (s): POSITIVE if object is to the RIGHT of the lens.
+    - Image distance (s'): NEGATIVE if image is to the LEFT of the lens.
+    - Image distance (s'): POSITIVE if image is to the RIGHT of the lens.
     - Focal length: positive for converging, negative for diverging.
 
 All length values are in meters (SI base unit).

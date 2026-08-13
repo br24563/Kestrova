@@ -29,6 +29,7 @@ interface ComponentEditorProps {
   onUpdateAnalysisSettings: (field: string, value: number | string[]) => void;
   onAddLens: () => void;
   onRemoveComponent: (id: string) => void;
+  onReorderComponent: (id: string, direction: "up" | "down") => void;
 }
 
 export function ComponentEditor({
@@ -42,6 +43,7 @@ export function ComponentEditor({
   onUpdateAnalysisSettings,
   onAddLens,
   onRemoveComponent,
+  onReorderComponent,
 }: ComponentEditorProps) {
   const formatLensField = (label: string, field: string, value: number) => {
     return (
@@ -117,12 +119,28 @@ export function ComponentEditor({
               >
                 <div className="flex justify-between items-center">
                   <span className="font-medium">{comp.id} ({comp.type})</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRemoveComponent(comp.id); }}
-                    className="text-red-500 hover:text-red-700 text-xs"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onReorderComponent(comp.id, "up"); }}
+                      className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                      title="Move up"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onReorderComponent(comp.id, "down"); }}
+                      className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                      title="Move down"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onRemoveComponent(comp.id); }}
+                      className="text-red-500 hover:text-red-700 text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 {isLens && (
                   <div className="text-xs text-gray-500 mt-1">
@@ -211,6 +229,37 @@ export function ComponentEditor({
           <span className="text-xs text-gray-500">
             {Math.round(system.analysis_settings.aperture_fraction * 100)}%
           </span>
+        </div>
+        <div className="mb-2">
+          <label className="block text-xs text-gray-600 mb-1">Wavelength (nm)</label>
+          <input
+            type="number" min="380" max="780" step="1"
+            value={Math.round(system.analysis_settings.wavelength * 1e9)}
+            onChange={(e) => onUpdateAnalysisSettings("wavelength", parseFloat(e.target.value) / 1e9)}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+        <div className="mb-2">
+          <label className="block text-xs text-gray-600 mb-1">Ray Types</label>
+          <div className="flex flex-wrap gap-2">
+            {["chief", "marginal", "fill"].map((type) => (
+              <label key={type} className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={system.analysis_settings.ray_types.includes(type)}
+                  onChange={(e) => {
+                    const current = system.analysis_settings.ray_types;
+                    const updated = e.target.checked
+                      ? [...current, type]
+                      : current.filter((t) => t !== type);
+                    onUpdateAnalysisSettings("ray_types", updated);
+                  }}
+                  className="rounded"
+                />
+                {type}
+              </label>
+            ))}
+          </div>
         </div>
       </div>
     </div>

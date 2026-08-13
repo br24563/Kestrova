@@ -4,10 +4,12 @@ Thin lens calculations.
 This module implements the fundamental thin lens equations and the
 ray transfer matrix (ABCD matrix) method for paraxial ray tracing.
 
-Sign convention (Cartesian):
+Sign convention (optics, used in optical design software):
     - Light travels from left to right.
-    - Object distance (s): positive if object is to the LEFT of the lens.
-    - Image distance (s'): positive if image is to the RIGHT of the lens.
+    - Object distance (s): NEGATIVE if object is to the LEFT of the lens.
+    - Object distance (s): POSITIVE if object is to the RIGHT of the lens.
+    - Image distance (s'): NEGATIVE if image is to the LEFT of the lens.
+    - Image distance (s'): POSITIVE if image is to the RIGHT of the lens.
     - Focal length (f): positive for converging, negative for diverging.
     - Ray height (y): positive above the optical axis.
     - Ray angle (theta): positive if ray goes upward (counterclockwise).
@@ -21,65 +23,79 @@ from dataclasses import dataclass
 
 
 # ---------------------------------------------------------------------------
-# Thin Lens Equation: 1/f = 1/s + 1/s'
+# Thin Lens Equation: 1/f = 1/s' - 1/s
 # ---------------------------------------------------------------------------
 
 def image_distance(f: float, s: float) -> float:
     """
     Calculate the image distance for a thin lens.
 
-    Uses the thin lens equation: 1/f = 1/s + 1/s'
+    Uses the thin lens equation: 1/f = 1/s' - 1/s
+
+    Sign convention (optics):
+        - s < 0: object is to the LEFT of the lens (typical case)
+        - s > 0: object is to the RIGHT of the lens
+        - s' < 0: image is to the LEFT of the lens (virtual image)
+        - s' > 0: image is to the RIGHT of the lens (real image)
 
     Args:
         f: Focal length of the lens (meters). Positive = converging.
-        s: Object distance (meters). Positive if object is to the left.
+        s: Object distance (meters). Negative if object is to the left.
 
     Returns:
         Image distance s' (meters). Positive if image is to the right
         (real image), negative if to the left (virtual image).
 
     Raises:
-        ValueError: If s equals f (image at infinity).
+        ValueError: If s equals -f (image at infinity).
 
     Examples:
-        >>> # Object at 2f produces image at 2f
-        >>> image_distance(0.05, 0.10)
+        >>> # Object at 2f to the left produces image at 2f to the right
+        >>> image_distance(0.05, -0.10)
         0.1
         >>> # Object at infinity produces image at focal plane
-        >>> image_distance(0.05, float('inf'))
+        >>> image_distance(0.05, float('-inf'))
         0.05
     """
     if s == float('inf') or s == float('-inf'):
         # Object at infinity: image forms at the focal plane
         return f
 
-    if abs(s - f) < 1e-15:
+    if abs(s + f) < 1e-15:
         raise ValueError(
-            f"Object distance ({s}) equals focal length ({f}): "
+            f"Object distance ({s}) equals -focal length ({-f}): "
             f"image is at infinity."
         )
 
-    # s' = 1 / (1/f - 1/s) = f * s / (s - f)
-    return f * s / (s - f)
+    # From 1/f = 1/s' - 1/s:
+    #   1/s' = 1/f + 1/s = (s + f) / (f * s)
+    #   s' = f * s / (s + f)
+    return f * s / (s + f)
 
 
 def object_distance(f: float, s_prime: float) -> float:
     """
     Calculate the object distance for a thin lens.
 
-    Uses the thin lens equation: 1/f = 1/s + 1/s'
+    Uses the thin lens equation: 1/f = 1/s' - 1/s
+
+    Sign convention (optics):
+        - s < 0: object is to the LEFT of the lens (typical case)
+        - s > 0: object is to the RIGHT of the lens
+        - s' < 0: image is to the LEFT of the lens (virtual image)
+        - s' > 0: image is to the RIGHT of the lens (real image)
 
     Args:
         f: Focal length of the lens (meters).
         s_prime: Image distance (meters). Positive if image is to the right.
 
     Returns:
-        Object distance s (meters). Positive if object is to the left.
+        Object distance s (meters). Negative if object is to the left.
 
     Examples:
-        >>> # Image at 2f with f=50mm means object at 2f
+        >>> # Image at 2f to the right with f=50mm means object at 2f to the left
         >>> object_distance(0.05, 0.10)
-        0.1
+        -0.1
     """
     if s_prime == float('inf') or s_prime == float('-inf'):
         return f
@@ -90,36 +106,46 @@ def object_distance(f: float, s_prime: float) -> float:
             f"object is at infinity."
         )
 
-    # s = 1 / (1/f - 1/s') = f * s' / (s' - f)
-    return f * s_prime / (s_prime - f)
+    # From 1/f = 1/s' - 1/s:
+    #   1/s = 1/s' - 1/f = (f - s') / (s' * f)
+    #   s = s' * f / (f - s')
+    return s_prime * f / (f - s_prime)
 
 
 def focal_length(s: float, s_prime: float) -> float:
     """
     Calculate the focal length given object and image distances.
 
-    Uses the thin lens equation: 1/f = 1/s + 1/s'
+    Uses the thin lens equation: 1/f = 1/s' - 1/s
+
+    Sign convention (optics):
+        - s < 0: object is to the LEFT of the lens (typical case)
+        - s > 0: object is to the RIGHT of the lens
+        - s' < 0: image is to the LEFT of the lens (virtual image)
+        - s' > 0: image is to the RIGHT of the lens (real image)
 
     Args:
-        s: Object distance (meters).
-        s_prime: Image distance (meters).
+        s: Object distance (meters). Negative if object is to the left.
+        s_prime: Image distance (meters). Positive if image is to the right.
 
     Returns:
         Focal length f (meters).
 
     Examples:
-        >>> # Object at 2f, image at 2f => f = 1/(1/2f + 1/2f) = f
-        >>> focal_length(0.10, 0.10)
+        >>> # Object at 2f to the left, image at 2f to the right => f = 50mm
+        >>> focal_length(-0.10, 0.10)
         0.05
     """
-    if abs(s + s_prime) < 1e-15:
+    if abs(s - s_prime) < 1e-15:
         raise ValueError(
-            f"Object distance ({s}) and image distance ({s_prime}) "
-            f"sum to zero: focal length is infinite (afocal system)."
+            f"Object distance ({s}) equals image distance ({s_prime}): "
+            f"focal length is infinite (afocal system)."
         )
 
-    # f = 1 / (1/s + 1/s') = s * s' / (s + s')
-    return s * s_prime / (s + s_prime)
+    # From 1/f = 1/s' - 1/s:
+    #   1/f = (s - s') / (s' * s)
+    #   f = s' * s / (s - s')
+    return s_prime * s / (s - s_prime)
 
 
 # ---------------------------------------------------------------------------
@@ -130,40 +156,49 @@ def magnification(s: float, s_prime: float) -> float:
     """
     Calculate the transverse magnification of a thin lens.
 
-    m = -s' / s
+    m = s' / s
 
     A negative magnification means the image is inverted.
     A magnification with |m| > 1 means the image is larger than the object.
 
+    Sign convention (optics):
+        - s < 0: object is to the LEFT of the lens (typical case)
+        - s > 0: object is to the RIGHT of the lens
+        - s' < 0: image is to the LEFT of the lens (virtual image)
+        - s' > 0: image is to the RIGHT of the lens (real image)
+
     Args:
-        s: Object distance (meters).
-        s_prime: Image distance (meters).
+        s: Object distance (meters). Negative if object is to the left.
+        s_prime: Image distance (meters). Positive if image is to the right.
 
     Returns:
         Magnification (dimensionless).
 
     Examples:
-        >>> # Object at 2f, image at 2f => m = -1 (same size, inverted)
-        >>> magnification(0.10, 0.10)
+        >>> # Object at 2f to the left, image at 2f to the right => m = -1
+        >>> magnification(-0.10, 0.10)
         -1.0
-        >>> # Object at f, image at infinity => m = -inf
-        >>> magnification(0.05, float('inf'))
+        >>> # Object at f to the left, image at infinity => m = -inf
+        >>> magnification(-0.05, float('inf'))
         -inf
     """
     if s == 0:
         raise ValueError("Object distance is zero: magnification is undefined.")
-    return -s_prime / s
+    return s_prime / s
 
 
 def magnification_from_f(f: float, s: float) -> float:
     """
     Calculate magnification directly from focal length and object distance.
 
-    m = -s' / s = -f / (s - f)
+    m = s' / s = f / (s + f)
+
+    Sign convention (optics):
+        - s < 0: object is to the LEFT of the lens (typical case)
 
     Args:
         f: Focal length (meters).
-        s: Object distance (meters).
+        s: Object distance (meters). Negative if object is to the left.
 
     Returns:
         Magnification (dimensionless).
@@ -259,11 +294,16 @@ def two_lens_system_image(
 
     The image formed by the first lens becomes the object for the second lens.
 
+    Sign convention (optics):
+        - s < 0: object is to the LEFT of the first lens (typical case)
+        - s > 0: object is to the RIGHT of the first lens
+        - s' > 0: image is to the RIGHT of the last lens (real image)
+
     Args:
         f1: Focal length of the first lens (meters).
         f2: Focal length of the second lens (meters).
         d: Distance between the two lenses (meters).
-        s: Object distance from the first lens (meters, positive if left).
+        s: Object distance from the first lens (meters, negative if left).
 
     Returns:
         Tuple of (image_distance_from_lens2, total_magnification).
@@ -276,9 +316,9 @@ def two_lens_system_image(
 
     # Object distance for lens 2
     # The image from lens 1 is at position (lens1_pos + s1_prime)
-    # The object for lens 2 is at distance d - s1_prime from lens 2
-    # (positive if the image is to the left of lens 2)
-    s2 = d - s1_prime
+    # The object for lens 2 is at distance s1_prime - d from lens 2
+    # (negative if the intermediate image is to the left of lens 2)
+    s2 = s1_prime - d
 
     # If s2 is very close to zero, the image is at the lens
     if abs(s2) < 1e-15:

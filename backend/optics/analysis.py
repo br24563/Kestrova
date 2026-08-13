@@ -12,6 +12,12 @@ This module computes the key optical properties of an optical system:
 
 All calculations use the paraxial (first-order) approximation.
 All values are in SI base units (meters, radians).
+
+Sign convention (optics, used in optical design software):
+    - Object distance (s): NEGATIVE if object is to the LEFT of the lens.
+    - Image distance (s'): NEGATIVE if image is to the LEFT of the lens.
+    - Image distance (s'): POSITIVE if image is to the RIGHT of the lens.
+    - Magnification: m = s' / s (negative = inverted).
 """
 
 import math
@@ -184,11 +190,15 @@ def object_distance(system: OpticalSystem) -> float:
     """
     Calculate the object distance from the first lens.
 
+    Sign convention (optics):
+        - Returns NEGATIVE if the object is to the LEFT of the first lens.
+        - Returns POSITIVE if the object is to the RIGHT of the first lens.
+
     Args:
         system: The optical system.
 
     Returns:
-        Object distance (meters). Positive if object is to the left
+        Object distance (meters). Negative if object is to the left
         of the first lens.
     """
     lenses = sorted(
@@ -199,12 +209,16 @@ def object_distance(system: OpticalSystem) -> float:
         return 0.0
 
     first_lens = lenses[0]
-    return first_lens.position - system.object.position
+    return system.object.position - first_lens.position
 
 
 def image_distance(system: OpticalSystem) -> float:
     """
     Calculate the image distance from the last lens.
+
+    Sign convention (optics):
+        - Returns POSITIVE if the image is to the RIGHT of the last lens.
+        - Returns NEGATIVE if the image is to the LEFT of the last lens.
 
     Args:
         system: The optical system.
@@ -312,7 +326,8 @@ def system_numerical_aperture(system: OpticalSystem) -> float:
     if abs(s) < 1e-15:
         return 0.0
 
-    # Half-angle: theta = arctan(D/2 / s)
+    # Half-angle: theta = arctan(D/2 / |s|)
+    # Use absolute value of s since it's a geometric angle
     theta = math.atan(D / 2.0 / abs(s))
     n = refractive_index("air")
 
@@ -368,6 +383,7 @@ def analyze_system(
 
     # Determine if image is real
     # Image is real if it's on the opposite side of the last lens from the object
+    # In optics convention: image is real if s' > 0 (to the right of the last lens)
     is_real = img_dist > 0
 
     # Image is inverted if magnification is negative

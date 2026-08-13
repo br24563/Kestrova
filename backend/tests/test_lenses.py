@@ -3,6 +3,11 @@ Tests for thin lens calculations.
 
 These tests verify the fundamental thin lens equations against
 known physical cases. All values are in SI base units (meters).
+
+Sign convention (optics):
+    - Object distance (s): NEGATIVE if object is to the LEFT of the lens.
+    - Image distance (s'): NEGATIVE if image is to the LEFT of the lens.
+    - Image distance (s'): POSITIVE if image is to the RIGHT of the lens.
 """
 
 import math
@@ -20,53 +25,53 @@ from optics.lenses import (
 
 
 # ---------------------------------------------------------------------------
-# Thin Lens Equation: 1/f = 1/s + 1/s'
+# Thin Lens Equation: 1/f = 1/s' - 1/s
 # ---------------------------------------------------------------------------
 
 class TestImageDistance:
     """Tests for the image_distance function."""
 
     def test_object_at_2f_produces_image_at_2f(self):
-        """Object at 2f should produce image at 2f (symmetric case)."""
+        """Object at 2f to the left should produce image at 2f to the right."""
         f = 0.050  # 50 mm
-        s = 0.100  # 100 mm = 2f
+        s = -0.100  # -100 mm = -2f (object to the left)
         s_prime = image_distance(f, s)
         assert s_prime == pytest.approx(0.100, rel=1e-10)
 
     def test_object_at_infinity_produces_image_at_focal_plane(self):
         """Object at infinity should produce image at the focal plane."""
         f = 0.050  # 50 mm
-        s = float('inf')
+        s = float('-inf')
         s_prime = image_distance(f, s)
         assert s_prime == pytest.approx(0.050, rel=1e-10)
 
     def test_object_at_f_produces_image_at_infinity(self):
-        """Object at focal point should produce image at infinity."""
+        """Object at focal point to the left should produce image at infinity."""
         f = 0.050  # 50 mm
-        s = 0.050  # f
+        s = -0.050  # -f (object at focal point to the left)
         with pytest.raises(ValueError, match="infinity"):
             image_distance(f, s)
 
     def test_object_inside_f_produces_virtual_image(self):
         """Object inside focal length should produce a virtual image."""
         f = 0.050  # 50 mm
-        s = 0.025  # f/2
+        s = -0.025  # -f/2 (object between lens and focal point)
         s_prime = image_distance(f, s)
-        assert s_prime < 0  # Virtual image (negative)
+        assert s_prime < 0  # Virtual image (to the left, negative)
         assert s_prime == pytest.approx(-0.050, rel=1e-10)
 
     def test_diverging_lens(self):
         """Diverging lens (f < 0) should produce virtual image."""
         f = -0.050  # -50 mm
-        s = 0.100  # 100 mm
+        s = -0.100  # -100 mm (object to the left)
         s_prime = image_distance(f, s)
-        assert s_prime < 0  # Virtual image
+        assert s_prime < 0  # Virtual image (to the left)
         assert s_prime == pytest.approx(-0.033333, rel=1e-4)
 
     def test_object_at_3f_produces_image_at_1_5f(self):
-        """Object at 3f should produce image at 1.5f."""
+        """Object at 3f to the left should produce image at 1.5f to the right."""
         f = 0.050  # 50 mm
-        s = 0.150  # 150 mm = 3f
+        s = -0.150  # -150 mm = -3f (object to the left)
         s_prime = image_distance(f, s)
         assert s_prime == pytest.approx(0.075, rel=1e-10)  # 1.5f
 
@@ -75,12 +80,14 @@ class TestObjectDistance:
     """Tests for the object_distance function."""
 
     def test_image_at_2f_produces_object_at_2f(self):
+        """Image at 2f to the right => object at 2f to the left."""
         f = 0.050
         s_prime = 0.100
         s = object_distance(f, s_prime)
-        assert s == pytest.approx(0.100, rel=1e-10)
+        assert s == pytest.approx(-0.100, rel=1e-10)
 
     def test_image_at_f_produces_object_at_infinity(self):
+        """Image at focal point => object at infinity."""
         f = 0.050
         s_prime = 0.050
         with pytest.raises(ValueError, match="infinity"):
@@ -91,14 +98,15 @@ class TestFocalLength:
     """Tests for the focal_length function."""
 
     def test_focal_length_from_2f_distances(self):
-        """Object at 2f, image at 2f => f = s/2."""
-        s = 0.100
+        """Object at 2f to the left, image at 2f to the right => f = s/2."""
+        s = -0.100
         s_prime = 0.100
         f = focal_length(s, s_prime)
         assert f == pytest.approx(0.050, rel=1e-10)
 
     def test_focal_length_from_3f_and_1_5f(self):
-        s = 0.150
+        """Object at 3f to the left, image at 1.5f to the right => f = 50mm."""
+        s = -0.150
         s_prime = 0.075
         f = focal_length(s, s_prime)
         assert f == pytest.approx(0.050, rel=1e-10)
@@ -112,8 +120,8 @@ class TestMagnification:
     """Tests for magnification calculations."""
 
     def test_magnification_at_2f_is_negative_one(self):
-        """Object at 2f, image at 2f => m = -1 (inverted, same size)."""
-        s = 0.100
+        """Object at 2f to the left, image at 2f to the right => m = -1."""
+        s = -0.100
         s_prime = 0.100
         m = magnification(s, s_prime)
         assert m == pytest.approx(-1.0, rel=1e-10)
@@ -121,7 +129,7 @@ class TestMagnification:
     def test_magnification_sign_is_negative_for_real_image(self):
         """Real image should have negative magnification (inverted)."""
         f = 0.050
-        s = 0.100  # 2f
+        s = -0.100  # -2f (object to the left)
         s_prime = image_distance(f, s)
         m = magnification(s, s_prime)
         assert m < 0
@@ -129,21 +137,22 @@ class TestMagnification:
     def test_magnification_sign_is_positive_for_virtual_image(self):
         """Virtual image (object inside f) should have positive magnification."""
         f = 0.050
-        s = 0.025  # f/2
+        s = -0.025  # -f/2 (object between lens and focal point)
         s_prime = image_distance(f, s)
         m = magnification(s, s_prime)
         assert m > 0
 
     def test_magnification_from_f_at_2f(self):
+        """Object at 2f to the left => m = -1."""
         f = 0.050
-        s = 0.100
+        s = -0.100
         m = magnification_from_f(f, s)
         assert m == pytest.approx(-1.0, rel=1e-10)
 
     def test_magnification_at_3f(self):
-        """Object at 3f => m = -0.5 (inverted, half size)."""
+        """Object at 3f to the left => m = -0.5 (inverted, half size)."""
         f = 0.050
-        s = 0.150  # 3f
+        s = -0.150  # -3f (object to the left)
         s_prime = image_distance(f, s)
         m = magnification(s, s_prime)
         assert m == pytest.approx(-0.5, rel=1e-10)
@@ -201,11 +210,11 @@ class TestTwoLensSystem:
         f1 = 0.050
         f2 = 0.050
         d = 0.050  # 50mm apart
-        s = 0.100  # Object at 100mm from first lens
+        s = -0.100  # Object at 100mm to the left of first lens
         s_prime, m = two_lens_system_image(f1, f2, d, s)
         # Image should be at 25mm from second lens
         # (object at 2f of lens 1 => image at 2f, which is 50mm past lens 2,
-        #  so virtual object for lens 2 at -50mm, image at 25mm)
+        #  so virtual object for lens 2 at +50mm, image at 25mm)
         assert s_prime == pytest.approx(0.025, rel=1e-10)
         # Magnification: m1=-1, m2=0.5, m_total=-0.5
         assert m == pytest.approx(-0.5, rel=1e-10)

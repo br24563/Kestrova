@@ -210,7 +210,7 @@ class TestParaxialImage:
     def test_single_lens_image_position(self):
         """Image position for a single lens should match thin lens equation."""
         f = 0.050
-        s = 0.100  # Object at 2f
+        # Object at 2f to the left of the lens (s = -2f = -0.100)
         system = OpticalSystem(
             components=[
                 ThinLens(
@@ -232,7 +232,7 @@ class TestParaxialImage:
     def test_single_lens_image_height(self):
         """Image height should match magnification * object height."""
         f = 0.050
-        s = 0.100  # Object at 2f => m = -1
+        # Object at 2f to the left of the lens => m = -1
         system = OpticalSystem(
             components=[
                 ThinLens(

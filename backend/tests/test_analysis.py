@@ -153,12 +153,13 @@ class TestDistances:
     """Tests for distance calculations."""
 
     def test_object_distance(self):
-        """Object distance should be lens_pos - obj_pos."""
+        """Object distance should be negative when object is to the left."""
         system = make_single_lens_system(
             f=0.050, obj_pos=0.0, lens_pos=0.100,
         )
         s = object_distance(system)
-        assert s == pytest.approx(0.100, rel=1e-10)
+        # Object is to the LEFT of the lens => s < 0 (optics convention)
+        assert s == pytest.approx(-0.100, rel=1e-10)
 
     def test_image_distance(self):
         """Image distance should be image_pos - lens_pos."""
@@ -233,7 +234,8 @@ class TestAnalyzeSystem:
 
         assert result.effective_focal_length == pytest.approx(0.050, rel=1e-10)
         assert result.magnification == pytest.approx(-1.0, rel=1e-10)
-        assert result.object_distance == pytest.approx(0.100, rel=1e-10)
+        # Object is to the LEFT of the lens => s < 0 (optics convention)
+        assert result.object_distance == pytest.approx(-0.100, rel=1e-10)
         assert result.image_distance == pytest.approx(0.100, rel=1e-10)
         assert result.f_number == pytest.approx(2.0, rel=1e-10)
         assert result.aperture_diameter == pytest.approx(0.025, rel=1e-10)

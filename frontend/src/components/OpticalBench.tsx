@@ -80,7 +80,7 @@ export function OpticalBench({ system, rayResult, analysis }: OpticalBenchProps)
     setScale(Math.max(0.1, Math.min(5, scale + delta)));
   };
 
-  const drawLens = (comp: ThinLens) => {
+    const drawLens = (comp: ThinLens) => {
     const x = toSvgX(comp.position);
     const lensWidth = 20;
     const halfHeight = COMPONENT_HEIGHT / 2;
@@ -88,16 +88,16 @@ export function OpticalBench({ system, rayResult, analysis }: OpticalBenchProps)
     return (
       <g key={comp.id} className="lens">
         <polygon
-          points={`${x - lensWidth},${toSvgY(halfHeight)} ${x + lensWidth},${toSvgY(halfHeight)} ${x},${toSvgY(-halfHeight)}`}
+          points={`${x - lensWidth},${OPTICAL_AXIS_Y - halfHeight} ${x + lensWidth},${OPTICAL_AXIS_Y - halfHeight} ${x},${OPTICAL_AXIS_Y + halfHeight}`}
           fill="#3b82f6"
           fillOpacity={0.3}
           stroke="#3b82f6"
           strokeWidth={2}
         />
-        <text x={x} y={toSvgY(-halfHeight) - 10} textAnchor="middle" fontSize={12} fill="#374151">
+        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 10} textAnchor="middle" fontSize={12} fill="#374151">
           {comp.id}
         </text>
-        <text x={x} y={toSvgY(halfHeight) + 20} textAnchor="middle" fontSize={10} fill="#6b7280">
+        <text x={x} y={OPTICAL_AXIS_Y + halfHeight + 20} textAnchor="middle" fontSize={10} fill="#6b7280">
           f={toMM(comp.focal_length).toFixed(0)}mm
         </text>
         <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
@@ -140,14 +140,14 @@ export function OpticalBench({ system, rayResult, analysis }: OpticalBenchProps)
       <g key="image_plane" className="image-plane">
         <line
           x1={x}
-          y1={toSvgY(-halfHeight)}
+          y1={OPTICAL_AXIS_Y - halfHeight}
           x2={x}
-          y2={toSvgY(halfHeight)}
+          y2={OPTICAL_AXIS_Y + halfHeight}
           stroke="#8b5cf6"
           strokeWidth={2}
           strokeDasharray="5,3"
         />
-        <text x={x + 5} y={toSvgY(-halfHeight) - 5} textAnchor="start" fontSize={12} fill="#8b5cf6">
+        <text x={x + 5} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="start" fontSize={12} fill="#8b5cf6">
           Image Plane
         </text>
         <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
