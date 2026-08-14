@@ -15,6 +15,8 @@ import type {
   OpticalSystem,
   OpticalComponent,
   ThinLens,
+  ApertureStop,
+  Mirror,
   LengthUnit,
 } from "../types";
 import { fromMeters, toMeters, LENGTH_UNIT_LABELS } from "../types";
@@ -30,6 +32,8 @@ interface ComponentEditorProps {
   onUpdateImagePlane: (position: number) => void;
   onUpdateAnalysisSettings: (field: string, value: number | string[]) => void;
   onAddLens: () => void;
+  onAddAperture: () => void;
+  onAddMirror: () => void;
   onRemoveComponent: (id: string) => void;
   onReorderComponent: (id: string, direction: "up" | "down") => void;
 }
@@ -45,6 +49,8 @@ export function ComponentEditor({
   onUpdateImagePlane,
   onUpdateAnalysisSettings,
   onAddLens,
+  onAddAperture,
+  onAddMirror,
   onRemoveComponent,
   onReorderComponent,
 }: ComponentEditorProps) {
@@ -111,12 +117,26 @@ export function ComponentEditor({
       <div className="mb-4">
         <div className="flex justify-between items-center mb-2">
           <h3 className="text-sm font-medium text-gray-700">Components</h3>
-          <button
-            onClick={onAddLens}
-            className="px-2 py-1 bg-optical-600 text-white text-xs rounded hover:bg-optical-700"
-          >
-            + Add Lens
-          </button>
+          <div className="flex gap-1">
+            <button
+              onClick={onAddLens}
+              className="px-2 py-1 bg-optical-600 text-white text-xs rounded hover:bg-optical-700"
+            >
+              + Lens
+            </button>
+            <button
+              onClick={onAddAperture}
+              className="px-2 py-1 bg-optical-600 text-white text-xs rounded hover:bg-optical-700"
+            >
+              + Aperture
+            </button>
+            <button
+              onClick={onAddMirror}
+              className="px-2 py-1 bg-optical-600 text-white text-xs rounded hover:bg-optical-700"
+            >
+              + Mirror
+            </button>
+          </div>
         </div>
         <div className="space-y-1">
           {system.components.map((comp) => {
@@ -203,6 +223,16 @@ export function ComponentEditor({
                   <option value="FusedSilica">Fused Silica</option>
                 </select>
               </div>
+            </>
+          )}
+          {selectedComponent.type === "aperture" && (
+            <>
+              {formatLensField("Diameter", "diameter", (selectedComponent as ApertureStop).diameter)}
+            </>
+          )}
+          {selectedComponent.type === "mirror" && (
+            <>
+              {formatLensField("Width", "width", (selectedComponent as Mirror).width)}
             </>
           )}
         </div>
