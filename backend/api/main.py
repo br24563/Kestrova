@@ -32,6 +32,12 @@ from optics.models import (
 from optics.systems import create_default_system, validate_system
 from optics.rays import trace_system
 from optics.analysis import analyze_system
+from persistence import (
+    save_system as db_save_system,
+    list_systems as db_list_systems,
+    get_system as db_get_system,
+    delete_system as db_delete_system,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +62,29 @@ class SystemResponse(BaseModel):
     """Response containing the optical system and validation warnings."""
     system: OpticalSystem
     warnings: list[str] = Field(default_factory=list)
+
+
+class SaveSystemRequest(BaseModel):
+    """Request body for saving a system to the database."""
+    name: str
+    system: OpticalSystem
+
+
+class SystemMetadata(BaseModel):
+    """Metadata for a saved system (without the full system JSON)."""
+    id: int
+    name: str
+    created_at: str
+    updated_at: str
+
+
+class SavedSystemResponse(BaseModel):
+    """A saved system with its metadata and JSON."""
+    id: int
+    name: str
+    system_json: str
+    created_at: str
+    updated_at: str
 
 
 # ---------------------------------------------------------------------------
@@ -174,3 +203,82 @@ async def validate(system: OpticalSystem):
     """
     warnings = validate_system(system)
     return SystemResponse(system=system, warnings=warnings)
+
+
+# ---------------------------------------------------------------------------
+# Persistence Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/systems", response_model=list[SystemMetadata])
+async def list_saved_systems():
+    """
+    List all saved optical system projects.
+
+    Returns metadata (id, name, timestamps) for each saved system,
+    ordered by most recently updated first.
+    """
+    return db_list_systems()
+
+
+@app.post("/api/systems", response_model=SystemMetadata)
+async def save_system(request: SaveSystemRequest):
+    """
+    Save an optical system project to the database.
+
+    If a system with the same name already exists, it is updated.
+
+    Args:
+        request: Contains the project name and the optical system.
+
+    Returns:
+        Metadata for the saved system.
+    """
+    system_json = request.system.model_dump_json()
+    system_id = db_save_system(request.name, system_json)
+    saved = db_get_system(system_id)
+    return SystemMetadata(
+        id=saved["id"],
+        name=saved["name"],
+        created_at=saved["created_at"],
+        updated_at=saved["updated_at"],
+    )
+
+
+@app.get("/api/systems/{system_id}", response_model=SavedSystemResponse)
+async def load_system(system_id: int):
+    """
+    Load a saved optical system project by id.
+
+    Args:
+        system_id: The id of the saved system.
+
+    Returns:
+        The saved system including its JSON representation.
+
+    Raises:
+        HTTPException: If the system id does not exist.
+    """
+    saved = db_get_system(system_id)
+    if saved is None:
+        raise HTTPException(status_code=404, detail=f"System {system_id} not found.")
+    return SavedSystemResponse(**saved)
+
+
+@app.delete("/api/systems/{system_id}")
+async def delete_system(system_id: int):
+    """
+    Delete a saved optical system project by id.
+
+    Args:
+        system_id: The id of the saved system.
+
+    Returns:
+        A confirmation message.
+
+    Raises:
+        HTTPException: If the system id does not exist.
+    """
+    deleted = db_delete_system(system_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"System {system_id} not found.")
+    return {"message": f"System {system_id} deleted."}

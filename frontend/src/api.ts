@@ -15,6 +15,22 @@ import type {
   AnalyzeRequest,
 } from "./types";
 
+// Persistence types
+export interface SystemMetadata {
+  id: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedSystemResponse {
+  id: number;
+  name: string;
+  system_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
 const API_BASE = "/api";
 
 /**
@@ -105,4 +121,56 @@ export async function validateSystem(
     throw new Error(`Failed to validate system: ${response.statusText}`);
   }
   return response.json();
+}
+
+/**
+ * List all saved optical system projects.
+ */
+export async function listSystems(): Promise<SystemMetadata[]> {
+  const response = await fetch(`${API_BASE}/systems`);
+  if (!response.ok) {
+    throw new Error(`Failed to list systems: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Save an optical system project to the database.
+ */
+export async function saveSystem(
+  name: string,
+  system: OpticalSystem,
+): Promise<SystemMetadata> {
+  const response = await fetch(`${API_BASE}/systems`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, system }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to save system: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Load a saved optical system project by id.
+ */
+export async function loadSystem(id: number): Promise<SavedSystemResponse> {
+  const response = await fetch(`${API_BASE}/systems/${id}`);
+  if (!response.ok) {
+    throw new Error(`Failed to load system: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Delete a saved optical system project by id.
+ */
+export async function deleteSystem(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/systems/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to delete system: ${response.statusText}`);
+  }
 }
