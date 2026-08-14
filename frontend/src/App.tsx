@@ -11,6 +11,8 @@ import type {
   OpticalSystem,
   OpticalComponent,
   ThinLens,
+  ApertureStop,
+  Mirror,
   RayTraceResult,
   AnalysisResult,
   LengthUnit,
@@ -142,6 +144,36 @@ function App() {
     setSystem({
       ...system,
       components: [...system.components, newLens],
+    });
+  };
+
+  // Add a new aperture stop
+  const addAperture = () => {
+    if (!system) return;
+    const newAperture: ApertureStop = {
+      type: "aperture",
+      id: `aperture_${system.components.length + 1}`,
+      position: 0.200,
+      diameter: 0.025,
+    };
+    setSystem({
+      ...system,
+      components: [...system.components, newAperture],
+    });
+  };
+
+  // Add a new mirror
+  const addMirror = () => {
+    if (!system) return;
+    const newMirror: Mirror = {
+      type: "mirror",
+      id: `mirror_${system.components.length + 1}`,
+      position: 0.200,
+      width: 0.050,
+    };
+    setSystem({
+      ...system,
+      components: [...system.components, newMirror],
     });
   };
 
@@ -290,6 +322,8 @@ function App() {
             onUpdateImagePlane={updateImagePlane}
             onUpdateAnalysisSettings={updateAnalysisSettings}
             onAddLens={addLens}
+            onAddAperture={addAperture}
+            onAddMirror={addMirror}
             onRemoveComponent={removeComponent}
             onReorderComponent={reorderComponent}
           />

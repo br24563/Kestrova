@@ -12,7 +12,7 @@
  */
 
 import { useRef, useState } from "react";
-import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, LengthUnit } from "../types";
+import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, ApertureStop, Mirror, LengthUnit } from "../types";
 import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 
 interface OpticalBenchProps {
@@ -129,6 +129,54 @@ export function OpticalBench({ system, rayResult, analysis, displayUnit }: Optic
         </text>
         <text x={x - 10} y={OPTICAL_AXIS_Y + 35} textAnchor="end" fontSize={10} fill="#9ca3af">
           {fromMeters(system.object.position, displayUnit).toFixed(1)}{unitLabel}
+        </text>
+      </g>
+    );
+  };
+
+  const drawAperture = (comp: ApertureStop) => {
+    const x = toSvgX(comp.position);
+    const halfHeight = COMPONENT_HEIGHT / 2;
+
+    return (
+      <g key={comp.id} className="aperture">
+        <line
+          x1={x}
+          y1={OPTICAL_AXIS_Y - halfHeight}
+          x2={x}
+          y2={OPTICAL_AXIS_Y + halfHeight}
+          stroke="#f59e0b"
+          strokeWidth={3}
+        />
+        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="middle" fontSize={11} fill="#f59e0b">
+          {comp.id}
+        </text>
+        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
+          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
+        </text>
+      </g>
+    );
+  };
+
+  const drawMirror = (comp: Mirror) => {
+    const x = toSvgX(comp.position);
+    const halfHeight = COMPONENT_HEIGHT / 2;
+
+    return (
+      <g key={comp.id} className="mirror">
+        <line
+          x1={x}
+          y1={OPTICAL_AXIS_Y - halfHeight}
+          x2={x}
+          y2={OPTICAL_AXIS_Y + halfHeight}
+          stroke="#64748b"
+          strokeWidth={4}
+        />
+        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="middle" fontSize={11} fill="#64748b">
+          {comp.id}
+        </text>
+        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
+          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
         </text>
       </g>
     );
@@ -259,6 +307,12 @@ export function OpticalBench({ system, rayResult, analysis, displayUnit }: Optic
           {system.components
             .filter((c): c is ThinLens => c.type === "thin_lens")
             .map((comp) => drawLens(comp))}
+          {system.components
+            .filter((c): c is ApertureStop => c.type === "aperture")
+            .map((comp) => drawAperture(comp))}
+          {system.components
+            .filter((c): c is Mirror => c.type === "mirror")
+            .map((comp) => drawMirror(comp))}
           {drawImagePlane()}
           {drawImageIndicator()}
           {drawRays()}
