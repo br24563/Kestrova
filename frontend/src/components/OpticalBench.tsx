@@ -12,13 +12,14 @@
  */
 
 import { useRef, useState } from "react";
-import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens } from "../types";
-import { toMM } from "../types";
+import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, LengthUnit } from "../types";
+import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 
 interface OpticalBenchProps {
   system: OpticalSystem;
   rayResult: RayTraceResult | null;
   analysis: AnalysisResult | null;
+  displayUnit: LengthUnit;
 }
 
 const RAY_COLORS: Record<string, string> = {
@@ -32,7 +33,8 @@ const MARGIN_LEFT = 60;
 const OPTICAL_AXIS_Y = 200;
 const COMPONENT_HEIGHT = 120;
 
-export function OpticalBench({ system, rayResult, analysis }: OpticalBenchProps) {
+export function OpticalBench({ system, rayResult, analysis, displayUnit }: OpticalBenchProps) {
+  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
   const svgRef = useRef<SVGSVGElement>(null);
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
@@ -98,10 +100,10 @@ export function OpticalBench({ system, rayResult, analysis }: OpticalBenchProps)
           {comp.id}
         </text>
         <text x={x} y={OPTICAL_AXIS_Y + halfHeight + 20} textAnchor="middle" fontSize={10} fill="#6b7280">
-          f={toMM(comp.focal_length).toFixed(0)}mm
+          f={fromMeters(comp.focal_length, displayUnit).toFixed(1)}{unitLabel}
         </text>
         <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {toMM(comp.position).toFixed(0)}mm
+          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
         </text>
       </g>
     );
@@ -126,7 +128,7 @@ export function OpticalBench({ system, rayResult, analysis }: OpticalBenchProps)
           Object
         </text>
         <text x={x - 10} y={OPTICAL_AXIS_Y + 35} textAnchor="end" fontSize={10} fill="#9ca3af">
-          {toMM(system.object.position).toFixed(0)}mm
+          {fromMeters(system.object.position, displayUnit).toFixed(1)}{unitLabel}
         </text>
       </g>
     );
@@ -151,7 +153,7 @@ export function OpticalBench({ system, rayResult, analysis }: OpticalBenchProps)
           Image Plane
         </text>
         <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {toMM(system.image_plane.position).toFixed(0)}mm
+          {fromMeters(system.image_plane.position, displayUnit).toFixed(1)}{unitLabel}
         </text>
       </g>
     );

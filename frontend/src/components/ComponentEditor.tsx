@@ -15,13 +15,15 @@ import type {
   OpticalSystem,
   OpticalComponent,
   ThinLens,
+  LengthUnit,
 } from "../types";
-import { toMM } from "../types";
+import { fromMeters, toMeters, LENGTH_UNIT_LABELS } from "../types";
 
 interface ComponentEditorProps {
   system: OpticalSystem;
   selectedComponent: OpticalComponent | null;
   selectedComponentId: string | null;
+  displayUnit: LengthUnit;
   onSelectComponent: (id: string | null) => void;
   onUpdateComponent: (id: string, field: string, value: number | string) => void;
   onUpdateObject: (field: string, value: number) => void;
@@ -36,6 +38,7 @@ export function ComponentEditor({
   system,
   selectedComponent,
   selectedComponentId,
+  displayUnit,
   onSelectComponent,
   onUpdateComponent,
   onUpdateObject,
@@ -45,19 +48,23 @@ export function ComponentEditor({
   onRemoveComponent,
   onReorderComponent,
 }: ComponentEditorProps) {
+  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
+
   const formatLensField = (label: string, field: string, value: number) => {
     return (
       <div key={field} className="mb-3">
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          {label} (mm)
+          {label} ({unitLabel})
         </label>
         <input
           type="number"
-          step="0.1"
-          value={toMM(value)}
+          step="any"
+          value={fromMeters(value, displayUnit)}
           onChange={(e) => {
             const val = parseFloat(e.target.value);
-            onUpdateComponent(selectedComponent!.id, field, val / 1000);
+            if (!isNaN(val)) {
+              onUpdateComponent(selectedComponent!.id, field, toMeters(val, displayUnit));
+            }
           }}
           className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
         />
@@ -75,20 +82,26 @@ export function ComponentEditor({
       <div className="mb-4 p-3 bg-gray-50 rounded border">
         <h3 className="text-sm font-medium text-gray-700 mb-2">Object</h3>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Position (mm)</label>
+          <label className="block text-xs text-gray-600 mb-1">Position ({unitLabel})</label>
           <input
-            type="number" step="1"
-            value={toMM(system.object.position)}
-            onChange={(e) => onUpdateObject("position", parseFloat(e.target.value) / 1000)}
+            type="number" step="any"
+            value={fromMeters(system.object.position, displayUnit)}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!isNaN(val)) onUpdateObject("position", toMeters(val, displayUnit));
+            }}
             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
           />
         </div>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Height (mm)</label>
+          <label className="block text-xs text-gray-600 mb-1">Height ({unitLabel})</label>
           <input
-            type="number" step="0.1"
-            value={toMM(system.object.height)}
-            onChange={(e) => onUpdateObject("height", parseFloat(e.target.value) / 1000)}
+            type="number" step="any"
+            value={fromMeters(system.object.height, displayUnit)}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!isNaN(val)) onUpdateObject("height", toMeters(val, displayUnit));
+            }}
             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
           />
         </div>
@@ -144,8 +157,8 @@ export function ComponentEditor({
                 </div>
                 {isLens && (
                   <div className="text-xs text-gray-500 mt-1">
-                    f={toMM((comp as ThinLens).focal_length).toFixed(0)}mm,
-                    D={toMM((comp as ThinLens).aperture_diameter).toFixed(0)}mm
+                    f={fromMeters((comp as ThinLens).focal_length, displayUnit).toFixed(1)}{unitLabel},
+                    D={fromMeters((comp as ThinLens).aperture_diameter, displayUnit).toFixed(1)}{unitLabel}
                   </div>
                 )}
               </div>
@@ -161,11 +174,14 @@ export function ComponentEditor({
             Properties: {selectedComponent.id}
           </h3>
           <div className="mb-2">
-            <label className="block text-xs text-gray-600 mb-1">Position (mm)</label>
+            <label className="block text-xs text-gray-600 mb-1">Position ({unitLabel})</label>
             <input
-              type="number" step="1"
-              value={toMM(selectedComponent.position)}
-              onChange={(e) => onUpdateComponent(selectedComponent.id, "position", parseFloat(e.target.value) / 1000)}
+              type="number" step="any"
+              value={fromMeters(selectedComponent.position, displayUnit)}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val)) onUpdateComponent(selectedComponent.id, "position", toMeters(val, displayUnit));
+              }}
               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
             />
           </div>
@@ -196,11 +212,14 @@ export function ComponentEditor({
       <div className="mb-4 p-3 bg-gray-50 rounded border">
         <h3 className="text-sm font-medium text-gray-700 mb-2">Image Plane</h3>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Position (mm)</label>
+          <label className="block text-xs text-gray-600 mb-1">Position ({unitLabel})</label>
           <input
-            type="number" step="1"
-            value={toMM(system.image_plane.position)}
-            onChange={(e) => onUpdateImagePlane(parseFloat(e.target.value) / 1000)}
+            type="number" step="any"
+            value={fromMeters(system.image_plane.position, displayUnit)}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!isNaN(val)) onUpdateImagePlane(toMeters(val, displayUnit));
+            }}
             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
           />
         </div>

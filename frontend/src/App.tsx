@@ -13,12 +13,14 @@ import type {
   ThinLens,
   RayTraceResult,
   AnalysisResult,
+  LengthUnit,
 } from "./types";
 import { getDefaultSystem, traceRays, analyzeSystem } from "./api";
 import { OpticalBench } from "./components/OpticalBench";
 import { ComponentEditor } from "./components/ComponentEditor";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { SpotDiagram } from "./components/SpotDiagram";
+import { DEFAULT_LENGTH_UNIT, LENGTH_UNIT_LABELS } from "./types";
 
 const STORAGE_KEY = "ai-optical-design-engineer-system";
 
@@ -31,6 +33,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [displayUnit, setDisplayUnit] = useState<LengthUnit>(DEFAULT_LENGTH_UNIT);
 
   // Load the default system on mount
   useEffect(() => {
@@ -241,6 +244,18 @@ function App() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <label className="text-xs opacity-80">Units:</label>
+            <select
+              value={displayUnit}
+              onChange={(e) => setDisplayUnit(e.target.value as LengthUnit)}
+              className="px-2 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium text-white border border-white/30"
+            >
+              {(Object.keys(LENGTH_UNIT_LABELS) as LengthUnit[]).map((u) => (
+                <option key={u} value={u} className="text-gray-800">
+                  {LENGTH_UNIT_LABELS[u]}
+                </option>
+              ))}
+            </select>
             <button
               onClick={saveSystem}
               className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
@@ -268,6 +283,7 @@ function App() {
             system={system}
             selectedComponent={selectedComponent ?? null}
             selectedComponentId={selectedComponentId}
+            displayUnit={displayUnit}
             onSelectComponent={setSelectedComponentId}
             onUpdateComponent={updateComponent}
             onUpdateObject={updateObject}
@@ -285,13 +301,14 @@ function App() {
             system={system}
             rayResult={rayResult}
             analysis={analysis}
+            displayUnit={displayUnit}
           />
         </div>
 
         {/* Right Panel: Analysis & Spot Diagram */}
         <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
-          <AnalysisPanel analysis={analysis} system={system} />
-          <SpotDiagram analysis={analysis} />
+          <AnalysisPanel analysis={analysis} system={system} displayUnit={displayUnit} />
+          <SpotDiagram analysis={analysis} displayUnit={displayUnit} />
         </div>
       </div>
 

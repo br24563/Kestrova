@@ -166,6 +166,41 @@ export const M_TO_MM = 1000;
 export const NM_TO_M = 1e-9;
 export const M_TO_NM = 1e9;
 
+// Supported display units for length. Each maps to its factor TO meters.
+export type LengthUnit = "nm" | "um" | "mm" | "cm" | "m";
+
+export const LENGTH_UNIT_FACTORS: Record<LengthUnit, number> = {
+  nm: 1e-9,
+  um: 1e-6,
+  mm: 1e-3,
+  cm: 1e-2,
+  m: 1.0,
+};
+
+export const LENGTH_UNIT_LABELS: Record<LengthUnit, string> = {
+  nm: "nm",
+  um: "μm",
+  mm: "mm",
+  cm: "cm",
+  m: "m",
+};
+
+export const DEFAULT_LENGTH_UNIT: LengthUnit = "mm";
+
+/**
+ * Convert a value in meters to the given display unit.
+ */
+export function fromMeters(meters: number, unit: LengthUnit): number {
+  return meters / LENGTH_UNIT_FACTORS[unit];
+}
+
+/**
+ * Convert a value in the given display unit to meters.
+ */
+export function toMeters(value: number, unit: LengthUnit): number {
+  return value * LENGTH_UNIT_FACTORS[unit];
+}
+
 export function toMM(meters: number): number {
   return meters * M_TO_MM;
 }

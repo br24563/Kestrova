@@ -6,14 +6,16 @@
  * all rays should converge to a single point.
  */
 
-import type { AnalysisResult } from "../types";
-import { toMM } from "../types";
+import type { AnalysisResult, LengthUnit } from "../types";
+import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 
 interface SpotDiagramProps {
   analysis: AnalysisResult | null;
+  displayUnit: LengthUnit;
 }
 
-export function SpotDiagram({ analysis }: SpotDiagramProps) {
+export function SpotDiagram({ analysis, displayUnit }: SpotDiagramProps) {
+  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
   if (!analysis || analysis.spot_points.length === 0) {
     return (
       <div className="p-4 border-t border-gray-200">
@@ -46,7 +48,7 @@ export function SpotDiagram({ analysis }: SpotDiagramProps) {
       <h2 className="text-lg font-semibold text-gray-800 mb-4">Spot Diagram</h2>
       <div className="mb-2">
         <span className="text-xs text-gray-500">
-          RMS Spot Radius: {toMM(analysis.rms_spot_radius).toFixed(4)} mm
+          RMS Spot Radius: {fromMeters(analysis.rms_spot_radius, displayUnit).toFixed(4)} {unitLabel}
         </span>
       </div>
       <div className="border border-gray-200 rounded bg-white overflow-auto">
@@ -63,13 +65,13 @@ export function SpotDiagram({ analysis }: SpotDiagramProps) {
             );
           })}
           <text x={width / 2} y={height - 5} textAnchor="middle" fontSize={10} fill="#94a3b8">
-            Ray height at image plane (mm)
+            Ray height at image plane ({unitLabel})
           </text>
         </svg>
       </div>
       <div className="mt-2 text-xs text-gray-500">
         <div>Number of rays: {analysis.spot_points.length}</div>
-        <div>Spot range: {toMM(minY).toFixed(4)} mm to {toMM(maxY).toFixed(4)} mm</div>
+        <div>Spot range: {fromMeters(minY, displayUnit).toFixed(4)} {unitLabel} to {fromMeters(maxY, displayUnit).toFixed(4)} {unitLabel}</div>
       </div>
     </div>
   );
