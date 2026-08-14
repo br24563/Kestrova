@@ -9,7 +9,7 @@ calculations are accurate.
 import math
 import pytest
 from optics.models import (
-    OpticalSystem, ThinLens, Object, ImagePlane, AnalysisSettings,
+    OpticalSystem, ThinLens, SphericalSurface, Object, ImagePlane, AnalysisSettings,
 )
 from optics.rays import (
     propagate, refract_at_thin_lens,
@@ -250,6 +250,43 @@ class TestParaxialImage:
         img_height = calculate_paraxial_image_height(system)
         # m = -1, so image height = -0.010 (inverted)
         assert img_height == pytest.approx(-0.010, rel=1e-10)
+
+
+class TestSphericalSurfaceTracing:
+    """Tests for tracing rays through spherical surfaces."""
+
+    def test_trace_ray_spherical_surface(self):
+        """A ray should refract at a spherical surface."""
+        system = OpticalSystem(
+            components=[
+                ThinLens(
+                    id="lens_1",
+                    position=0.100,
+                    focal_length=0.050,
+                    aperture_diameter=0.025,
+                ),
+                SphericalSurface(
+                    id="surface_1",
+                    position=0.150,
+                    radius=0.100,
+                    thickness=0.005,
+                    material="N-BK7",
+                ),
+            ],
+            object=Object(position=0.0, height=0.010),
+            image_plane=ImagePlane(position=0.250),
+            analysis_settings=AnalysisSettings(num_rays=1),
+        )
+
+        ray = generate_rays(system, num_rays=1)[0]
+        path = trace_ray(system, ray)
+
+        # Path should include points at object, lens, surface, image plane
+        assert len(path.points) >= 4
+        # First point at object
+        assert path.points[0][0] == pytest.approx(0.0)
+        # Last point at image plane
+        assert path.points[-1][0] == pytest.approx(0.250)
 
 
 class TestSpotDiagram:

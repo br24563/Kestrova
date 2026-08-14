@@ -22,11 +22,13 @@ import math
 from typing import Optional
 from .models import (
     OpticalSystem, Ray, RayPath, RayTraceResult,
-    ThinLens, OpticalComponent,
+    ThinLens, SphericalSurface, OpticalComponent,
 )
 from .lenses import (
     RayVector, propagation_matrix, thin_lens_matrix, apply_matrix,
 )
+from .surfaces import spherical_surface_refract
+from .materials import refractive_index
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +220,17 @@ def trace_ray(
             y, theta = refract_at_thin_lens(y, theta, comp.focal_length)
             # Record the point after refraction (same z, same y)
             points.append([z, y])
-        # Other component types (spherical surfaces, apertures, etc.)
+        elif isinstance(comp, SphericalSurface):
+            # Refract at a spherical surface (paraxial)
+            # n1 = incident medium (air), n2 = surface material
+            n1 = refractive_index("air")
+            n2 = refractive_index(comp.material)
+            y, theta = spherical_surface_refract(
+                y, theta, comp.radius, n1, n2
+            )
+            # Record the point after refraction (same z, same y)
+            points.append([z, y])
+        # Other component types (apertures, mirrors, etc.)
         # will be added in future phases.
 
     # Propagate to the image plane
