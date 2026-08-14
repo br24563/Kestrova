@@ -17,7 +17,11 @@ import type {
   AnalysisResult,
   LengthUnit,
 } from "./types";
-import { getDefaultSystem, traceRays, analyzeSystem } from "./api";
+import {
+  getDefaultSystem, traceRays, analyzeSystem,
+  listSystems, saveSystem, loadSystem, deleteSystem,
+  type SystemMetadata,
+} from "./api";
 import { OpticalBench } from "./components/OpticalBench";
 import { ComponentEditor } from "./components/ComponentEditor";
 import { AnalysisPanel } from "./components/AnalysisPanel";
@@ -36,6 +40,8 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [displayUnit, setDisplayUnit] = useState<LengthUnit>(DEFAULT_LENGTH_UNIT);
+  const [projects, setProjects] = useState<SystemMetadata[]>([]);
+  const [projectName, setProjectName] = useState<string>("");
 
   // Load the default system on mount
   useEffect(() => {
@@ -203,7 +209,7 @@ function App() {
   };
 
   // Save the current system to localStorage
-  const saveSystem = () => {
+  const saveToLocalStorage = () => {
     if (!system) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(system));
@@ -216,7 +222,7 @@ function App() {
   };
 
   // Load a saved system from localStorage
-  const loadSavedSystem = () => {
+  const loadFromLocalStorage = () => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) {
@@ -231,6 +237,64 @@ function App() {
       setTimeout(() => setSaveMessage(null), 2000);
     } catch (err) {
       setSaveMessage("Failed to load system");
+      setTimeout(() => setSaveMessage(null), 2000);
+    }
+  };
+
+  // Refresh the list of saved projects
+  const refreshProjects = useCallback(async () => {
+    try {
+      const list = await listSystems();
+      setProjects(list);
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : "Failed to list projects");
+      setTimeout(() => setSaveMessage(null), 2000);
+    }
+  }, []);
+
+  // Save the current system as a named project in the database
+  const saveProject = async () => {
+    if (!system || !projectName.trim()) {
+      setSaveMessage("Enter a project name to save");
+      setTimeout(() => setSaveMessage(null), 2000);
+      return;
+    }
+    try {
+      await saveSystem(projectName.trim(), system);
+      setProjectName("");
+      setSaveMessage("Project saved!");
+      setTimeout(() => setSaveMessage(null), 2000);
+      refreshProjects();
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : "Failed to save project");
+      setTimeout(() => setSaveMessage(null), 2000);
+    }
+  };
+
+  // Load a saved project from the database
+  const loadProject = async (id: number) => {
+    try {
+      const saved = await loadSystem(id);
+      const parsed = JSON.parse(saved.system_json) as OpticalSystem;
+      setSystem(parsed);
+      setSelectedComponentId(parsed.components[0]?.id ?? null);
+      setSaveMessage("Project loaded!");
+      setTimeout(() => setSaveMessage(null), 2000);
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : "Failed to load project");
+      setTimeout(() => setSaveMessage(null), 2000);
+    }
+  };
+
+  // Delete a saved project from the database
+  const deleteProject = async (id: number) => {
+    try {
+      await deleteSystem(id);
+      setSaveMessage("Project deleted!");
+      setTimeout(() => setSaveMessage(null), 2000);
+      refreshProjects();
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : "Failed to delete project");
       setTimeout(() => setSaveMessage(null), 2000);
     }
   };
@@ -289,13 +353,13 @@ function App() {
               ))}
             </select>
             <button
-              onClick={saveSystem}
+              onClick={saveToLocalStorage}
               className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
             >
               Save
             </button>
             <button
-              onClick={loadSavedSystem}
+              onClick={loadFromLocalStorage}
               className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
             >
               Load
@@ -309,7 +373,7 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Component Editor */}
+        {/* Left Panel: Component Editor + Projects */}
         <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
           <ComponentEditor
             system={system}
@@ -327,6 +391,59 @@ function App() {
             onRemoveComponent={removeComponent}
             onReorderComponent={reorderComponent}
           />
+
+          {/* Projects Panel */}
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-medium text-gray-700">Projects</h3>
+              <button
+                onClick={refreshProjects}
+                className="text-xs text-optical-600 hover:text-optical-700"
+              >
+                Refresh
+              </button>
+            </div>
+            <div className="flex gap-1 mb-3">
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Project name"
+                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+              />
+              <button
+                onClick={saveProject}
+                className="px-2 py-1 bg-optical-600 text-white text-xs rounded hover:bg-optical-700"
+              >
+                Save
+              </button>
+            </div>
+            {projects.length === 0 ? (
+              <p className="text-xs text-gray-500">No saved projects.</p>
+            ) : (
+              <div className="space-y-1">
+                {projects.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex justify-between items-center p-2 border border-gray-200 rounded text-sm"
+                  >
+                    <button
+                      onClick={() => loadProject(p.id)}
+                      className="text-left font-medium hover:text-optical-600"
+                    >
+                      {p.name}
+                    </button>
+                    <button
+                      onClick={() => deleteProject(p.id)}
+                      className="text-red-500 hover:text-red-700 text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Center: Optical Bench */}

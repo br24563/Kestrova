@@ -17,3 +17,4 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 *.egg
+optical_systems.db
