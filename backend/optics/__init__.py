@@ -16,6 +16,7 @@ Modules:
     systems   - Optical system assembly and management
     materials - Refractive index data
     analysis  - Optical analysis (focal length, NA, F-number, etc.)
+    optimization - Parameter sweeps and numerical optimization
 """
 
 __version__ = "0.1.0"
@@ -59,3 +60,7 @@ from .analysis import (
     system_f_number, system_numerical_aperture, analyze_system,
 )
 from .materials import refractive_index, refractive_index_sellmeier
+from .optimization import (
+    parameter_sweep, optimize_system,
+    minimize_rms_spot, target_magnification, target_efl,
+)
