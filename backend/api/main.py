@@ -38,6 +38,8 @@ from persistence import (
     get_system as db_get_system,
     delete_system as db_delete_system,
 )
+from ai.commands import AICommand
+from ai.engine import execute_command
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +87,20 @@ class SavedSystemResponse(BaseModel):
     system_json: str
     created_at: str
     updated_at: str
+
+
+class AICommandRequest(BaseModel):
+    """Request body for executing an AI command."""
+    system: OpticalSystem
+    command: AICommand
+
+
+class AICommandResponse(BaseModel):
+    """Response from executing an AI command."""
+    system: OpticalSystem
+    warnings: list[str] = Field(default_factory=list)
+    result: Optional[dict] = None
+    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +278,34 @@ async def load_system(system_id: int):
     if saved is None:
         raise HTTPException(status_code=404, detail=f"System {system_id} not found.")
     return SavedSystemResponse(**saved)
+
+
+@app.post("/api/ai/command", response_model=AICommandResponse)
+async def ai_command(request: AICommandRequest):
+    """
+    Execute a structured AI command against an optical system.
+
+    The AI never performs optical calculations directly. It emits a
+    structured command (modify_component, add_component, analyze, etc.)
+    which is validated and applied by the optics engine.
+
+    Args:
+        request: Contains the optical system and the AI command.
+
+    Returns:
+        The updated system, validation warnings, and any result
+        (e.g. analysis or optimization result).
+    """
+    try:
+        result = execute_command(request.system, request.command)
+        return AICommandResponse(
+            system=result["system"],
+            warnings=result["warnings"],
+            result=result["result"],
+            message=result["message"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.delete("/api/systems/{system_id}")
