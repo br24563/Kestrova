@@ -42,7 +42,7 @@ from .lenses import (
     f_number, numerical_aperture, half_angle_from_na,
 )
 from .rays import (
-    propagate, refract_at_thin_lens,
+    propagate, reflect_at_mirror, refract_at_thin_lens,
     generate_rays, trace_ray, trace_system,
     calculate_paraxial_image_position, calculate_paraxial_image_height,
     calculate_spot_diagram,
