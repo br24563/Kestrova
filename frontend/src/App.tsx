@@ -11,6 +11,7 @@ import type {
   OpticalSystem,
   OpticalComponent,
   ThinLens,
+  SphericalSurface,
   ApertureStop,
   Mirror,
   RayTraceResult,
@@ -150,6 +151,23 @@ function App() {
     setSystem({
       ...system,
       components: [...system.components, newLens],
+    });
+  };
+
+  // Add a new spherical surface
+  const addSurface = () => {
+    if (!system) return;
+    const newSurface: SphericalSurface = {
+      type: "spherical_surface",
+      id: `surface_${system.components.length + 1}`,
+      position: 0.200,
+      radius: 0.100,
+      thickness: 0.005,
+      material: "N-BK7",
+    };
+    setSystem({
+      ...system,
+      components: [...system.components, newSurface],
     });
   };
 
@@ -386,6 +404,7 @@ function App() {
             onUpdateImagePlane={updateImagePlane}
             onUpdateAnalysisSettings={updateAnalysisSettings}
             onAddLens={addLens}
+            onAddSurface={addSurface}
             onAddAperture={addAperture}
             onAddMirror={addMirror}
             onRemoveComponent={removeComponent}

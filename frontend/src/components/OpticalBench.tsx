@@ -12,7 +12,7 @@
  */
 
 import { useRef, useState } from "react";
-import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, ApertureStop, Mirror, LengthUnit } from "../types";
+import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, SphericalSurface, ApertureStop, Mirror, LengthUnit } from "../types";
 import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 
 interface OpticalBenchProps {
@@ -129,6 +129,29 @@ export function OpticalBench({ system, rayResult, analysis, displayUnit }: Optic
         </text>
         <text x={x - 10} y={OPTICAL_AXIS_Y + 35} textAnchor="end" fontSize={10} fill="#9ca3af">
           {fromMeters(system.object.position, displayUnit).toFixed(1)}{unitLabel}
+        </text>
+      </g>
+    );
+  };
+
+  const drawSphericalSurface = (comp: SphericalSurface) => {
+    const x = toSvgX(comp.position);
+    const halfHeight = COMPONENT_HEIGHT / 2;
+
+    return (
+      <g key={comp.id} className="spherical-surface">
+        <path
+          d={`M ${x - 15} ${OPTICAL_AXIS_Y - halfHeight} Q ${x + 15} ${OPTICAL_AXIS_Y} ${x - 15} ${OPTICAL_AXIS_Y + halfHeight}`}
+          fill="#10b981"
+          fillOpacity={0.2}
+          stroke="#10b981"
+          strokeWidth={2}
+        />
+        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="middle" fontSize={11} fill="#10b981">
+          {comp.id}
+        </text>
+        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
+          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
         </text>
       </g>
     );
@@ -307,6 +330,9 @@ export function OpticalBench({ system, rayResult, analysis, displayUnit }: Optic
           {system.components
             .filter((c): c is ThinLens => c.type === "thin_lens")
             .map((comp) => drawLens(comp))}
+          {system.components
+            .filter((c): c is SphericalSurface => c.type === "spherical_surface")
+            .map((comp) => drawSphericalSurface(comp))}
           {system.components
             .filter((c): c is ApertureStop => c.type === "aperture")
             .map((comp) => drawAperture(comp))}
