@@ -9,10 +9,10 @@ calculations are accurate.
 import math
 import pytest
 from optics.models import (
-    OpticalSystem, ThinLens, SphericalSurface, Object, ImagePlane, AnalysisSettings,
+    OpticalSystem, ThinLens, SphericalSurface, Mirror, Object, ImagePlane, AnalysisSettings,
 )
 from optics.rays import (
-    propagate, refract_at_thin_lens,
+    propagate, reflect_at_mirror, refract_at_thin_lens,
     generate_rays, trace_ray, trace_system,
     calculate_paraxial_image_position, calculate_paraxial_image_height,
     calculate_spot_diagram,
@@ -44,6 +44,28 @@ class TestPropagate:
         y, theta = propagate(0.01, -0.01, 0.1)
         assert y == pytest.approx(0.009)  # 0.01 - 0.1 * 0.01 = 0.009
         assert theta == pytest.approx(-0.01)
+
+
+class TestReflectAtMirror:
+    """Tests for the reflect_at_mirror function."""
+
+    def test_reflect_parallel_ray(self):
+        """A parallel ray should reflect back with reversed angle."""
+        y, theta = reflect_at_mirror(0.01, 0.0)
+        assert y == pytest.approx(0.01)  # Height unchanged
+        assert theta == pytest.approx(0.0)  # 0 -> -0 = 0
+
+    def test_reflect_upward_ray(self):
+        """An upward ray should reflect downward."""
+        y, theta = reflect_at_mirror(0.01, 0.05)
+        assert y == pytest.approx(0.01)
+        assert theta == pytest.approx(-0.05)
+
+    def test_reflect_downward_ray(self):
+        """A downward ray should reflect upward."""
+        y, theta = reflect_at_mirror(0.01, -0.05)
+        assert y == pytest.approx(0.01)
+        assert theta == pytest.approx(0.05)
 
 
 class TestRefractAtThinLens:
@@ -168,6 +190,47 @@ class TestTraceRay:
         for point in path.points:
             if abs(point[0] - focal_z) < 1e-10:
                 assert point[1] == pytest.approx(0.0, abs=1e-10)
+
+    def test_trace_ray_mirror_reflects(self):
+        """A ray should reflect at a flat mirror (angle reverses)."""
+        system = OpticalSystem(
+            components=[
+                ThinLens(
+                    id="lens_1",
+                    position=0.100,
+                    focal_length=0.050,
+                    aperture_diameter=0.025,
+                ),
+                Mirror(
+                    id="mirror_1",
+                    position=0.200,
+                    width=0.050,
+                ),
+            ],
+            object=Object(position=0.0, height=0.010),
+            image_plane=ImagePlane(position=0.250),
+            analysis_settings=AnalysisSettings(num_rays=1),
+        )
+
+        # Chief ray: from object (0, 0.01) through center of lens
+        ray = generate_rays(system, num_rays=1)[0]
+        path = trace_ray(system, ray)
+
+        # Path should include points at object, lens, mirror, image plane
+        assert len(path.points) >= 4
+
+        # Find the point at the mirror (z = 0.200)
+        mirror_point = None
+        for point in path.points:
+            if abs(point[0] - 0.200) < 1e-10:
+                mirror_point = point
+                break
+        assert mirror_point is not None
+
+        # The ray angle should reverse at the mirror.
+        # After the mirror, the ray propagates back toward the left.
+        # The final point should be at the image plane (z = 0.250).
+        assert path.points[-1][0] == pytest.approx(0.250)
 
 
 class TestTraceSystem:

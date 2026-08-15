@@ -22,7 +22,7 @@ import math
 from typing import Optional
 from .models import (
     OpticalSystem, Ray, RayPath, RayTraceResult,
-    ThinLens, SphericalSurface, OpticalComponent,
+    ThinLens, SphericalSurface, Mirror, OpticalComponent,
 )
 from .lenses import (
     RayVector, propagation_matrix, thin_lens_matrix, apply_matrix,
@@ -53,6 +53,23 @@ def propagate(y: float, theta: float, distance: float) -> tuple[float, float]:
     """
     new_y = y + distance * theta
     return new_y, theta
+
+
+def reflect_at_mirror(y: float, theta: float) -> tuple[float, float]:
+    """
+    Reflect a paraxial ray at a flat mirror.
+
+    A flat mirror perpendicular to the optical axis reflects the ray
+    back on itself: the height is unchanged and the angle reverses sign.
+
+    Args:
+        y: Ray height at the mirror (meters).
+        theta: Ray angle before the mirror (radians).
+
+    Returns:
+        Tuple of (new_y, new_theta).
+    """
+    return y, -theta
 
 
 def refract_at_thin_lens(
@@ -230,7 +247,12 @@ def trace_ray(
             )
             # Record the point after refraction (same z, same y)
             points.append([z, y])
-        # Other component types (apertures, mirrors, etc.)
+        elif isinstance(comp, Mirror):
+            # Reflect at a flat mirror: angle reverses sign
+            y, theta = reflect_at_mirror(y, theta)
+            # Record the point after reflection (same z, same y)
+            points.append([z, y])
+        # Other component types (apertures, etc.)
         # will be added in future phases.
 
     # Propagate to the image plane
