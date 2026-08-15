@@ -27,7 +27,7 @@ from .units import (
     convert, is_length_unit, is_angle_unit,
 )
 from .models import (
-    OpticalSystem, ThinLens, SphericalSurface, ApertureStop, Mirror,
+    OpticalSystem, ThinLens, SphericalSurface, ThickLens, ApertureStop, Mirror,
     Object, ImagePlane, AnalysisSettings,
     Ray, RayPath, RayTraceResult, AnalysisResult,
     OpticalComponent,
@@ -58,6 +58,10 @@ from .analysis import (
     system_magnification, object_distance as system_object_distance,
     image_distance as system_image_distance, working_distance,
     system_f_number, system_numerical_aperture, analyze_system,
+)
+from .surfaces import (
+    spherical_surface_power, spherical_surface_image_distance,
+    spherical_surface_refract, lensmaker_focal_length,
 )
 from .materials import refractive_index, refractive_index_sellmeier
 from .optimization import (

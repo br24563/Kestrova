@@ -25,7 +25,7 @@ import numpy as np
 from typing import Optional
 
 from .models import (
-    OpticalSystem, ThinLens, AnalysisResult, RayTraceResult,
+    OpticalSystem, ThinLens, ThickLens, AnalysisResult, RayTraceResult,
 )
 from .lenses import (
     RayVector, propagation_matrix, thin_lens_matrix, system_matrix,
@@ -35,7 +35,27 @@ from .rays import (
     trace_system, calculate_spot_diagram,
     calculate_paraxial_image_position, calculate_paraxial_image_height,
 )
+from .surfaces import lensmaker_focal_length
 from .materials import refractive_index
+
+
+def _lens_focal_length(comp) -> float:
+    """
+    Return the focal length of a lens component (thin or thick).
+
+    For a ThickLens, the focal length is computed using the lensmaker's
+    equation. For a ThinLens, it is the stored focal length.
+
+    Args:
+        comp: A ThinLens or ThickLens component.
+
+    Returns:
+        Focal length (meters).
+    """
+    if isinstance(comp, ThickLens):
+        n = refractive_index(comp.material)
+        return lensmaker_focal_length(comp.radius1, comp.radius2, comp.thickness, n)
+    return comp.focal_length
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +77,7 @@ def build_system_matrix(system: OpticalSystem) -> np.ndarray:
         2x2 system matrix as a NumPy array.
     """
     lenses = sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
 
@@ -68,7 +88,7 @@ def build_system_matrix(system: OpticalSystem) -> np.ndarray:
 
     for i, lens in enumerate(lenses):
         # Add the lens matrix
-        matrices.append(thin_lens_matrix(lens.focal_length))
+        matrices.append(thin_lens_matrix(_lens_focal_length(lens)))
 
         # Add propagation to the next lens (if not the last)
         if i < len(lenses) - 1:
@@ -202,7 +222,7 @@ def object_distance(system: OpticalSystem) -> float:
         of the first lens.
     """
     lenses = sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
     if not lenses:
@@ -228,7 +248,7 @@ def image_distance(system: OpticalSystem) -> float:
         of the last lens.
     """
     lenses = sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
     if not lenses:
@@ -250,7 +270,7 @@ def working_distance(system: OpticalSystem) -> float:
         Working distance (meters).
     """
     lenses = sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
     if not lenses:
@@ -282,7 +302,7 @@ def system_f_number(system: OpticalSystem) -> float:
     f_eff = effective_focal_length(system)
 
     lenses = sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
     if not lenses:
@@ -313,7 +333,7 @@ def system_numerical_aperture(system: OpticalSystem) -> float:
         Numerical aperture (dimensionless).
     """
     lenses = sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
     if not lenses:
@@ -375,7 +395,7 @@ def analyze_system(
     na = system_numerical_aperture(system)
 
     lenses = sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
     aperture_diam = lenses[0].aperture_diameter if lenses else 0.0

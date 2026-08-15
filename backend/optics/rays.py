@@ -22,12 +22,12 @@ import math
 from typing import Optional
 from .models import (
     OpticalSystem, Ray, RayPath, RayTraceResult,
-    ThinLens, SphericalSurface, Mirror, OpticalComponent,
+    ThinLens, SphericalSurface, ThickLens, Mirror, OpticalComponent,
 )
 from .lenses import (
     RayVector, propagation_matrix, thin_lens_matrix, apply_matrix,
 )
-from .surfaces import spherical_surface_refract
+from .surfaces import spherical_surface_refract, lensmaker_focal_length
 from .materials import refractive_index
 
 
@@ -129,8 +129,11 @@ def generate_rays(
     if aperture_fraction is None:
         aperture_fraction = system.analysis_settings.aperture_fraction
 
-    # Find the first lens component (sorted by position)
-    lenses = [c for c in system.components if isinstance(c, ThinLens)]
+    # Find the first lens component (thin or thick lens, sorted by position)
+    lenses = [
+        c for c in system.components
+        if isinstance(c, (ThinLens, ThickLens))
+    ]
     if not lenses:
         raise ValueError("System has no lens components; cannot generate rays.")
 
@@ -247,6 +250,27 @@ def trace_ray(
             )
             # Record the point after refraction (same z, same y)
             points.append([z, y])
+        elif isinstance(comp, ThickLens):
+            # Model a thick lens as two spherical surfaces with a thickness.
+            # First surface: air -> glass
+            n_air = refractive_index("air")
+            n_glass = refractive_index(comp.material)
+            y, theta = spherical_surface_refract(
+                y, theta, comp.radius1, n_air, n_glass
+            )
+            points.append([z, y])
+
+            # Propagate through the glass thickness
+            z_second = comp.position + comp.thickness
+            y, theta = propagate(y, theta, comp.thickness)
+            z = z_second
+            points.append([z, y])
+
+            # Second surface: glass -> air
+            y, theta = spherical_surface_refract(
+                y, theta, comp.radius2, n_glass, n_air
+            )
+            points.append([z, y])
         elif isinstance(comp, Mirror):
             # Reflect at a flat mirror: angle reverses sign
             y, theta = reflect_at_mirror(y, theta)
@@ -347,7 +371,14 @@ def calculate_paraxial_image_position(system: OpticalSystem) -> float:
     current_height = obj.height
 
     for comp in components:
-        if isinstance(comp, ThinLens):
+        if isinstance(comp, (ThinLens, ThickLens)):
+            # Determine the focal length
+            if isinstance(comp, ThickLens):
+                n = refractive_index(comp.material)
+                f = lensmaker_focal_length(comp.radius1, comp.radius2, comp.thickness, n)
+            else:
+                f = comp.focal_length
+
             # Object distance from this lens (optics convention)
             # s < 0 if object is to the LEFT of the lens
             s = current_pos - comp.position
@@ -358,7 +389,7 @@ def calculate_paraxial_image_position(system: OpticalSystem) -> float:
 
             # Image distance from this lens
             # 1/f = 1/s' - 1/s  =>  s' = f * s / (s + f)
-            s_prime = comp.focal_length * s / (s + comp.focal_length)
+            s_prime = f * s / (s + f)
 
             # Update current position
             current_pos = comp.position + s_prime
@@ -393,11 +424,17 @@ def calculate_paraxial_image_height(system: OpticalSystem) -> float:
     current_height = obj.height
 
     for comp in components:
-        if isinstance(comp, ThinLens):
+        if isinstance(comp, (ThinLens, ThickLens)):
+            if isinstance(comp, ThickLens):
+                n = refractive_index(comp.material)
+                f = lensmaker_focal_length(comp.radius1, comp.radius2, comp.thickness, n)
+            else:
+                f = comp.focal_length
+
             s = current_pos - comp.position
             if abs(s) < 1e-15:
                 continue
-            s_prime = comp.focal_length * s / (s + comp.focal_length)
+            s_prime = f * s / (s + f)
             m = s_prime / s
             current_height = current_height * m
             current_pos = comp.position + s_prime

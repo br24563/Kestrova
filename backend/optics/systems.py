@@ -11,7 +11,7 @@ The system is represented as an ordered list of optical components
 
 from typing import Optional
 from .models import (
-    OpticalSystem, OpticalComponent, ThinLens, SphericalSurface,
+    OpticalSystem, OpticalComponent, ThinLens, SphericalSurface, ThickLens,
     ApertureStop, Object, ImagePlane, AnalysisSettings,
 )
 
@@ -76,16 +76,16 @@ def create_default_system() -> OpticalSystem:
 
 def get_lenses(system: OpticalSystem) -> list[ThinLens]:
     """
-    Get all thin lens components, sorted by position.
+    Get all lens components (thin or thick), sorted by position.
 
     Args:
         system: The optical system.
 
     Returns:
-        List of ThinLens components, sorted by position (left to right).
+        List of lens components, sorted by position (left to right).
     """
     return sorted(
-        [c for c in system.components if isinstance(c, ThinLens)],
+        [c for c in system.components if isinstance(c, (ThinLens, ThickLens))],
         key=lambda l: l.position,
     )
 
@@ -298,7 +298,7 @@ def validate_system(system: OpticalSystem) -> list[str]:
 
     # Check for negative apertures
     for comp in system.components:
-        if isinstance(comp, ThinLens):
+        if isinstance(comp, (ThinLens, ThickLens)):
             if comp.aperture_diameter <= 0:
                 warnings.append(
                     f"Lens '{comp.id}' has non-positive aperture diameter."
@@ -315,6 +315,11 @@ def validate_system(system: OpticalSystem) -> list[str]:
             if abs(comp.focal_length) < 1e-15:
                 warnings.append(
                     f"Lens '{comp.id}' has zero focal length."
+                )
+        elif isinstance(comp, ThickLens):
+            if abs(comp.radius1) < 1e-15 and abs(comp.radius2) < 1e-15:
+                warnings.append(
+                    f"Lens '{comp.id}' has both radii zero (slab)."
                 )
 
     return warnings
