@@ -78,6 +78,27 @@ class SphericalSurface(OpticalComponentBase):
     material: str = Field(default="N-BK7", description="Glass material name")
 
 
+class ThickLens(OpticalComponentBase):
+    """
+    A thick lens modeled as two spherical surfaces with a thickness.
+
+    The lens is defined by the radii of curvature of its two surfaces
+    and its center thickness. The focal length is calculated using the
+    lensmaker's equation.
+
+    Sign convention:
+        - radius1 > 0: first surface is convex (center of curvature to the right)
+        - radius2 < 0: second surface is convex (center of curvature to the left)
+    """
+
+    type: Literal["thick_lens"] = "thick_lens"
+    radius1: float = Field(..., description="Radius of curvature of first surface (meters)")
+    radius2: float = Field(..., description="Radius of curvature of second surface (meters)")
+    thickness: float = Field(..., description="Center thickness of the lens (meters)")
+    aperture_diameter: float = Field(..., description="Aperture diameter in meters")
+    material: str = Field(default="N-BK7", description="Glass material name")
+
+
 class ApertureStop(OpticalComponentBase):
     """
     An aperture stop (iris diaphragm).
@@ -103,7 +124,7 @@ class Mirror(OpticalComponentBase):
 # Discriminated union: allows the system to hold any component type
 # and automatically deserialize the correct type based on the "type" field.
 OpticalComponent = Annotated[
-    Union[ThinLens, SphericalSurface, ApertureStop, Mirror],
+    Union[ThinLens, SphericalSurface, ThickLens, ApertureStop, Mirror],
     Field(discriminator="type"),
 ]
 
