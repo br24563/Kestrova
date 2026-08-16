@@ -1,6 +1,6 @@
 # AI Optical Design Engineer
 
-A free, local-first optical engineering application for designing, simulating, and analyzing simple optical systems.
+A free, local-first optical engineering application for designing, simulating, and analyzing optical systems.
 
 ## Overview
 
@@ -8,14 +8,18 @@ AI Optical Design Engineer is an educational tool that allows users to construct
 
 The application runs entirely on your local machine — no cloud services, no paid APIs, no subscriptions.
 
-## Features (MVP)
+## Features
 
-- **Two-lens optical system designer** — Add, remove, and edit thin lenses
+- **Optical system designer** — Add, remove, and edit thin lenses, thick lenses, spherical surfaces, apertures, and mirrors
 - **Paraxial ray tracing** — Trace chief, marginal, and fill rays through the system
 - **Optical analysis** — Effective focal length, magnification, F-number, NA, RMS spot radius
 - **Spot diagram** — Visualize where rays converge at the image plane
 - **Interactive optical bench** — SVG visualization with zoom/pan
 - **Unit system** — Supports nm, μm, mm, cm, m, degrees with centralized conversion
+- **Chromatic aberration analysis** — Longitudinal and lateral chromatic aberration using Sellmeier wavelength-dependent refractive index
+- **Optimization** — Parameter sweeps and SciPy-based numerical optimization
+- **AI Assistant** — Natural-language interface that interprets prompts into structured commands, executed by the validated optics engine
+- **Project persistence** — Save/load named projects to SQLite
 - **RESTful API** — FastAPI backend with JSON endpoints
 
 ## Quick Start
@@ -49,9 +53,14 @@ The application runs entirely on your local machine — no cloud services, no pa
 ### Running Tests
 
 ```bash
+# Backend (pytest)
 cd backend
 source venv/bin/activate
 pytest tests/ -v
+
+# Frontend (Vitest)
+cd frontend
+npm run test
 ```
 
 ## Project Structure
@@ -61,16 +70,24 @@ ai-optical-design-engineer/
 ├── backend/
 │   ├── api/
 │   │   └── main.py          # FastAPI REST API
+│   ├── ai/
+│   │   ├── commands.py       # Structured AI command models
+│   │   ├── engine.py         # Command validation & application
+│   │   ├── interpreter.py    # Abstract LLM interpreter interface
+│   │   └── local_provider.py # Rule-based parser + optional Ollama
 │   ├── optics/
 │   │   ├── units.py          # Unit conversion system
 │   │   ├── models.py         # Data models (Pydantic)
 │   │   ├── lenses.py         # Thin lens math + ABCD matrices
-│   │   ├── surfaces.py       # Spherical surface calculations
+│   │   ├── surfaces.py       # Spherical surface + lensmaker's equation
 │   │   ├── rays.py           # Ray tracing engine
 │   │   ├── systems.py        # System assembly & management
-│   │   ├── materials.py      # Refractive index data
-│   │   └── analysis.py       # Optical analysis calculations
-│   ├── tests/                # pytest test suite (119 tests)
+│   │   ├── materials.py      # Refractive index + Sellmeier equation
+│   │   ├── analysis.py       # Optical analysis calculations
+│   │   ├── optimization.py   # Parameter sweeps & SciPy optimization
+│   │   └── aberration.py     # Chromatic aberration analysis
+│   ├── persistence.py        # SQLite project persistence
+│   ├── tests/                # pytest test suite (198 tests)
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -81,7 +98,8 @@ ai-optical-design-engineer/
 │   │       ├── OpticalBench.tsx
 │   │       ├── ComponentEditor.tsx
 │   │       ├── AnalysisPanel.tsx
-│   │       └── SpotDiagram.tsx
+│   │       ├── SpotDiagram.tsx
+│   │       └── AIChatPanel.tsx
 │   └── package.json
 ├── ARCHITECTURE.md
 ├── DEVELOPMENT.md
