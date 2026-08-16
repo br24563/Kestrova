@@ -132,7 +132,8 @@ def test_execute_analyze():
     result = execute_command(system, cmd)
     assert result["result"] is not None
     assert result["result"].effective_focal_length == pytest.approx(0.050, abs=1e-9)
-    assert result["message"] == "Analysis complete."
+    assert "Analysis complete" in result["message"]
+    assert "Effective focal length" in result["message"]
 
 
 def test_execute_modify_sorts_components():
