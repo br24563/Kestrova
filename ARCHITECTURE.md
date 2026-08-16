@@ -58,15 +58,32 @@ The optics engine is a pure Python library with zero dependencies on the web fra
 | `units.py` | Centralized unit conversions (nm, mm, cm, m, degrees → meters/radians) |
 | `models.py` | Pydantic data models for all optical components, rays, and results |
 | `lenses.py` | Thin lens equations, ABCD matrix method, F-number, NA |
-| `surfaces.py` | Spherical refractive surface math (Phase 2 ready) |
+| `surfaces.py` | Spherical refractive surface math, lensmaker's equation |
 | `rays.py` | Ray generation, propagation, tracing through systems, spot diagram |
 | `systems.py` | System creation, component management (add/remove/update), validation |
 | `materials.py` | Refractive index database and Sellmeier equation support |
 | `analysis.py` | Full system analysis (EFL, magnification, distances, NA, F/#) |
+| `optimization.py` | Parameter sweeps and SciPy-based numerical optimization |
+| `aberration.py` | Chromatic aberration analysis (LCA, TCA) |
 
 ### Layer 2: API Layer (`backend/api/`)
 
 FastAPI REST API that wraps the optics engine. The API is **stateless** — the frontend sends the complete optical system with each request, and the backend returns results. This keeps the backend simple and scalable.
+
+### Layer 2.5: AI Abstraction Layer (`backend/ai/`)
+
+The AI layer provides a structured-command interface between an LLM (or any AI provider) and the validated optics engine. The AI never performs optical calculations directly; it only emits structured commands that are validated and applied by the optics engine.
+
+| Module | Responsibility |
+|--------|---------------|
+| `commands.py` | Pydantic models for structured AI commands (modify/add/remove component, set object/image plane, analyze, optimize) |
+| `engine.py` | Validates and applies commands to the optics engine (the only place AI commands become optics operations) |
+| `interpreter.py` | Abstract interface for LLM providers |
+| `local_provider.py` | Offline rule-based parser + optional Ollama provider |
+
+### Layer 2.75: Persistence (`backend/persistence.py`)
+
+SQLite-based project persistence using Python's built-in `sqlite3`. Stores serialized `OpticalSystem` JSON with metadata (name, timestamps).
 
 ### Layer 3: Frontend (`frontend/`)
 
@@ -111,9 +128,9 @@ The project uses the **optics sign convention** (as used in optical design softw
 - Focal length (f): positive for converging lenses, negative for diverging
 - Magnification (m): m = s' / s (negative = inverted)
 
-## AI Architecture (Future)
+## AI Architecture
 
-When AI is added, the LLM will never perform calculations directly. Instead:
+The LLM never performs calculations directly. Instead:
 
 ```
 User (natural language)
@@ -127,4 +144,4 @@ Optics engine performs calculation
 LLM explains results to user
 ```
 
-This ensures all numerical results come from the validated engine, not from LLM-generated math.
+This ensures all numerical results come from the validated engine, not from LLM-generated math. The AI abstraction layer (`backend/ai/`) implements this flow, with a rule-based parser for offline use and an optional Ollama provider for more complex prompts.
