@@ -346,7 +346,9 @@ def trace_system(
 # Paraxial Image Calculation
 # ---------------------------------------------------------------------------
 
-def calculate_paraxial_image_position(system: OpticalSystem) -> float:
+def calculate_paraxial_image_position(
+    system: OpticalSystem, wavelength: Optional[float] = None
+) -> float:
     """
     Calculate the paraxial image position for the optical system.
 
@@ -359,10 +361,17 @@ def calculate_paraxial_image_position(system: OpticalSystem) -> float:
 
     Args:
         system: The optical system.
+        wavelength: Wavelength in meters. If provided, the refractive
+            index of thick lenses is computed at this wavelength
+            (Sellmeier equation). If None, uses the system's analysis
+            wavelength.
 
     Returns:
         Image position along the z-axis (meters).
     """
+    if wavelength is None:
+        wavelength = system.analysis_settings.wavelength
+
     obj = system.object
     components = sorted(system.components, key=lambda c: c.position)
 
@@ -374,7 +383,7 @@ def calculate_paraxial_image_position(system: OpticalSystem) -> float:
         if isinstance(comp, (ThinLens, ThickLens)):
             # Determine the focal length
             if isinstance(comp, ThickLens):
-                n = refractive_index(comp.material)
+                n = refractive_index(comp.material, wavelength)
                 f = lensmaker_focal_length(comp.radius1, comp.radius2, comp.thickness, n)
             else:
                 f = comp.focal_length
@@ -401,7 +410,9 @@ def calculate_paraxial_image_position(system: OpticalSystem) -> float:
     return current_pos
 
 
-def calculate_paraxial_image_height(system: OpticalSystem) -> float:
+def calculate_paraxial_image_height(
+    system: OpticalSystem, wavelength: Optional[float] = None
+) -> float:
     """
     Calculate the paraxial image height for the optical system.
 
@@ -413,10 +424,17 @@ def calculate_paraxial_image_height(system: OpticalSystem) -> float:
 
     Args:
         system: The optical system.
+        wavelength: Wavelength in meters. If provided, the refractive
+            index of thick lenses is computed at this wavelength
+            (Sellmeier equation). If None, uses the system's analysis
+            wavelength.
 
     Returns:
         Image height (meters).
     """
+    if wavelength is None:
+        wavelength = system.analysis_settings.wavelength
+
     obj = system.object
     components = sorted(system.components, key=lambda c: c.position)
 
@@ -426,7 +444,7 @@ def calculate_paraxial_image_height(system: OpticalSystem) -> float:
     for comp in components:
         if isinstance(comp, (ThinLens, ThickLens)):
             if isinstance(comp, ThickLens):
-                n = refractive_index(comp.material)
+                n = refractive_index(comp.material, wavelength)
                 f = lensmaker_focal_length(comp.radius1, comp.radius2, comp.thickness, n)
             else:
                 f = comp.focal_length
