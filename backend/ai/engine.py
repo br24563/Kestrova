@@ -115,11 +115,27 @@ def execute_command(
     if isinstance(command, AnalyzeCommand):
         result = analyze_system(system)
         warnings = validate_system(system)
+
+        # Build a natural-language explanation of the analysis result
+        efl_mm = result.effective_focal_length * 1000
+        mag = result.magnification
+        f_num = result.f_number
+        rms_um = result.rms_spot_radius * 1e6
+        real = "real" if result.is_image_real else "virtual"
+        inverted = "inverted" if result.is_image_inverted else "upright"
+
+        message = (
+            f"Analysis complete. Effective focal length: {efl_mm:.1f} mm. "
+            f"Magnification: {mag:.2f} ({inverted}). "
+            f"F-number: {f_num:.1f}. "
+            f"RMS spot radius: {rms_um:.2f} um. "
+            f"Image is {real}."
+        )
         return {
             "system": system,
             "warnings": warnings,
             "result": result,
-            "message": "Analysis complete.",
+            "message": message,
         }
 
     if isinstance(command, OptimizeCommand):
