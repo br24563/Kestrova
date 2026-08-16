@@ -17,6 +17,7 @@ Modules:
     materials - Refractive index data
     analysis  - Optical analysis (focal length, NA, F-number, etc.)
     optimization - Parameter sweeps and numerical optimization
+    aberration - Chromatic aberration analysis
 """
 
 __version__ = "0.1.0"
@@ -67,4 +68,10 @@ from .materials import refractive_index, refractive_index_sellmeier
 from .optimization import (
     parameter_sweep, optimize_system,
     minimize_rms_spot, target_magnification, target_efl,
+)
+from .aberration import (
+    F_LINE, D_LINE, C_LINE,
+    image_position_at_wavelength, image_height_at_wavelength,
+    longitudinal_chromatic_aberration, lateral_chromatic_aberration,
+    chromatic_aberration_analysis,
 )
