@@ -27,6 +27,7 @@ import { OpticalBench } from "./components/OpticalBench";
 import { ComponentEditor } from "./components/ComponentEditor";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { SpotDiagram } from "./components/SpotDiagram";
+import { AIChatPanel } from "./components/AIChatPanel";
 import { DEFAULT_LENGTH_UNIT, LENGTH_UNIT_LABELS } from "./types";
 
 const STORAGE_KEY = "ai-optical-design-engineer-system";
@@ -410,6 +411,9 @@ function App() {
             onRemoveComponent={removeComponent}
             onReorderComponent={reorderComponent}
           />
+
+          {/* AI Chat Panel */}
+          <AIChatPanel system={system} onSystemUpdate={setSystem} />
 
           {/* Projects Panel */}
           <div className="p-4 border-t border-gray-200">

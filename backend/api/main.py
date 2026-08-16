@@ -40,6 +40,7 @@ from persistence import (
 )
 from ai.commands import AICommand
 from ai.engine import execute_command
+from ai.local_provider import LocalLLMProvider
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +101,18 @@ class AICommandResponse(BaseModel):
     system: OpticalSystem
     warnings: list[str] = Field(default_factory=list)
     result: Optional[dict] = None
+    message: str
+
+
+class AIInterpretRequest(BaseModel):
+    """Request body for interpreting a natural-language prompt."""
+    system: OpticalSystem
+    prompt: str
+
+
+class AIInterpretResponse(BaseModel):
+    """Response from interpreting a natural-language prompt."""
+    commands: list[AICommand]
     message: str
 
 
@@ -278,6 +291,32 @@ async def load_system(system_id: int):
     if saved is None:
         raise HTTPException(status_code=404, detail=f"System {system_id} not found.")
     return SavedSystemResponse(**saved)
+
+
+@app.post("/api/ai/interpret", response_model=AIInterpretResponse)
+async def ai_interpret(request: AIInterpretRequest):
+    """
+    Interpret a natural-language prompt into structured AI commands.
+
+    Uses the local rule-based parser (or Ollama if enabled) to convert
+    the user's request into structured commands. The commands are NOT
+    executed here; use POST /api/ai/command to apply them.
+
+    Args:
+        request: Contains the optical system and the natural-language prompt.
+
+    Returns:
+        The interpreted commands and a human-readable message.
+    """
+    try:
+        provider = LocalLLMProvider()
+        commands = provider.interpret(request.prompt)
+        return AIInterpretResponse(
+            commands=commands,
+            message=f"Interpreted {len(commands)} command(s).",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/ai/command", response_model=AICommandResponse)
