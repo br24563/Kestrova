@@ -271,3 +271,67 @@ def test_provider_raises_on_unknown():
     provider = LocalLLMProvider()
     with pytest.raises(ValueError):
         provider.interpret("do something completely random")
+
+
+# ---------------------------------------------------------------------------
+# End-to-End AI Flow Tests
+# ---------------------------------------------------------------------------
+
+def test_end_to_end_move_lens():
+    """Full flow: prompt -> command -> engine -> updated system."""
+    system = make_single_lens_system()
+    provider = LocalLLMProvider()
+
+    # Interpret the prompt
+    commands = provider.interpret("move lens_1 to 150mm")
+    assert len(commands) == 1
+
+    # Execute the command
+    result = execute_command(system, commands[0])
+    lens = get_component_by_id(result["system"], "lens_1")
+    assert lens.position == pytest.approx(0.150)
+    assert "Modified lens_1.position" in result["message"]
+
+
+def test_end_to_end_analyze():
+    """Full flow: prompt -> analyze command -> explanation."""
+    system = make_single_lens_system()
+    provider = LocalLLMProvider()
+
+    commands = provider.interpret("analyze the system")
+    assert len(commands) == 1
+    assert isinstance(commands[0], AnalyzeCommand)
+
+    result = execute_command(system, commands[0])
+    assert result["result"] is not None
+    assert "Effective focal length" in result["message"]
+    assert "Magnification" in result["message"]
+
+
+def test_end_to_end_set_object_height():
+    """Full flow: prompt -> set object height -> updated system."""
+    system = make_single_lens_system()
+    provider = LocalLLMProvider()
+
+    commands = provider.interpret("set object height to 5mm")
+    assert len(commands) == 1
+    assert isinstance(commands[0], SetObjectCommand)
+
+    result = execute_command(system, commands[0])
+    assert result["system"].object.height == pytest.approx(0.005)
+
+
+def test_end_to_end_optimize():
+    """Full flow: prompt -> optimize command -> optimized system."""
+    system = make_single_lens_system()
+    provider = LocalLLMProvider()
+
+    # The rule-based parser supports optimize for rms_spot
+    commands = provider.interpret("optimize lens_1 focal_length for rms_spot")
+    assert len(commands) == 1
+    assert isinstance(commands[0], OptimizeCommand)
+
+    result = execute_command(system, commands[0])
+    assert result["result"] is not None
+    assert result["result"]["success"] is True
+    assert "Optimization complete" in result["message"]

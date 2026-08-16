@@ -127,7 +127,8 @@ class RuleBasedParser:
                 return [OptimizeCommand(
                     objective="rms_spot",
                     params=[{"component_id": component_id, "field": field}],
-                    bounds=[[0.0, 1.0]],
+                    # Use bounds that exclude zero to avoid division by zero
+                    bounds=[[0.001, 1.0]],
                 )]
             raise ValueError(f"Unsupported optimize objective: {objective}")
 
