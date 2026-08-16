@@ -38,7 +38,7 @@ SELLMEIER_COEFFICIENTS: dict[str, list[tuple[float, float]]] = {
     "N-BK7": [
         (1.03961212, 0.00600069867),
         (0.231792034, 0.00170883814),
-        (1.01047410, 1039.621020),
+        (1.01047410, 103.560653),
     ],
     "N-SF11": [
         (1.71562519, 0.0129603622),
@@ -57,13 +57,13 @@ def refractive_index(material: str, wavelength: float = 587.6e-9) -> float:
     """
     Get the refractive index of a material at a given wavelength.
 
-    For the MVP, this returns the refractive index at the reference
-    wavelength (587.6 nm). In future phases, the Sellmeier equation
-    will be used for wavelength-dependent indices.
+    If the material has Sellmeier coefficients, the wavelength-dependent
+    index is computed using the Sellmeier equation. Otherwise, the
+    reference index at 587.6 nm is returned.
 
     Args:
         material: Material name (e.g., "N-BK7", "air").
-        wavelength: Wavelength in meters (currently ignored for MVP).
+        wavelength: Wavelength in meters.
 
     Returns:
         Refractive index (dimensionless).
@@ -82,6 +82,13 @@ def refractive_index(material: str, wavelength: float = 587.6e-9) -> float:
             f"Unknown material: '{material}'. "
             f"Known materials: {list(REFRACTIVE_INDICES.keys())}"
         )
+
+    # Use the Sellmeier equation for wavelength-dependent indices.
+    # At the reference wavelength (587.6 nm), return the catalog value
+    # for backward compatibility.
+    if material in SELLMEIER_COEFFICIENTS and abs(wavelength - 587.6e-9) > 1e-12:
+        return refractive_index_sellmeier(material, wavelength)
+
     return REFRACTIVE_INDICES[material]
 
 
