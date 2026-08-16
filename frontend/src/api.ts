@@ -31,6 +31,34 @@ export interface SavedSystemResponse {
   updated_at: string;
 }
 
+// AI command types
+export type AICommand =
+  | { action: "modify_component"; component_id: string; field: string; value: number }
+  | { action: "add_component"; component: unknown }
+  | { action: "remove_component"; component_id: string }
+  | { action: "set_object"; position?: number; height?: number }
+  | { action: "set_image_plane"; position: number }
+  | { action: "analyze" }
+  | {
+      action: "optimize";
+      objective: "rms_spot" | "magnification" | "efl";
+      target?: number;
+      params: Record<string, unknown>[];
+      bounds: number[][];
+    };
+
+export interface AIInterpretResponse {
+  commands: AICommand[];
+  message: string;
+}
+
+export interface AICommandResponse {
+  system: OpticalSystem;
+  warnings: string[];
+  result: Record<string, unknown> | null;
+  message: string;
+}
+
 const API_BASE = "/api";
 
 /**
@@ -173,4 +201,48 @@ export async function deleteSystem(id: number): Promise<void> {
   if (!response.ok) {
     throw new Error(`Failed to delete system: ${response.statusText}`);
   }
+}
+
+/**
+ * Interpret a natural-language prompt into structured AI commands.
+ *
+ * @param system - The current optical system (for context)
+ * @param prompt - The user's natural-language request
+ * @returns The interpreted commands and a message
+ */
+export async function interpretPrompt(
+  system: OpticalSystem,
+  prompt: string,
+): Promise<AIInterpretResponse> {
+  const response = await fetch(`${API_BASE}/ai/interpret`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system, prompt }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to interpret prompt: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Execute a structured AI command against an optical system.
+ *
+ * @param system - The optical system to apply the command to
+ * @param command - The structured AI command
+ * @returns The updated system, warnings, and any result
+ */
+export async function executeAICommand(
+  system: OpticalSystem,
+  command: AICommand,
+): Promise<AICommandResponse> {
+  const response = await fetch(`${API_BASE}/ai/command`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system, command }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to execute AI command: ${response.statusText}`);
+  }
+  return response.json();
 }
