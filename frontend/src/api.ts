@@ -13,6 +13,7 @@ import type {
   SystemResponse,
   TraceRequest,
   AnalyzeRequest,
+  ChromaticAberrationResult,
 } from "./types";
 
 // Persistence types
@@ -201,6 +202,28 @@ export async function deleteSystem(id: number): Promise<void> {
   if (!response.ok) {
     throw new Error(`Failed to delete system: ${response.statusText}`);
   }
+}
+
+/**
+ * Analyze chromatic aberration of an optical system.
+ *
+ * @param system - The optical system to analyze
+ * @param wavelengths - Optional list of wavelengths in meters
+ * @returns Chromatic aberration result (LCA, TCA, per-wavelength positions/heights)
+ */
+export async function analyzeAberration(
+  system: OpticalSystem,
+  wavelengths?: number[],
+): Promise<ChromaticAberrationResult> {
+  const response = await fetch(`${API_BASE}/analyze/aberration`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system, wavelengths }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to analyze aberration: ${response.statusText}`);
+  }
+  return response.json();
 }
 
 /**
