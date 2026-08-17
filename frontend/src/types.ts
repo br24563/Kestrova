@@ -168,6 +168,14 @@ export interface AnalyzeRequest {
   aperture_fraction?: number;
 }
 
+export interface ChromaticAberrationResult {
+  wavelengths: number[];
+  image_positions: number[];
+  image_heights: number[];
+  lca: number;
+  tca: number;
+}
+
 // ---------------------------------------------------------------------------
 // Unit Conversion Helpers
 // ---------------------------------------------------------------------------

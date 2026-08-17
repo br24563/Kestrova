@@ -32,6 +32,7 @@ from optics.models import (
 from optics.systems import create_default_system, validate_system
 from optics.rays import trace_system
 from optics.analysis import analyze_system
+from optics.aberration import chromatic_aberration_analysis
 from persistence import (
     save_system as db_save_system,
     list_systems as db_list_systems,
@@ -59,6 +60,12 @@ class AnalyzeRequest(BaseModel):
     system: OpticalSystem
     num_rays: Optional[int] = None
     aperture_fraction: Optional[float] = None
+
+
+class AberrationRequest(BaseModel):
+    """Request body for chromatic aberration analysis."""
+    system: OpticalSystem
+    wavelengths: Optional[list[float]] = None
 
 
 class SystemResponse(BaseModel):
@@ -210,6 +217,30 @@ async def analyze(request: AnalyzeRequest):
             request.system,
             num_rays=request.num_rays,
             aperture_fraction=request.aperture_fraction,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/aberration")
+async def analyze_aberration(request: AberrationRequest):
+    """
+    Analyze chromatic aberration of an optical system.
+
+    Computes image position and height at multiple wavelengths and
+    returns the longitudinal and lateral chromatic aberration.
+
+    Args:
+        request: Contains the optical system and optional wavelengths.
+
+    Returns:
+        Dict with wavelengths, image_positions, image_heights, lca, tca.
+    """
+    try:
+        result = chromatic_aberration_analysis(
+            request.system,
+            wavelengths=request.wavelengths,
         )
         return result
     except ValueError as e:
