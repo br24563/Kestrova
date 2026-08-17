@@ -16,6 +16,7 @@ import type {
   OpticalComponent,
   ThinLens,
   SphericalSurface,
+  ThickLens,
   ApertureStop,
   Mirror,
   LengthUnit,
@@ -34,6 +35,7 @@ interface ComponentEditorProps {
   onUpdateAnalysisSettings: (field: string, value: number | string[]) => void;
   onAddLens: () => void;
   onAddSurface: () => void;
+  onAddThickLens: () => void;
   onAddAperture: () => void;
   onAddMirror: () => void;
   onRemoveComponent: (id: string) => void;
@@ -52,6 +54,7 @@ export function ComponentEditor({
   onUpdateAnalysisSettings,
   onAddLens,
   onAddSurface,
+  onAddThickLens,
   onAddAperture,
   onAddMirror,
   onRemoveComponent,
@@ -134,6 +137,12 @@ export function ComponentEditor({
               + Surface
             </button>
             <button
+              onClick={onAddThickLens}
+              className="px-2 py-1 bg-optical-600 text-white text-xs rounded hover:bg-optical-700"
+            >
+              + Thick Lens
+            </button>
+            <button
               onClick={onAddAperture}
               className="px-2 py-1 bg-optical-600 text-white text-xs rounded hover:bg-optical-700"
             >
@@ -196,6 +205,13 @@ export function ComponentEditor({
                     t={fromMeters((comp as SphericalSurface).thickness, displayUnit).toFixed(1)}{unitLabel}
                   </div>
                 )}
+                {comp.type === "thick_lens" && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    R1={fromMeters((comp as ThickLens).radius1, displayUnit).toFixed(1)}{unitLabel},
+                    R2={fromMeters((comp as ThickLens).radius2, displayUnit).toFixed(1)}{unitLabel},
+                    t={fromMeters((comp as ThickLens).thickness, displayUnit).toFixed(1)}{unitLabel}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -248,6 +264,28 @@ export function ComponentEditor({
                 <label className="block text-xs text-gray-600 mb-1">Material</label>
                 <select
                   value={(selectedComponent as SphericalSurface).material}
+                  onChange={(e) => onUpdateComponent(selectedComponent.id, "material", e.target.value)}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                >
+                  <option value="N-BK7">N-BK7</option>
+                  <option value="N-SF2">N-SF2</option>
+                  <option value="N-SF5">N-SF5</option>
+                  <option value="N-SF11">N-SF11</option>
+                  <option value="FusedSilica">Fused Silica</option>
+                </select>
+              </div>
+            </>
+          )}
+          {selectedComponent.type === "thick_lens" && (
+            <>
+              {formatLensField("Radius 1", "radius1", (selectedComponent as ThickLens).radius1)}
+              {formatLensField("Radius 2", "radius2", (selectedComponent as ThickLens).radius2)}
+              {formatLensField("Thickness", "thickness", (selectedComponent as ThickLens).thickness)}
+              {formatLensField("Aperture Diameter", "aperture_diameter", (selectedComponent as ThickLens).aperture_diameter)}
+              <div className="mb-3">
+                <label className="block text-xs text-gray-600 mb-1">Material</label>
+                <select
+                  value={(selectedComponent as ThickLens).material}
                   onChange={(e) => onUpdateComponent(selectedComponent.id, "material", e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 >

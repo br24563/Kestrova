@@ -13,6 +13,7 @@
 export type ComponentType =
   | "thin_lens"
   | "spherical_surface"
+  | "thick_lens"
   | "aperture"
   | "mirror";
 
@@ -35,6 +36,15 @@ export interface SphericalSurface extends OpticalComponentBase {
   material: string;
 }
 
+export interface ThickLens extends OpticalComponentBase {
+  type: "thick_lens";
+  radius1: number; // meters
+  radius2: number; // meters
+  thickness: number; // meters
+  aperture_diameter: number; // meters
+  material: string;
+}
+
 export interface ApertureStop extends OpticalComponentBase {
   type: "aperture";
   diameter: number; // meters
@@ -48,6 +58,7 @@ export interface Mirror extends OpticalComponentBase {
 export type OpticalComponent =
   | ThinLens
   | SphericalSurface
+  | ThickLens
   | ApertureStop
   | Mirror;
 

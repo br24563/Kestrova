@@ -12,6 +12,7 @@ import type {
   OpticalComponent,
   ThinLens,
   SphericalSurface,
+  ThickLens,
   ApertureStop,
   Mirror,
   RayTraceResult,
@@ -169,6 +170,25 @@ function App() {
     setSystem({
       ...system,
       components: [...system.components, newSurface],
+    });
+  };
+
+  // Add a new thick lens
+  const addThickLens = () => {
+    if (!system) return;
+    const newThickLens: ThickLens = {
+      type: "thick_lens",
+      id: `thick_lens_${system.components.length + 1}`,
+      position: 0.200,
+      radius1: 0.100,
+      radius2: -0.100,
+      thickness: 0.010,
+      aperture_diameter: 0.025,
+      material: "N-BK7",
+    };
+    setSystem({
+      ...system,
+      components: [...system.components, newThickLens],
     });
   };
 
@@ -406,6 +426,7 @@ function App() {
             onUpdateAnalysisSettings={updateAnalysisSettings}
             onAddLens={addLens}
             onAddSurface={addSurface}
+            onAddThickLens={addThickLens}
             onAddAperture={addAperture}
             onAddMirror={addMirror}
             onRemoveComponent={removeComponent}
