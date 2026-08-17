@@ -12,7 +12,7 @@
  */
 
 import { useRef, useState } from "react";
-import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, SphericalSurface, ApertureStop, Mirror, LengthUnit } from "../types";
+import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, SphericalSurface, ThickLens, ApertureStop, Mirror, LengthUnit } from "../types";
 import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 
 interface OpticalBenchProps {
@@ -151,6 +151,36 @@ export function OpticalBench({ system, rayResult, analysis, displayUnit }: Optic
           {comp.id}
         </text>
         <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
+          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
+        </text>
+      </g>
+    );
+  };
+
+  const drawThickLens = (comp: ThickLens) => {
+    // The thick lens spans from its position to position + thickness.
+    // The first surface is at the left edge and the second at the right edge.
+    const x1 = toSvgX(comp.position);
+    const x2 = toSvgX(comp.position + comp.thickness);
+    const halfHeight = COMPONENT_HEIGHT / 2;
+
+    return (
+      <g key={comp.id} className="thick-lens">
+        {/* Lens body (biconvex shape between the two surfaces) */}
+        <path
+          d={`M ${x1} ${OPTICAL_AXIS_Y - halfHeight} Q ${(x1 + x2) / 2} ${OPTICAL_AXIS_Y - halfHeight - 25} ${x2} ${OPTICAL_AXIS_Y - halfHeight} L ${x2} ${OPTICAL_AXIS_Y + halfHeight} Q ${(x1 + x2) / 2} ${OPTICAL_AXIS_Y + halfHeight + 25} ${x1} ${OPTICAL_AXIS_Y + halfHeight} Z`}
+          fill="#6366f1"
+          fillOpacity={0.3}
+          stroke="#6366f1"
+          strokeWidth={2}
+        />
+        <text x={(x1 + x2) / 2} y={OPTICAL_AXIS_Y - halfHeight - 10} textAnchor="middle" fontSize={12} fill="#374151">
+          {comp.id}
+        </text>
+        <text x={(x1 + x2) / 2} y={OPTICAL_AXIS_Y + halfHeight + 20} textAnchor="middle" fontSize={10} fill="#6b7280">
+          R1={fromMeters(comp.radius1, displayUnit).toFixed(1)}{unitLabel}, R2={fromMeters(comp.radius2, displayUnit).toFixed(1)}{unitLabel}
+        </text>
+        <text x={(x1 + x2) / 2} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
           {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
         </text>
       </g>
@@ -333,6 +363,9 @@ export function OpticalBench({ system, rayResult, analysis, displayUnit }: Optic
           {system.components
             .filter((c): c is SphericalSurface => c.type === "spherical_surface")
             .map((comp) => drawSphericalSurface(comp))}
+          {system.components
+            .filter((c): c is ThickLens => c.type === "thick_lens")
+            .map((comp) => drawThickLens(comp))}
           {system.components
             .filter((c): c is ApertureStop => c.type === "aperture")
             .map((comp) => drawAperture(comp))}
