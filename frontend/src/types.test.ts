@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   toMM, toM, toNm, MM_TO_M, M_TO_MM, NM_TO_M, M_TO_NM,
   fromMeters, toMeters, LENGTH_UNIT_FACTORS, LENGTH_UNIT_LABELS,
-  DEFAULT_LENGTH_UNIT,
+  DEFAULT_LENGTH_UNIT, type ComponentType, type OpticalComponent,
 } from "./types";
 
 describe("unit conversion helpers", () => {
@@ -77,5 +77,46 @@ describe("display unit conversion helpers", () => {
     for (const unit of ["nm", "um", "mm", "cm", "m"] as const) {
       expect(toMeters(fromMeters(0.123, unit), unit)).toBeCloseTo(0.123);
     }
+  });
+});
+
+describe("thick_lens component type", () => {
+  it("includes thick_lens in the ComponentType union", () => {
+    // This is a compile-time check; the value confirms the literal exists.
+    const lensType: ComponentType = "thick_lens";
+    expect(lensType).toBe("thick_lens");
+  });
+
+  it("constructs a valid ThickLens optical component", () => {
+    const thickLens: OpticalComponent = {
+      type: "thick_lens",
+      id: "thick_lens_1",
+      position: 0.200,
+      radius1: 0.100,
+      radius2: -0.100,
+      thickness: 0.010,
+      aperture_diameter: 0.025,
+      material: "N-BK7",
+    };
+
+    expect(thickLens.type).toBe("thick_lens");
+    expect(thickLens.id).toBe("thick_lens_1");
+    expect(thickLens.position).toBe(0.2);
+    expect(thickLens.radius1).toBe(0.1);
+    expect(thickLens.radius2).toBe(-0.1);
+    expect(thickLens.thickness).toBe(0.01);
+    expect(thickLens.aperture_diameter).toBe(0.025);
+    expect(thickLens.material).toBe("N-BK7");
+  });
+
+  it("distinguishes thick_lens from thin_lens in the union", () => {
+    const comps: OpticalComponent[] = [
+      { type: "thin_lens", id: "l1", position: 0.1, focal_length: 0.05, aperture_diameter: 0.025, material: "N-BK7" },
+      { type: "thick_lens", id: "tl1", position: 0.2, radius1: 0.1, radius2: -0.1, thickness: 0.01, aperture_diameter: 0.025, material: "N-BK7" },
+    ];
+
+    // The discriminated union should preserve each component's type tag.
+    expect(comps[0].type).toBe("thin_lens");
+    expect(comps[1].type).toBe("thick_lens");
   });
 });
