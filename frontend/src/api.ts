@@ -16,6 +16,8 @@ import type {
   ChromaticAberrationResult,
   OptimizeRequest,
   OptimizeResult,
+  SweepRequest,
+  SweepPoint,
 } from "./types";
 
 // Persistence types
@@ -60,6 +62,12 @@ export interface AICommandResponse {
   warnings: string[];
   result: Record<string, unknown> | null;
   message: string;
+}
+
+export interface AIProviderInfo {
+  use_ollama: boolean;
+  model: string;
+  ollama_url: string;
 }
 
 const API_BASE = "/api";
@@ -227,6 +235,24 @@ export async function optimizeSystem(
 }
 
 /**
+ * Sweep a single parameter across a range of values and analyze each.
+ *
+ * @param request - The sweep request (system, param, values)
+ * @returns A list of sweep points, each with the parameter value and analysis
+ */
+export async function runSweep(request: SweepRequest): Promise<SweepPoint[]> {
+  const response = await fetch(`${API_BASE}/sweep`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to run sweep: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
  * Analyze chromatic aberration of an optical system.
  *
  * @param system - The optical system to analyze
@@ -244,6 +270,19 @@ export async function analyzeAberration(
   });
   if (!response.ok) {
     throw new Error(`Failed to analyze aberration: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Get the current AI interpreter provider configuration.
+ *
+ * @returns Whether Ollama is enabled, the model, and the Ollama URL
+ */
+export async function getAIProvider(): Promise<AIProviderInfo> {
+  const response = await fetch(`${API_BASE}/ai/provider`);
+  if (!response.ok) {
+    throw new Error(`Failed to get AI provider: ${response.statusText}`);
   }
   return response.json();
 }

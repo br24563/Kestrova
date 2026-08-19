@@ -35,6 +35,7 @@ from optics.analysis import analyze_system
 from optics.aberration import chromatic_aberration_analysis
 from optics.optimization import (
     optimize_system as run_optimization,
+    parameter_sweep as run_parameter_sweep,
     minimize_rms_spot, target_magnification, target_efl,
 )
 from persistence import (
@@ -79,6 +80,15 @@ class OptimizeRequest(BaseModel):
     target: Optional[float] = None
     params: list[dict]
     bounds: list[list[float]]
+
+
+class SweepRequest(BaseModel):
+    """Request body for a parameter sweep."""
+    system: OpticalSystem
+    param: dict
+    values: list[float]
+    num_rays: Optional[int] = None
+    aperture_fraction: Optional[float] = None
 
 
 class SystemResponse(BaseModel):
@@ -167,7 +177,16 @@ async def root():
             "GET /api/system/default": "Get the default optical system",
             "POST /api/trace": "Trace rays through an optical system",
             "POST /api/analyze": "Analyze an optical system",
+            "POST /api/optimize": "Numerically optimize system parameters",
+            "POST /api/sweep": "Sweep a parameter across a range of values",
+            "POST /api/analyze/aberration": "Analyze chromatic aberration",
             "POST /api/validate": "Validate an optical system",
+            "GET /api/systems": "List saved projects",
+            "POST /api/systems": "Save a project",
+            "GET /api/systems/{id}": "Load a saved project",
+            "DELETE /api/systems/{id}": "Delete a saved project",
+            "POST /api/ai/interpret": "Interpret a natural-language prompt",
+            "POST /api/ai/command": "Execute a structured AI command",
         },
     }
 
@@ -276,6 +295,40 @@ async def optimize(request: OptimizeRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/sweep")
+async def sweep(request: SweepRequest):
+    """
+    Sweep a single parameter across a range of values and analyze each.
+
+    Useful for understanding how a system behaves as a parameter
+    (e.g. lens position, focal length) changes.
+
+    Args:
+        request: Contains the system, param spec, and values to sweep.
+
+    Returns:
+        List of dicts, one per value, with the parameter value and
+        the analysis result for that value.
+    """
+    try:
+        results = run_parameter_sweep(
+            request.system,
+            request.param,
+            request.values,
+            num_rays=request.num_rays,
+            aperture_fraction=request.aperture_fraction,
+        )
+        return [
+            {
+                "value": value,
+                "analysis": result.model_dump(),
+            }
+            for value, result in results
+        ]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/analyze/aberration")
 async def analyze_aberration(request: AberrationRequest):
     """
@@ -377,6 +430,20 @@ async def load_system(system_id: int):
     return SavedSystemResponse(**saved)
 
 
+@app.get("/api/ai/provider")
+async def ai_provider():
+    """
+    Report the current AI interpreter provider configuration.
+
+    Returns whether Ollama is enabled and the model/URL in use.
+    """
+    return {
+        "use_ollama": os.environ.get("OLLAMA_ENABLED", "").lower() in ("1", "true", "yes"),
+        "model": os.environ.get("OLLAMA_MODEL", "llama3.2"),
+        "ollama_url": os.environ.get("OLLAMA_URL", "http://localhost:11434"),
+    }
+
+
 @app.post("/api/ai/interpret", response_model=AIInterpretResponse)
 async def ai_interpret(request: AIInterpretRequest):
     """
@@ -393,7 +460,11 @@ async def ai_interpret(request: AIInterpretRequest):
         The interpreted commands and a human-readable message.
     """
     try:
-        provider = LocalLLMProvider()
+        provider = LocalLLMProvider(
+            use_ollama=os.environ.get("OLLAMA_ENABLED", "").lower() in ("1", "true", "yes"),
+            model=os.environ.get("OLLAMA_MODEL", "llama3.2"),
+            ollama_url=os.environ.get("OLLAMA_URL", "http://localhost:11434"),
+        )
         commands = provider.interpret(request.prompt)
         return AIInterpretResponse(
             commands=commands,

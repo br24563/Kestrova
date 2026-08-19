@@ -193,6 +193,19 @@ export interface OptimizeResult {
   success: boolean;
 }
 
+export interface SweepRequest {
+  system: OpticalSystem;
+  param: { component_id: string; field: string };
+  values: number[];
+  num_rays?: number;
+  aperture_fraction?: number;
+}
+
+export interface SweepPoint {
+  value: number;
+  analysis: AnalysisResult;
+}
+
 // ---------------------------------------------------------------------------
 // Unit Conversion Helpers
 // ---------------------------------------------------------------------------
