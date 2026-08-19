@@ -6,9 +6,9 @@
  * backend, then executed against the optics engine.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { OpticalSystem } from "../types";
-import { interpretPrompt, executeAICommand, type AICommandResponse } from "../api";
+import { interpretPrompt, executeAICommand, getAIProvider, type AICommandResponse, type AIProviderInfo } from "../api";
 
 interface AIChatPanelProps {
   system: OpticalSystem;
@@ -24,6 +24,13 @@ export function AIChatPanel({ system, onSystemUpdate }: AIChatPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const [provider, setProvider] = useState<AIProviderInfo | null>(null);
+
+  useEffect(() => {
+    getAIProvider()
+      .then(setProvider)
+      .catch(() => setProvider(null));
+  }, []);
 
   const handleSend = async () => {
     const text = prompt.trim();
@@ -62,7 +69,14 @@ export function AIChatPanel({ system, onSystemUpdate }: AIChatPanelProps) {
 
   return (
     <div className="p-4 border-t border-gray-200">
-      <h3 className="text-sm font-medium text-gray-700 mb-2">AI Assistant</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-medium text-gray-700">AI Assistant</h3>
+        {provider && (
+          <span className="text-[10px] text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+            {provider.use_ollama ? `Ollama (${provider.model})` : "Rule-based parser"}
+          </span>
+        )}
+      </div>
 
       <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
         {messages.length === 0 && (

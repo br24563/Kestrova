@@ -8,6 +8,9 @@ import {
   saveSystem,
   loadSystem,
   deleteSystem,
+  optimizeSystem,
+  runSweep,
+  getAIProvider,
 } from "./api";
 import type { OpticalSystem } from "./types";
 
@@ -129,6 +132,52 @@ describe("API client", () => {
       "/api/systems/1",
       expect.objectContaining({ method: "DELETE" }),
     );
+  });
+
+  it("optimizeSystem posts the system and returns the result", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockFetchResponse({ params: [0.05], objective: 0.001, system: mockSystem, success: true }),
+    );
+    const result = await optimizeSystem({
+      system: mockSystem,
+      objective: "rms_spot",
+      params: [{ component_id: "lens_1", field: "position" }],
+      bounds: [[0.01, 0.1]],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/optimize",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("runSweep posts the system and returns sweep points", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockFetchResponse([
+        { value: 0.1, analysis: { effective_focal_length: 0.05, magnification: -1.0, rms_spot_radius: 0.001 } },
+        { value: 0.2, analysis: { effective_focal_length: 0.05, magnification: -1.0, rms_spot_radius: 0.002 } },
+      ]),
+    );
+    const result = await runSweep({
+      system: mockSystem,
+      param: { component_id: "lens_1", field: "position" },
+      values: [0.1, 0.2],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/sweep",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result).toHaveLength(2);
+    expect(result[0].value).toBe(0.1);
+  });
+
+  it("getAIProvider fetches the provider config", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockFetchResponse({ use_ollama: false, model: "llama3.2", ollama_url: "http://localhost:11434" }),
+    );
+    const result = await getAIProvider();
+    expect(fetchMock).toHaveBeenCalledWith("/api/ai/provider");
+    expect(result.use_ollama).toBe(false);
   });
 
   it("throws an error when a request fails", async () => {
