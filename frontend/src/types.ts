@@ -176,6 +176,23 @@ export interface ChromaticAberrationResult {
   tca: number;
 }
 
+export type OptimizeObjective = "rms_spot" | "magnification" | "efl";
+
+export interface OptimizeRequest {
+  system: OpticalSystem;
+  objective: OptimizeObjective;
+  target?: number;
+  params: { component_id: string; field: string }[];
+  bounds: [number, number][];
+}
+
+export interface OptimizeResult {
+  params: number[];
+  objective: number;
+  system: OpticalSystem;
+  success: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Unit Conversion Helpers
 // ---------------------------------------------------------------------------

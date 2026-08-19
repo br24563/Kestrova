@@ -33,6 +33,10 @@ from optics.systems import create_default_system, validate_system
 from optics.rays import trace_system
 from optics.analysis import analyze_system
 from optics.aberration import chromatic_aberration_analysis
+from optics.optimization import (
+    optimize_system as run_optimization,
+    minimize_rms_spot, target_magnification, target_efl,
+)
 from persistence import (
     save_system as db_save_system,
     list_systems as db_list_systems,
@@ -66,6 +70,15 @@ class AberrationRequest(BaseModel):
     """Request body for chromatic aberration analysis."""
     system: OpticalSystem
     wavelengths: Optional[list[float]] = None
+
+
+class OptimizeRequest(BaseModel):
+    """Request body for numerical optimization."""
+    system: OpticalSystem
+    objective: str
+    target: Optional[float] = None
+    params: list[dict]
+    bounds: list[list[float]]
 
 
 class SystemResponse(BaseModel):
@@ -217,6 +230,46 @@ async def analyze(request: AnalyzeRequest):
             request.system,
             num_rays=request.num_rays,
             aperture_fraction=request.aperture_fraction,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/optimize")
+async def optimize(request: OptimizeRequest):
+    """
+    Optimize a set of system parameters to minimize an objective.
+
+    Uses SciPy's differential_evolution to find parameter values that
+    minimize the chosen objective (rms_spot, magnification, or efl).
+
+    Args:
+        request: Contains the system, objective, params, and bounds.
+
+    Returns:
+        Dict with params, objective, system, and success.
+    """
+    try:
+        if request.objective == "rms_spot":
+            objective = minimize_rms_spot
+        elif request.objective == "magnification":
+            if request.target is None:
+                raise ValueError("magnification objective requires a target.")
+            objective = lambda s: target_magnification(s, request.target)
+        elif request.objective == "efl":
+            if request.target is None:
+                raise ValueError("efl objective requires a target.")
+            objective = lambda s: target_efl(s, request.target)
+        else:
+            raise ValueError(f"Unknown objective: {request.objective}")
+
+        bounds = [(b[0], b[1]) for b in request.bounds]
+        result = run_optimization(
+            request.system,
+            objective,
+            params=request.params,
+            bounds=bounds,
         )
         return result
     except ValueError as e:

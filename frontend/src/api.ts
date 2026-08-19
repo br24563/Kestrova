@@ -14,6 +14,8 @@ import type {
   TraceRequest,
   AnalyzeRequest,
   ChromaticAberrationResult,
+  OptimizeRequest,
+  OptimizeResult,
 } from "./types";
 
 // Persistence types
@@ -202,6 +204,26 @@ export async function deleteSystem(id: number): Promise<void> {
   if (!response.ok) {
     throw new Error(`Failed to delete system: ${response.statusText}`);
   }
+}
+
+/**
+ * Optimize a set of system parameters to minimize an objective.
+ *
+ * @param request - The optimization request (system, objective, params, bounds)
+ * @returns The optimization result (params, objective, optimized system, success)
+ */
+export async function optimizeSystem(
+  request: OptimizeRequest,
+): Promise<OptimizeResult> {
+  const response = await fetch(`${API_BASE}/optimize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to optimize: ${response.statusText}`);
+  }
+  return response.json();
 }
 
 /**
