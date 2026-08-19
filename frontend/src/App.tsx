@@ -29,6 +29,7 @@ import { ComponentEditor } from "./components/ComponentEditor";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { SpotDiagram } from "./components/SpotDiagram";
 import { AIChatPanel } from "./components/AIChatPanel";
+import { OptimizationPanel } from "./components/OptimizationPanel";
 import { DEFAULT_LENGTH_UNIT, LENGTH_UNIT_LABELS } from "./types";
 
 const STORAGE_KEY = "ai-optical-design-engineer-system";
@@ -504,6 +505,11 @@ function App() {
         <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
           <AnalysisPanel analysis={analysis} system={system} displayUnit={displayUnit} />
           <SpotDiagram analysis={analysis} displayUnit={displayUnit} />
+          <OptimizationPanel
+            system={system}
+            displayUnit={displayUnit}
+            onApplyOptimized={setSystem}
+          />
         </div>
       </div>
 
