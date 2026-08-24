@@ -20,6 +20,7 @@ Modules:
     aberration - Chromatic aberration analysis
     real_rays  - Exact (Snell's law) ray tracing for aberration analysis
     seidel     - Seidel (third-order) monochromatic aberration analysis
+    diffraction - PSF, MTF, OTF, Airy disk, encircled energy
 """
 
 __version__ = "0.1.0"
@@ -85,4 +86,8 @@ from .real_rays import (
 from .seidel import (
     spherical_aberration, coma, astigmatism_and_field_curvature,
     distortion, seidel_analysis,
+)
+from .diffraction import (
+    airy_disk_radius, psf, encircled_energy,
+    mtf, otf, diffraction_limited_check, diffraction_analysis,
 )
