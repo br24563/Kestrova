@@ -18,6 +18,8 @@ Modules:
     analysis  - Optical analysis (focal length, NA, F-number, etc.)
     optimization - Parameter sweeps and numerical optimization
     aberration - Chromatic aberration analysis
+    real_rays  - Exact (Snell's law) ray tracing for aberration analysis
+    seidel     - Seidel (third-order) monochromatic aberration analysis
 """
 
 __version__ = "0.1.0"
@@ -74,4 +76,12 @@ from .aberration import (
     image_position_at_wavelength, image_height_at_wavelength,
     longitudinal_chromatic_aberration, lateral_chromatic_aberration,
     chromatic_aberration_analysis,
+)
+from .real_rays import (
+    trace_real_ray, real_intercept_at_plane, real_axis_crossing,
+    real_ray_crossing,
+)
+from .seidel import (
+    spherical_aberration, coma, astigmatism_and_field_curvature,
+    distortion, seidel_analysis,
 )
