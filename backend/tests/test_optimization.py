@@ -12,8 +12,9 @@ from optics.models import (
 )
 from optics.analysis import effective_focal_length, system_magnification
 from optics.optimization import (
-    parameter_sweep, optimize_system,
+    parameter_sweep, optimize_system, multi_objective_optimize,
     minimize_rms_spot, target_magnification, target_efl,
+    _constraint_penalty, _constraint_value,
 )
 
 
@@ -213,4 +214,133 @@ def test_optimize_mismatched_params_bounds():
             minimize_rms_spot,
             params=[{"component_id": "lens_1", "field": "position"}],
             bounds=[(0.05, 0.15), (0.05, 0.15)],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Constraint Tests
+# ---------------------------------------------------------------------------
+
+def test_constraint_value_magnification():
+    """_constraint_value should return the system magnification."""
+    system = make_single_lens_system()
+    # Single lens: obj at 0, lens at 0.1, f=0.05 => s=-0.1, s'=0.1, m=-1
+    assert _constraint_value(system, "magnification") == pytest.approx(-1.0, abs=1e-6)
+
+
+def test_constraint_value_unsupported_field():
+    """An unsupported constraint field should raise ValueError."""
+    system = make_single_lens_system()
+    with pytest.raises(ValueError):
+        _constraint_value(system, "bogus")
+
+
+def test_constraint_penalty_satisfied():
+    """A satisfied constraint should give zero penalty."""
+    system = make_single_lens_system()
+    constraints = [
+        {"type": "range", "field": "magnification", "min": -2.0, "max": -0.5},
+    ]
+    assert _constraint_penalty(system, constraints) == 0.0
+
+
+def test_constraint_penalty_violated():
+    """A violated constraint should give a nonzero penalty."""
+    system = make_single_lens_system()
+    # Magnification is -1.0; require it to be between -0.5 and 0 => violated
+    constraints = [
+        {"type": "range", "field": "magnification", "min": -0.5, "max": 0.0},
+    ]
+    penalty = _constraint_penalty(system, constraints)
+    assert penalty > 0
+
+
+def test_optimize_with_constraint():
+    """Optimization should respect a magnification constraint."""
+    system = make_single_lens_system(f=0.050)
+    # Optimize focal length to minimize RMS spot, but require
+    # magnification to stay between -2.0 and -0.5 (which the default
+    # -1.0 already satisfies).
+    constraints = [
+        {"type": "range", "field": "magnification", "min": -2.0, "max": -0.5},
+    ]
+    result = optimize_system(
+        system,
+        minimize_rms_spot,
+        params=[{"component_id": "lens_1", "field": "focal_length"}],
+        bounds=[(0.01, 0.20)],
+        seed=42,
+        maxiter=200,
+        constraints=constraints,
+    )
+    assert result["success"] is True
+    assert result["constraints_satisfied"] is True
+
+
+# ---------------------------------------------------------------------------
+# Multi-Objective Optimization Tests
+# ---------------------------------------------------------------------------
+
+def test_multi_objective_optimize_basic():
+    """Multi-objective optimization should return individual objectives."""
+    system = make_single_lens_system(f=0.050)
+    result = multi_objective_optimize(
+        system,
+        objectives=[minimize_rms_spot, lambda s: target_magnification(s, -1.0)],
+        params=[{"component_id": "lens_1", "field": "focal_length"}],
+        bounds=[(0.01, 0.20)],
+        seed=42,
+        maxiter=200,
+    )
+    assert result["success"] is True
+    assert "objectives" in result
+    assert len(result["objectives"]) == 2
+    assert "params" in result
+    assert "system" in result
+
+
+def test_multi_objective_optimize_weights():
+    """Custom weights should be respected (normalized)."""
+    system = make_single_lens_system(f=0.050)
+    result = multi_objective_optimize(
+        system,
+        objectives=[minimize_rms_spot, lambda s: target_magnification(s, -1.0)],
+        weights=[2.0, 1.0],
+        params=[{"component_id": "lens_1", "field": "focal_length"}],
+        bounds=[(0.01, 0.20)],
+        seed=42,
+        maxiter=200,
+    )
+    assert result["success"] is True
+    assert len(result["objectives"]) == 2
+
+
+def test_multi_objective_optimize_default_params():
+    """Default params should optimize the first lens focal length."""
+    system = make_single_lens_system(f=0.050)
+    result = multi_objective_optimize(
+        system,
+        objectives=[minimize_rms_spot],
+        seed=42,
+        maxiter=200,
+    )
+    assert result["success"] is True
+    assert len(result["params"]) == 1
+
+
+def test_multi_objective_empty_objectives():
+    """Empty objectives should raise ValueError."""
+    system = make_single_lens_system()
+    with pytest.raises(ValueError):
+        multi_objective_optimize(system, objectives=[])
+
+
+def test_multi_objective_weight_mismatch():
+    """Mismatched weights and objectives should raise ValueError."""
+    system = make_single_lens_system()
+    with pytest.raises(ValueError):
+        multi_objective_optimize(
+            system,
+            objectives=[minimize_rms_spot, lambda s: target_magnification(s, -1.0)],
+            weights=[1.0],
         )
