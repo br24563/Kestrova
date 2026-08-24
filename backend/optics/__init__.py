@@ -68,8 +68,9 @@ from .surfaces import (
 )
 from .materials import refractive_index, refractive_index_sellmeier
 from .optimization import (
-    parameter_sweep, optimize_system,
+    parameter_sweep, optimize_system, multi_objective_optimize,
     minimize_rms_spot, target_magnification, target_efl,
+    CONSTRAINT_PENALTY,
 )
 from .aberration import (
     F_LINE, D_LINE, C_LINE,
