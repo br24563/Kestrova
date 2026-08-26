@@ -25,8 +25,9 @@ from optics.optimization import (
 from .commands import (
     AICommand, ModifyComponentCommand, AddComponentCommand,
     RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
-    AnalyzeCommand, OptimizeCommand,
+    AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
 )
+from .explanations import explain_system, diagnose_system
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +84,10 @@ def apply_command(system: OpticalSystem, command: AICommand) -> OpticalSystem:
 
     if isinstance(command, OptimizeCommand):
         # Optimize returns a new system; handled in execute_command
+        return system
+
+    if isinstance(command, (ExplainCommand, DiagnoseCommand)):
+        # Explanation / diagnosis do not modify the system
         return system
 
     raise ValueError(f"Unknown command type: {type(command).__name__}")
@@ -172,6 +177,30 @@ def execute_command(
                 f"Optimization complete. Objective: {opt_result['objective']:.6g}. "
                 f"Params: {[f'{p:.6g}' for p in opt_result['params']]}"
             ),
+        }
+
+    if isinstance(command, ExplainCommand):
+        explanation = explain_system(system)
+        message = " ".join(explanation["parts"])
+        return {
+            "system": system,
+            "warnings": [],  # detailed warnings live in the explanation
+            "result": explanation,
+            "message": message,
+        }
+
+    if isinstance(command, DiagnoseCommand):
+        diagnosis = diagnose_system(system)
+        # Summarize findings into a single message
+        parts = []
+        for f in diagnosis["findings"]:
+            parts.append(f"[{f['level']}] {f['message']} -> {f['suggestion']}")
+        message = " ".join(parts) or diagnosis["summary"]
+        return {
+            "system": system,
+            "warnings": diagnosis["findings"],
+            "result": diagnosis,
+            "message": message,
         }
 
     # System-modifying command

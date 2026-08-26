@@ -14,9 +14,11 @@ from optics.systems import create_default_system, get_component_by_id
 from ai.commands import (
     ModifyComponentCommand, AddComponentCommand, RemoveComponentCommand,
     SetObjectCommand, SetImagePlaneCommand, AnalyzeCommand, OptimizeCommand,
+    ExplainCommand, DiagnoseCommand,
 )
 from ai.engine import apply_command, execute_command
 from ai.local_provider import RuleBasedParser, LocalLLMProvider
+from ai.explanations import explain_system, diagnose_system
 
 
 # ---------------------------------------------------------------------------
@@ -335,3 +337,93 @@ def test_end_to_end_optimize():
     assert result["result"] is not None
     assert result["result"]["success"] is True
     assert "Optimization complete" in result["message"]
+
+
+# ---------------------------------------------------------------------------
+# Explanation & Diagnosis Tests
+# ---------------------------------------------------------------------------
+
+def test_explain_command_returns_parts():
+    """execute_command for ExplainCommand returns a rich explanation."""
+    system = make_single_lens_system()
+    cmd = ExplainCommand()
+    result = execute_command(system, cmd)
+    # System should not change
+    assert result["system"] is system
+    # Result is the explanation dict
+    assert result["result"]["summary"] is not None
+    assert len(result["result"]["parts"]) > 0
+    # Message joins the parts
+    assert "magnification" in result["message"].lower()
+
+
+def test_explain_system_metrics():
+    """explain_system includes the key numeric metrics."""
+    system = make_single_lens_system()
+    expl = explain_system(system)
+    m = expl["metrics"]
+    assert "effective_focal_length_mm" in m
+    assert "magnification" in m
+    assert "f_number" in m
+    assert m["magnification"] == pytest.approx(-1.0, abs=1e-6)
+
+
+def test_diagnose_command_returns_findings():
+    """execute_command for DiagnoseCommand returns findings."""
+    system = make_single_lens_system()
+    cmd = DiagnoseCommand()
+    result = execute_command(system, cmd)
+    assert result["system"] is system
+    assert len(result["result"]["findings"]) > 0
+    assert any("level" in f for f in result["result"]["findings"])
+
+
+def test_diagnose_system_finds_issue():
+    """diagnose_system should flag a poorly-placed image plane."""
+    # Move the image plane far from the paraxial focus
+    system = make_single_lens_system()
+    system = system.model_copy(
+        update={"image_plane": system.image_plane.model_copy(update={"position": 0.300})}
+    )
+    diag = diagnose_system(system)
+    messages = " ".join(f["message"] for f in diag["findings"])
+    # Should mention image plane offset (paraxial focus is at 0.200)
+    assert "image plane" in messages.lower()
+
+
+def test_parse_explain_without_modifier():
+    """Rule-based parser handles 'explain the system'."""
+    parser = RuleBasedParser()
+    commands = parser.parse("explain the system")
+    assert len(commands) == 1
+    assert isinstance(commands[0], ExplainCommand)
+
+
+def test_parse_diagnose_prompt():
+    """Rule-based parser handles a troubleshoot prompt."""
+    parser = RuleBasedParser()
+    commands = parser.parse("diagnose the system")
+    assert len(commands) == 1
+    assert isinstance(commands[0], DiagnoseCommand)
+
+
+def test_parse_troubleshoot_synonym():
+    """The parser recognizes 'troubleshoot' as a diagnose command."""
+    parser = RuleBasedParser()
+    commands = parser.parse("troubleshoot this design")
+    assert len(commands) == 1
+    assert isinstance(commands[0], DiagnoseCommand)
+
+
+def test_end_to_end_explain():
+    """Full flow: prompt -> explain -> message."""
+    system = make_single_lens_system()
+    provider = LocalLLMProvider()
+    commands = provider.interpret("explain the system")
+    result = execute_command(system, commands[0])
+    assert result["result"]["summary"]
+
+    # The rule-based parser also handles diagnose
+    commands = provider.interpret("what's wrong with this system")
+    result = execute_command(system, commands[0])
+    assert "findings" in result["result"]
