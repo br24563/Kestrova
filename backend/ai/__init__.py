@@ -16,16 +16,18 @@ Modules:
 from .commands import (
     AICommand, ModifyComponentCommand, AddComponentCommand,
     RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
-    AnalyzeCommand, OptimizeCommand,
+    AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
 )
 from .engine import apply_command, execute_command
 from .interpreter import LLMInterpreter
 from .local_provider import LocalLLMProvider
+from .explanations import explain_system, diagnose_system
 
 __all__ = [
     "AICommand", "ModifyComponentCommand", "AddComponentCommand",
     "RemoveComponentCommand", "SetObjectCommand", "SetImagePlaneCommand",
-    "AnalyzeCommand", "OptimizeCommand",
+    "AnalyzeCommand", "OptimizeCommand", "ExplainCommand", "DiagnoseCommand",
     "apply_command", "execute_command",
     "LLMInterpreter", "LocalLLMProvider",
+    "explain_system", "diagnose_system",
 ]

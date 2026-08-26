@@ -25,7 +25,7 @@ from typing import Optional
 from .commands import (
     AICommand, ModifyComponentCommand, AddComponentCommand,
     RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
-    AnalyzeCommand, OptimizeCommand,
+    AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
 )
 from .interpreter import LLMInterpreter
 
@@ -110,6 +110,15 @@ class RuleBasedParser:
             ValueError: If the prompt cannot be parsed.
         """
         text = prompt.strip().lower()
+
+        # Explain
+        if re.search(r"\bexplain\b", text):
+            return [ExplainCommand()]
+
+        # Diagnose / troubleshoot
+        if re.search(r"\b(diagnos\w*|troubleshoot\w*|what'?s? wrong|problem)\b", text):
+            return [DiagnoseCommand()]
+            return [DiagnoseCommand()]
 
         # Analyze
         if re.search(r"\banalyz", text):
@@ -276,7 +285,8 @@ class LocalLLMProvider(LLMInterpreter):
             "You are an optical design assistant. Convert the user's request "
             "into a JSON array of structured commands. Each command must have "
             "an 'action' field. Valid actions: modify_component, add_component, "
-            "remove_component, set_object, set_image_plane, analyze, optimize. "
+            "remove_component, set_object, set_image_plane, analyze, optimize, "
+            "explain, diagnose. "
             "All lengths must be in meters. Return ONLY valid JSON, no other text."
         )
 

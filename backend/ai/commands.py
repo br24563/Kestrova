@@ -121,6 +121,34 @@ class OptimizeCommand(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Explanation and Troubleshooting Commands
+# ---------------------------------------------------------------------------
+
+class ExplainCommand(BaseModel):
+    """
+    Produce a rich natural-language explanation of the current system.
+
+    The AI itself does not perform any optical calculations. The engine
+    computes all metrics from the validated optics modules and builds an
+    educational explanation of what the numbers mean.
+    """
+
+    action: Literal["explain"] = "explain"
+
+
+class DiagnoseCommand(BaseModel):
+    """
+    Troubleshoot the current optical system.
+
+    The engine inspects the validated system for common issues (ignoring
+    the LLM entirely) and returns a list of findings with concrete,
+    actionable suggestions.
+    """
+
+    action: Literal["diagnose"] = "diagnose"
+
+
+# ---------------------------------------------------------------------------
 # Discriminated Union
 # ---------------------------------------------------------------------------
 
@@ -133,6 +161,8 @@ AICommand = Annotated[
         SetImagePlaneCommand,
         AnalyzeCommand,
         OptimizeCommand,
+        ExplainCommand,
+        DiagnoseCommand,
     ],
     Field(discriminator="action"),
 ]
