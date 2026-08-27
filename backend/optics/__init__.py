@@ -91,3 +91,8 @@ from .diffraction import (
     airy_disk_radius, psf, encircled_energy,
     mtf, otf, diffraction_limited_check, diffraction_analysis,
 )
+from .batch import batch_analyze_systems, batch_sweep_and_analyze
+from .tolerance import tolerance_analysis
+from .report import (
+    compare_systems, system_spot_svg, engineering_report_markdown,
+)
