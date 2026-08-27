@@ -26,8 +26,10 @@ from .commands import (
     AICommand, ModifyComponentCommand, AddComponentCommand,
     RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
     AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
+    DesignCommand,
 )
 from .explanations import explain_system, diagnose_system
+from .design import design_from_requirements
 
 
 # ---------------------------------------------------------------------------
@@ -86,8 +88,8 @@ def apply_command(system: OpticalSystem, command: AICommand) -> OpticalSystem:
         # Optimize returns a new system; handled in execute_command
         return system
 
-    if isinstance(command, (ExplainCommand, DiagnoseCommand)):
-        # Explanation / diagnosis do not modify the system
+    if isinstance(command, (ExplainCommand, DiagnoseCommand, DesignCommand)):
+        # Explanation / diagnosis / design do not modify the current system
         return system
 
     raise ValueError(f"Unknown command type: {type(command).__name__}")
@@ -200,6 +202,31 @@ def execute_command(
             "system": system,
             "warnings": diagnosis["findings"],
             "result": diagnosis,
+            "message": message,
+        }
+
+    if isinstance(command, DesignCommand):
+        result = design_from_requirements(
+            magnification=command.magnification,
+            wavelength=command.wavelength,
+            aperture_diameter=command.aperture_diameter,
+            objective=command.objective,
+            num_candidates=command.num_candidates,
+        )
+        best = result["candidates"][0] if result["candidates"] else None
+        if best is None:
+            raise ValueError("Design search produced no candidates.")
+        # The designed system becomes the new current system.
+        message = (
+            f"Designed a system achieving magnification {best['magnification']:.2f} "
+            f"(target {command.magnification if command.magnification else 'n/a'}) "
+            f"with EFL {best['efl_mm']:.1f} mm and RMS spot "
+            f"{best['rms_spot_um']:.2f} um."
+        )
+        return {
+            "system": best["system"],
+            "warnings": best["warnings"],
+            "result": result,
             "message": message,
         }
 
