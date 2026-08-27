@@ -26,6 +26,7 @@ from .commands import (
     AICommand, ModifyComponentCommand, AddComponentCommand,
     RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
     AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
+    DesignCommand,
 )
 from .interpreter import LLMInterpreter
 
@@ -118,7 +119,34 @@ class RuleBasedParser:
         # Diagnose / troubleshoot
         if re.search(r"\b(diagnos\w*|troubleshoot\w*|what'?s? wrong|problem)\b", text):
             return [DiagnoseCommand()]
-            return [DiagnoseCommand()]
+
+        # Design from requirements
+        # e.g. "design a 5x imaging system at 532 nm with a 10 mm aperture"
+        if re.search(r"\bdesign\b.*?imaging", text, re.IGNORECASE) or re.search(
+            r"\bdesign\b.*?(magnif|power)", text, re.IGNORECASE
+        ):
+            magnification = None
+            mag_match = re.search(r"([-+]?\d*\.?\d+)\s*x", text)
+            if mag_match:
+                magnification = float(mag_match.group(1))
+            wavelength = None
+            wl_match = re.search(r"at\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)", text)
+            if wl_match:
+                wavelength = _parse_length(wl_match.group(1))
+            aperture = None
+            ap_match = re.search(
+                r"([-+]?\d*\.?\d+)\s*(nm|um|µm|mm|cm|m)?\s+aperture", text
+            )
+            if ap_match:
+                aperture = _parse_length(
+                    ap_match.group(1) + (ap_match.group(2) or "mm")
+                )
+            return [DesignCommand(
+                magnification=magnification,
+                wavelength=wavelength,
+                aperture_diameter=aperture,
+                objective="rms_spot",
+            )]
 
         # Analyze
         if re.search(r"\banalyz", text):
@@ -286,7 +314,7 @@ class LocalLLMProvider(LLMInterpreter):
             "into a JSON array of structured commands. Each command must have "
             "an 'action' field. Valid actions: modify_component, add_component, "
             "remove_component, set_object, set_image_plane, analyze, optimize, "
-            "explain, diagnose. "
+            "explain, diagnose, design. "
             "All lengths must be in meters. Return ONLY valid JSON, no other text."
         )
 

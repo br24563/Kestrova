@@ -14,11 +14,12 @@ from optics.systems import create_default_system, get_component_by_id
 from ai.commands import (
     ModifyComponentCommand, AddComponentCommand, RemoveComponentCommand,
     SetObjectCommand, SetImagePlaneCommand, AnalyzeCommand, OptimizeCommand,
-    ExplainCommand, DiagnoseCommand,
+    ExplainCommand, DiagnoseCommand, DesignCommand,
 )
 from ai.engine import apply_command, execute_command
 from ai.local_provider import RuleBasedParser, LocalLLMProvider
 from ai.explanations import explain_system, diagnose_system
+from ai.design import design_from_requirements
 
 
 # ---------------------------------------------------------------------------
@@ -427,3 +428,69 @@ def test_end_to_end_explain():
     commands = provider.interpret("what's wrong with this system")
     result = execute_command(system, commands[0])
     assert "findings" in result["result"]
+
+
+# ---------------------------------------------------------------------------
+# Design-from-Requirements Tests (Phase 7)
+# ---------------------------------------------------------------------------
+
+def test_design_command_returns_design():
+    """execute_command for a DesignCommand produces candidates and a new system."""
+    system = make_single_lens_system()
+    cmd = DesignCommand(
+        magnification=-5.0, wavelength=532e-9, aperture_diameter=0.010,
+        objective="rms_spot",
+    )
+    result = execute_command(system, cmd)
+    # The designed system is returned (and magnification target pursued)
+    assert result["result"]["candidates"]
+    assert "Designed" in result["message"]
+    assert result["system"] is not None
+
+
+def test_design_from_requirements_achieves_magnification():
+    """A design request for -5x should reach near that magnification."""
+    result = design_from_requirements(
+        magnification=-5.0, wavelength=532e-9, aperture_diameter=0.010,
+        maxiter=40,
+    )
+    best = result["candidates"][0]
+    assert best["magnification"] == pytest.approx(-5.0, abs=0.8)
+
+
+def test_design_from_requirements_sets_wavelength():
+    """The designed system should use the requested wavelength."""
+    result = design_from_requirements(
+        magnification=-3.0, wavelength=532e-9, aperture_diameter=0.010,
+        maxiter=40,
+    )
+    best = result["candidates"][0]
+    assert best["system"].analysis_settings.wavelength == pytest.approx(532e-9)
+
+
+def test_design_default_wavelength():
+    """Without a wavelength, design uses the 550 nm default."""
+    result = design_from_requirements(magnification=-2.0, maxiter=30)
+    assert result["requirements"]["wavelength"] == 550e-9
+
+
+def test_parse_design_prompt():
+    """The parser recognizes a design-from-requirements prompt."""
+    parser = RuleBasedParser()
+    commands = parser.parse("design a 5x imaging system at 532 nm with a 10 mm aperture")
+    assert len(commands) == 1
+    assert isinstance(commands[0], DesignCommand)
+    assert commands[0].magnification == pytest.approx(5.0)
+    assert commands[0].wavelength == pytest.approx(532e-9)
+    assert commands[0].aperture_diameter == pytest.approx(0.010)
+
+
+def test_end_to_end_design():
+    """Full flow: prompt -> design command -> optimized system."""
+    system = make_single_lens_system()
+    provider = LocalLLMProvider()
+    cmd = provider.interpret("design a 4x imaging system at 550 nm")
+    assert len(cmd) == 1
+    assert isinstance(cmd[0], DesignCommand)
+    result = execute_command(system, cmd[0])
+    assert "Designed" in result["message"]

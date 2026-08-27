@@ -17,17 +17,20 @@ from .commands import (
     AICommand, ModifyComponentCommand, AddComponentCommand,
     RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
     AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
+    DesignCommand,
 )
 from .engine import apply_command, execute_command
 from .interpreter import LLMInterpreter
 from .local_provider import LocalLLMProvider
 from .explanations import explain_system, diagnose_system
+from .design import design_from_requirements
 
 __all__ = [
     "AICommand", "ModifyComponentCommand", "AddComponentCommand",
     "RemoveComponentCommand", "SetObjectCommand", "SetImagePlaneCommand",
     "AnalyzeCommand", "OptimizeCommand", "ExplainCommand", "DiagnoseCommand",
+    "DesignCommand",
     "apply_command", "execute_command",
     "LLMInterpreter", "LocalLLMProvider",
-    "explain_system", "diagnose_system",
+    "explain_system", "diagnose_system", "design_from_requirements",
 ]

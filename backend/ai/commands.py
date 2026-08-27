@@ -149,6 +149,40 @@ class DiagnoseCommand(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Design-from-Requirements Command
+# ---------------------------------------------------------------------------
+
+class DesignCommand(BaseModel):
+    """
+    Design an optical system from a set of requirements.
+
+    The AI does not perform any optical calculations itself. It only
+    carries the parsed requirements; the engine (design.py) uses the
+    validated optics engine to build and optimize candidate designs.
+
+    Example requirements: "5x imaging at 532 nm with a 10 mm aperture
+    and minimum RMS spot."
+    """
+
+    action: Literal["design"] = "design"
+    magnification: Optional[float] = Field(
+        None, description="Target magnification (dimensionless, signed)"
+    )
+    wavelength: Optional[float] = Field(
+        None, description="Operating wavelength (meters). Defaults to 550 nm."
+    )
+    aperture_diameter: Optional[float] = Field(
+        None, description="Required aperture diameter (meters)."
+    )
+    objective: Literal["rms_spot", "magnification"] = Field(
+        "rms_spot", description="Primary objective for the design search"
+    )
+    num_candidates: int = Field(
+        1, ge=1, le=5, description="Number of candidate designs to produce"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Discriminated Union
 # ---------------------------------------------------------------------------
 
@@ -163,6 +197,7 @@ AICommand = Annotated[
         OptimizeCommand,
         ExplainCommand,
         DiagnoseCommand,
+        DesignCommand,
     ],
     Field(discriminator="action"),
 ]
