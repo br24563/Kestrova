@@ -38,6 +38,16 @@ from optics.optimization import (
     parameter_sweep as run_parameter_sweep,
     minimize_rms_spot, target_magnification, target_efl,
 )
+from optics.batch import (
+    batch_analyze_systems as run_batch_analyze,
+    batch_sweep_and_analyze as run_batch_sweep,
+)
+from optics.tolerance import tolerance_analysis as run_tolerance
+from optics.report import (
+    compare_systems as run_compare,
+    system_spot_svg as run_spot_svg,
+    engineering_report_markdown as run_report_markdown,
+)
 from persistence import (
     save_system as db_save_system,
     list_systems as db_list_systems,
@@ -89,6 +99,36 @@ class SweepRequest(BaseModel):
     values: list[float]
     num_rays: Optional[int] = None
     aperture_fraction: Optional[float] = None
+
+
+class CompareRequest(BaseModel):
+    """Request body for comparing two systems."""
+    system_a: OpticalSystem
+    system_b: OpticalSystem
+    label_a: str = "Design A"
+    label_b: str = "Design B"
+
+
+class BatchRequest(BaseModel):
+    """Request body for batch analysis."""
+    systems: list[OpticalSystem]
+
+
+class ToleranceRequest(BaseModel):
+    """Request body for Monte-Carlo tolerance analysis."""
+    system: OpticalSystem
+    tolerances: Optional[dict[str, float]] = None
+    trials: int = 100
+    seed: Optional[int] = None
+
+
+class ReportRequest(BaseModel):
+    """Request body for generating an engineering report."""
+    system_a: Optional[OpticalSystem] = None
+    system_b: Optional[OpticalSystem] = None
+    label_a: str = "Design A"
+    label_b: str = "Design B"
+    include_svg: bool = False
 
 
 class SystemResponse(BaseModel):
@@ -179,6 +219,10 @@ async def root():
             "POST /api/analyze": "Analyze an optical system",
             "POST /api/optimize": "Numerically optimize system parameters",
             "POST /api/sweep": "Sweep a parameter across a range of values",
+            "POST /api/compare": "Compare two systems side by side",
+            "POST /api/batch": "Batch-analyze a list of systems",
+            "POST /api/tolerance": "Run Monte-Carlo tolerance analysis",
+            "POST /api/report": "Generate an engineering (Markdown) report",
             "POST /api/analyze/aberration": "Analyze chromatic aberration",
             "POST /api/validate": "Validate an optical system",
             "GET /api/systems": "List saved projects",
@@ -325,6 +369,61 @@ async def sweep(request: SweepRequest):
             }
             for value, result in results
         ]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/compare")
+async def compare(request: CompareRequest):
+    """Compare two optical systems side by side."""
+    try:
+        return run_compare(
+            request.system_a, request.system_b,
+            request.label_a, request.label_b,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/batch")
+async def batch_analyze(request: BatchRequest):
+    """Analyze a list of optical systems in batch."""
+    try:
+        return run_batch_analyze(request.systems)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/tolerance")
+async def tolerance(request: ToleranceRequest):
+    """Run a Monte-Carlo tolerance analysis on a system."""
+    try:
+        result = run_tolerance(
+            request.system,
+            tolerances=request.tolerances,
+            trials=request.trials,
+            seed=request.seed,
+        )
+        # Drop the heavy "worst" system from the response to keep it light.
+        result.pop("worst", None)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/report")
+async def report(request: ReportRequest):
+    """Generate an engineering (Markdown) report for one or two designs."""
+    try:
+        return {
+            "markdown": run_report_markdown(
+                request.system_a,
+                request.system_b,
+                request.label_a,
+                request.label_b,
+                request.include_svg,
+            )
+        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
