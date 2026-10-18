@@ -30,10 +30,10 @@ from optics.seidel import seidel_analysis
 from optics.materials_expanded import ALL_MATERIALS, get_material_properties
 from .conversation import extract_numbers, number_before, number_after
 
-
 # =============================================================================
 # Reference design library
 # =============================================================================
+
 
 @dataclass
 class ReferenceDesign:
@@ -42,52 +42,98 @@ class ReferenceDesign:
     R. Kingslake, *A History of the Photographic Lens*, 1989; W. J. Smith,
     *Modern Lens Design*, 2nd ed., 2005).
     """
+
     name: str
     n_elements: int
-    power_signs: Optional[str] = None   # element power signs, front to back
+    power_signs: Optional[str] = None  # element power signs, front to back
     afocal: bool = False
-    property: str = ""                  # extra defining condition, see _matches
+    property: str = ""  # extra defining condition, see _matches
     description: str = ""
     typical_use: str = ""
 
 
 REFERENCE_DESIGNS = (
-    ReferenceDesign("Singlet", 1, "+", description="Single positive element; "
-                    "spherical aberration and colour uncorrected.",
-                    typical_use="Condensers, laser focusing"),
-    ReferenceDesign("Achromatic doublet", 2, "+-", property="achromat",
-                    description="Crown and flint pair of opposite power correcting "
-                                "primary axial colour.",
-                    typical_use="General purpose imaging"),
-    ReferenceDesign("Keplerian telescope", 2, "++", afocal=True,
-                    description="Two positive groups separated by the sum of their "
-                                "focal lengths; inverted image.",
-                    typical_use="Astronomy, beam expansion"),
-    ReferenceDesign("Galilean telescope", 2, "+-", afocal=True,
-                    description="Positive objective with negative eyepiece; erect image.",
-                    typical_use="Opera glasses, laser expanders"),
-    ReferenceDesign("Cooke triplet", 3, "+-+",
-                    description="Positive, negative, positive separated elements; "
-                                "the classic three-element anastigmat.",
-                    typical_use="General photography"),
-    ReferenceDesign("Tessar", 4, "+-" + "-+", property="",
-                    description="Triplet form with the rear element a cemented doublet.",
-                    typical_use="Compact cameras, enlarging"),
-    ReferenceDesign("Petzval lens", 4, property="two_groups",
-                    description="Two separated positive groups; fast with strong "
-                                "field curvature.",
-                    typical_use="Portrait and projection lenses"),
-    ReferenceDesign("Double Gauss", 6, property="",
-                    description="Two near-symmetric Gauss groups about the stop.",
-                    typical_use="Fast standard lenses"),
-    ReferenceDesign("Telephoto", 2, property="telephoto",
-                    description="Positive front group and negative rear group; total "
-                                "length shorter than the focal length.",
-                    typical_use="Long-focus photography"),
-    ReferenceDesign("Retrofocus", 2, property="retrofocus",
-                    description="Negative front group and positive rear group; back "
-                                "focal distance longer than the focal length.",
-                    typical_use="Wide-angle lenses with clearance behind the lens"),
+    ReferenceDesign(
+        "Singlet",
+        1,
+        "+",
+        description="Single positive element; "
+        "spherical aberration and colour uncorrected.",
+        typical_use="Condensers, laser focusing",
+    ),
+    ReferenceDesign(
+        "Achromatic doublet",
+        2,
+        "+-",
+        property="achromat",
+        description="Crown and flint pair of opposite power correcting "
+        "primary axial colour.",
+        typical_use="General purpose imaging",
+    ),
+    ReferenceDesign(
+        "Keplerian telescope",
+        2,
+        "++",
+        afocal=True,
+        description="Two positive groups separated by the sum of their "
+        "focal lengths; inverted image.",
+        typical_use="Astronomy, beam expansion",
+    ),
+    ReferenceDesign(
+        "Galilean telescope",
+        2,
+        "+-",
+        afocal=True,
+        description="Positive objective with negative eyepiece; erect image.",
+        typical_use="Opera glasses, laser expanders",
+    ),
+    ReferenceDesign(
+        "Cooke triplet",
+        3,
+        "+-+",
+        description="Positive, negative, positive separated elements; "
+        "the classic three-element anastigmat.",
+        typical_use="General photography",
+    ),
+    ReferenceDesign(
+        "Tessar",
+        4,
+        "+-" + "-+",
+        property="",
+        description="Triplet form with the rear element a cemented doublet.",
+        typical_use="Compact cameras, enlarging",
+    ),
+    ReferenceDesign(
+        "Petzval lens",
+        4,
+        property="two_groups",
+        description="Two separated positive groups; fast with strong "
+        "field curvature.",
+        typical_use="Portrait and projection lenses",
+    ),
+    ReferenceDesign(
+        "Double Gauss",
+        6,
+        property="",
+        description="Two near-symmetric Gauss groups about the stop.",
+        typical_use="Fast standard lenses",
+    ),
+    ReferenceDesign(
+        "Telephoto",
+        2,
+        property="telephoto",
+        description="Positive front group and negative rear group; total "
+        "length shorter than the focal length.",
+        typical_use="Long-focus photography",
+    ),
+    ReferenceDesign(
+        "Retrofocus",
+        2,
+        property="retrofocus",
+        description="Negative front group and positive rear group; back "
+        "focal distance longer than the focal length.",
+        typical_use="Wide-angle lenses with clearance behind the lens",
+    ),
 )
 
 
@@ -102,6 +148,7 @@ CLAIM_TOLERANCE = 0.01  # 1 percent
 @dataclass
 class ClaimResult:
     """Outcome of verifying a single stated claim."""
+
     claim: str
     kind: str
     verified: bool
@@ -132,25 +179,57 @@ def _rel_error(actual: float, stated: float) -> float:
     return abs(actual - stated) / abs(stated)
 
 
-def _numeric_verdict(claim: str, kind: str, stated: float, actual: float,
-                     unit: str, tolerance: float) -> ClaimResult:
+def _numeric_verdict(
+    claim: str, kind: str, stated: float, actual: float, unit: str, tolerance: float
+) -> ClaimResult:
     """Build a ClaimResult for a numeric claim."""
     err = _rel_error(actual, stated)
     ok = err <= tolerance
     if ok:
-        msg = ("VERIFIED: " + kind + " is " + str(round(actual, 6)) + " " + unit
-               + " (stated " + str(stated) + ", error " + str(round(err * 100.0, 4)) + "%).")
+        msg = (
+            "VERIFIED: "
+            + kind
+            + " is "
+            + str(round(actual, 6))
+            + " "
+            + unit
+            + " (stated "
+            + str(stated)
+            + ", error "
+            + str(round(err * 100.0, 4))
+            + "%)."
+        )
     else:
-        msg = ("MISMATCH: stated " + kind + " = " + str(stated) + " " + unit
-               + " but the engine computes " + str(round(actual, 6)) + " " + unit
-               + " (error " + str(round(err * 100.0, 4)) + "%).")
-    return ClaimResult(claim=claim, kind=kind, verified=ok, stated=stated,
-                       actual=actual, unit=unit, error_pct=err * 100.0,
-                       message=msg)
+        msg = (
+            "MISMATCH: stated "
+            + kind
+            + " = "
+            + str(stated)
+            + " "
+            + unit
+            + " but the engine computes "
+            + str(round(actual, 6))
+            + " "
+            + unit
+            + " (error "
+            + str(round(err * 100.0, 4))
+            + "%)."
+        )
+    return ClaimResult(
+        claim=claim,
+        kind=kind,
+        verified=ok,
+        stated=stated,
+        actual=actual,
+        unit=unit,
+        error_pct=err * 100.0,
+        message=msg,
+    )
 
 
-def verify_claim(system: OpticalSystem, claim: str,
-                 tolerance: float = CLAIM_TOLERANCE) -> ClaimResult:
+def verify_claim(
+    system: OpticalSystem, claim: str, tolerance: float = CLAIM_TOLERANCE
+) -> ClaimResult:
     """
     Verify a statement about the system against computed values.
 
@@ -165,18 +244,29 @@ def verify_claim(system: OpticalSystem, claim: str,
     if "diffraction limited" in low or "diffraction-limited" in low:
         dl = diffraction_limited_check(system)
         actual = bool(dl.get("is_diffraction_limited"))
-        claims_negative = (("not " in low) or ("isn" + chr(39) + "t" in low)
-                           or ("n" + chr(39) + "t " in low) or ("non-" in low))
+        claims_negative = (
+            ("not " in low)
+            or ("isn" + chr(39) + "t" in low)
+            or ("n" + chr(39) + "t " in low)
+            or ("non-" in low)
+        )
         claimed = not claims_negative
-        ok = (claimed == actual)
+        ok = claimed == actual
         if ok:
-            msg = ("VERIFIED: the engine reports the system is "
-                   + ("" if actual else "NOT ") + "diffraction limited (Strehl/RMS check).")
+            msg = (
+                "VERIFIED: the engine reports the system is "
+                + ("" if actual else "NOT ")
+                + "diffraction limited (Strehl/RMS check)."
+            )
         else:
-            msg = ("MISMATCH: the engine reports the system is "
-                   + ("" if actual else "NOT ") + "diffraction limited.")
-        return ClaimResult(claim=claim, kind="diffraction_limited", verified=ok,
-                           message=msg)
+            msg = (
+                "MISMATCH: the engine reports the system is "
+                + ("" if actual else "NOT ")
+                + "diffraction limited."
+            )
+        return ClaimResult(
+            claim=claim, kind="diffraction_limited", verified=ok, message=msg
+        )
 
     # --- effective focal length ---
     if "efl" in low or "focal length" in low:
@@ -201,7 +291,7 @@ def verify_claim(system: OpticalSystem, claim: str,
         stated = None
         for idx, ch in enumerate(low):
             if ch == "x" and idx > 0:
-                prior = extract_numbers(low[max(0, idx - 10):idx])
+                prior = extract_numbers(low[max(0, idx - 10) : idx])
                 if prior:
                     stated = prior[-1]
                     break
@@ -211,17 +301,29 @@ def verify_claim(system: OpticalSystem, claim: str,
         if stated is not None:
             err = _rel_error(abs(result.magnification), abs(stated))
             if err <= tolerance and result.magnification * stated < 0:
-                msg = ("VERIFIED with note: |magnification| is "
-                       + str(round(abs(result.magnification), 6))
-                       + " (stated " + str(abs(stated)) + "). The image is "
-                       + ("inverted" if result.magnification < 0 else "erect")
-                       + ", so the signed magnification is "
-                       + str(round(result.magnification, 6)) + ".")
-                return ClaimResult(claim=claim, kind="magnification", verified=True,
-                                   stated=stated, actual=result.magnification,
-                                   error_pct=err * 100.0, message=msg)
-            return _numeric_verdict(claim, "magnification", stated,
-                                    result.magnification, "", tolerance)
+                msg = (
+                    "VERIFIED with note: |magnification| is "
+                    + str(round(abs(result.magnification), 6))
+                    + " (stated "
+                    + str(abs(stated))
+                    + "). The image is "
+                    + ("inverted" if result.magnification < 0 else "erect")
+                    + ", so the signed magnification is "
+                    + str(round(result.magnification, 6))
+                    + "."
+                )
+                return ClaimResult(
+                    claim=claim,
+                    kind="magnification",
+                    verified=True,
+                    stated=stated,
+                    actual=result.magnification,
+                    error_pct=err * 100.0,
+                    message=msg,
+                )
+            return _numeric_verdict(
+                claim, "magnification", stated, result.magnification, "", tolerance
+            )
 
     # --- f-number ---
     if "f/" in low or "f-number" in low or "f number" in low or "fno" in low:
@@ -231,8 +333,9 @@ def verify_claim(system: OpticalSystem, claim: str,
             nums = extract_numbers(low)
             stated = nums[0] if nums else None
         if stated is not None:
-            return _numeric_verdict(claim, "f-number", stated,
-                                    result.f_number, "", tolerance)
+            return _numeric_verdict(
+                claim, "f-number", stated, result.f_number, "", tolerance
+            )
 
     # --- RMS spot radius ---
     if "rms" in low or "spot" in low:
@@ -246,19 +349,25 @@ def verify_claim(system: OpticalSystem, claim: str,
             actual = result.rms_spot_radius * 1e6
             unit = "um"
         if stated is not None:
-            return _numeric_verdict(claim, "RMS spot radius", stated, actual,
-                                    unit, tolerance)
+            return _numeric_verdict(
+                claim, "RMS spot radius", stated, actual, unit, tolerance
+            )
 
     return ClaimResult(
-        claim=claim, kind="unknown", verified=False,
-        message=("Could not parse a verifiable quantity from that claim. "
-                 "Try: 'EFL is 100 mm', 'f/2.8', 'magnification is -1x', "
-                 "'RMS spot is 10 um', 'the system is diffraction limited'."),
+        claim=claim,
+        kind="unknown",
+        verified=False,
+        message=(
+            "Could not parse a verifiable quantity from that claim. "
+            "Try: 'EFL is 100 mm', 'f/2.8', 'magnification is -1x', "
+            "'RMS spot is 10 um', 'the system is diffraction limited'."
+        ),
     )
 
 
-def verify_claims(system: OpticalSystem, claims: list,
-                  tolerance: float = CLAIM_TOLERANCE) -> list:
+def verify_claims(
+    system: OpticalSystem, claims: list, tolerance: float = CLAIM_TOLERANCE
+) -> list:
     """Verify several claims and return the list of ClaimResult objects."""
     return [verify_claim(system, c, tolerance) for c in claims]
 
@@ -267,11 +376,13 @@ def verify_claims(system: OpticalSystem, claims: list,
 # Design-rule checking (manufacturability)
 # =============================================================================
 
+
 @dataclass
 class Finding:
     """A single design-rule finding."""
+
     rule: str
-    level: str          # info | warning | error
+    level: str  # info | warning | error
     message: str
     surface: Optional[int] = None
     value: Optional[float] = None
@@ -280,22 +391,32 @@ class Finding:
     def as_dict(self) -> dict:
         """Return the finding as a JSON-friendly dict."""
         return {
-            "rule": self.rule, "level": self.level, "message": self.message,
-            "surface": self.surface, "value": self.value, "limit": self.limit,
+            "rule": self.rule,
+            "level": self.level,
+            "message": self.message,
+            "surface": self.surface,
+            "value": self.value,
+            "limit": self.limit,
         }
 
 
 # Manufacturability defaults used by the rule checks.
-MIN_EDGE_THICKNESS_M = 1.0e-3     # 1.0 mm minimum edge
-MAX_ASPECT_RATIO = 10.0           # diameter / centre thickness
-MIN_CENTER_THICKNESS_M = 1.0e-3   # 1.0 mm minimum centre
+MIN_EDGE_THICKNESS_M = 1.0e-3  # 1.0 mm minimum edge
+MAX_ASPECT_RATIO = 10.0  # diameter / centre thickness
+MIN_CENTER_THICKNESS_M = 1.0e-3  # 1.0 mm minimum centre
 
 
 def _element_geometry(comp):
     """(semi_aperture, centre thickness, r1, r2, material) of a ThickLens.
     Ideal thin lenses have no geometry and return None."""
     if isinstance(comp, ThickLens):
-        return comp.aperture_diameter / 2.0, comp.thickness, comp.radius1, comp.radius2, comp.material
+        return (
+            comp.aperture_diameter / 2.0,
+            comp.thickness,
+            comp.radius1,
+            comp.radius2,
+            comp.material,
+        )
     return None
 
 
@@ -306,11 +427,14 @@ def _sag(radius: float, semi_aperture: float) -> float:
         return 0.0
     if semi_aperture >= abs(radius):
         raise ValueError("semi-aperture exceeds the surface radius")
-    return radius - math.copysign(math.sqrt(radius * radius - semi_aperture * semi_aperture), radius)
+    return radius - math.copysign(
+        math.sqrt(radius * radius - semi_aperture * semi_aperture), radius
+    )
 
 
-def check_edge_thickness(system: OpticalSystem,
-                         minimum: float = MIN_EDGE_THICKNESS_M) -> list:
+def check_edge_thickness(
+    system: OpticalSystem, minimum: float = MIN_EDGE_THICKNESS_M
+) -> list:
     """Flag elements whose edge thickness is below the manufacturing floor."""
     findings = []
     surface = 0
@@ -323,32 +447,53 @@ def check_edge_thickness(system: OpticalSystem,
         try:
             edge = thickness - _sag(r1, semi) + _sag(r2, semi)
         except ValueError:
-            findings.append(Finding(
-                rule="edge_thickness", level="error",
-                message="Element " + comp.id + ": the clear aperture is larger than a "
-                        "surface radius, so the lens cannot be made.",
-                surface=surface))
+            findings.append(
+                Finding(
+                    rule="edge_thickness",
+                    level="error",
+                    message="Element "
+                    + comp.id
+                    + ": the clear aperture is larger than a "
+                    "surface radius, so the lens cannot be made.",
+                    surface=surface,
+                )
+            )
             continue
         if edge < minimum:
-            findings.append(Finding(
-                rule="edge_thickness",
-                level="error" if edge <= 0 else "warning",
-                message=("Element " + comp.id + " edge thickness "
-                         + str(round(edge * 1000.0, 3)) + " mm is below the "
-                         + str(round(minimum * 1000.0, 3)) + " mm floor."),
-                surface=surface, value=edge, limit=minimum,
-            ))
+            findings.append(
+                Finding(
+                    rule="edge_thickness",
+                    level="error" if edge <= 0 else "warning",
+                    message=(
+                        "Element "
+                        + comp.id
+                        + " edge thickness "
+                        + str(round(edge * 1000.0, 3))
+                        + " mm is below the "
+                        + str(round(minimum * 1000.0, 3))
+                        + " mm floor."
+                    ),
+                    surface=surface,
+                    value=edge,
+                    limit=minimum,
+                )
+            )
     if not findings:
-        findings.append(Finding(
-            rule="edge_thickness", level="info",
-            message="All element edge thicknesses meet the "
-                    + str(round(minimum * 1000.0, 3)) + " mm floor.",
-        ))
+        findings.append(
+            Finding(
+                rule="edge_thickness",
+                level="info",
+                message="All element edge thicknesses meet the "
+                + str(round(minimum * 1000.0, 3))
+                + " mm floor.",
+            )
+        )
     return findings
 
 
-def check_center_thickness(system: OpticalSystem,
-                           minimum: float = MIN_CENTER_THICKNESS_M) -> list:
+def check_center_thickness(
+    system: OpticalSystem, minimum: float = MIN_CENTER_THICKNESS_M
+) -> list:
     """Flag elements thinner at the centre than the manufacturing floor."""
     findings = []
     for comp in sorted(system.components, key=lambda c: c.position):
@@ -357,18 +502,29 @@ def check_center_thickness(system: OpticalSystem,
             continue
         thickness = geo[1]
         if thickness < minimum:
-            findings.append(Finding(
-                rule="center_thickness", level="warning",
-                message=("Element " + comp.id + " centre thickness "
-                         + str(round(thickness * 1000.0, 3)) + " mm is below the "
-                         + str(round(minimum * 1000.0, 3)) + " mm floor."),
-                value=thickness, limit=minimum,
-            ))
+            findings.append(
+                Finding(
+                    rule="center_thickness",
+                    level="warning",
+                    message=(
+                        "Element "
+                        + comp.id
+                        + " centre thickness "
+                        + str(round(thickness * 1000.0, 3))
+                        + " mm is below the "
+                        + str(round(minimum * 1000.0, 3))
+                        + " mm floor."
+                    ),
+                    value=thickness,
+                    limit=minimum,
+                )
+            )
     return findings
 
 
-def check_element_aspect_ratio(system: OpticalSystem,
-                                maximum: float = MAX_ASPECT_RATIO) -> list:
+def check_element_aspect_ratio(
+    system: OpticalSystem, maximum: float = MAX_ASPECT_RATIO
+) -> list:
     """Flag elements that are too thin relative to their diameter."""
     findings = []
     for comp in sorted(system.components, key=lambda c: c.position):
@@ -380,12 +536,23 @@ def check_element_aspect_ratio(system: OpticalSystem,
             continue
         ratio = (2.0 * semi) / thickness
         if ratio > maximum:
-            findings.append(Finding(
-                rule="aspect_ratio", level="warning",
-                message=("Element " + comp.id + " diameter/thickness ratio "
-                         + str(round(ratio, 2)) + " exceeds " + str(maximum) + "."),
-                value=ratio, limit=maximum,
-            ))
+            findings.append(
+                Finding(
+                    rule="aspect_ratio",
+                    level="warning",
+                    message=(
+                        "Element "
+                        + comp.id
+                        + " diameter/thickness ratio "
+                        + str(round(ratio, 2))
+                        + " exceeds "
+                        + str(maximum)
+                        + "."
+                    ),
+                    value=ratio,
+                    limit=maximum,
+                )
+            )
     return findings
 
 
@@ -399,16 +566,27 @@ def check_glass_availability(system: OpticalSystem) -> list:
         if material.lower() == "air":
             continue
         if get_material_properties(material) is None:
-            findings.append(Finding(
-                rule="glass_availability", level="error",
-                message=("Element " + comp.id + " uses glass '" + str(material)
-                         + "' which is not in the catalog.")
-            ))
+            findings.append(
+                Finding(
+                    rule="glass_availability",
+                    level="error",
+                    message=(
+                        "Element "
+                        + comp.id
+                        + " uses glass '"
+                        + str(material)
+                        + "' which is not in the catalog."
+                    ),
+                )
+            )
     if not findings:
-        findings.append(Finding(
-            rule="glass_availability", level="info",
-            message="All element glasses are present in the catalog."
-        ))
+        findings.append(
+            Finding(
+                rule="glass_availability",
+                level="info",
+                message="All element glasses are present in the catalog.",
+            )
+        )
     return findings
 
 
@@ -439,9 +617,11 @@ def rule_check_summary(system: OpticalSystem) -> dict:
 # Prescription comparison against reference designs
 # =============================================================================
 
+
 @dataclass
 class PrescriptionComparison:
     """Result of comparing a design against the reference library."""
+
     closest: Optional[ReferenceDesign] = None
     score: float = float("inf")
     deltas: dict = field(default_factory=dict)
@@ -468,6 +648,7 @@ def count_elements(system: OpticalSystem) -> int:
 
 def _element_powers(system: OpticalSystem) -> list:
     from optics import raytrace as rt
+
     wl = system.analysis_settings.wavelength
     out = []
     for c in sorted(system.components, key=lambda c: c.position):
@@ -484,6 +665,7 @@ def _element_powers(system: OpticalSystem) -> list:
 
 def _system_traits(system: OpticalSystem) -> dict:
     from optics import raytrace as rt
+
     seq = rt.build_sequence(system)
     fo = rt.first_order(system, seq=seq)
     powers = _element_powers(system)
@@ -511,10 +693,18 @@ def _matches(ref: ReferenceDesign, n_elem: int, t: dict) -> tuple:
         if t["afocal"] or n_elem < 2:
             return False, []
         if ref.property == "telephoto":
-            ok = t["telephoto_ratio"] < 1.0 and t["signs"][0] == "+" and t["signs"][-1] == "-"
+            ok = (
+                t["telephoto_ratio"] < 1.0
+                and t["signs"][0] == "+"
+                and t["signs"][-1] == "-"
+            )
             reasons.append(f"telephoto ratio {t['telephoto_ratio']:.2f} < 1")
         else:
-            ok = t["bfl_over_efl"] > 1.0 and t["signs"][0] == "-" and t["signs"][-1] == "+"
+            ok = (
+                t["bfl_over_efl"] > 1.0
+                and t["signs"][0] == "-"
+                and t["signs"][-1] == "+"
+            )
             reasons.append(f"back focus / EFL {t['bfl_over_efl']:.2f} > 1")
         return ok, reasons
     if n_elem != ref.n_elements:
@@ -526,6 +716,7 @@ def _matches(ref: ReferenceDesign, n_elem: int, t: dict) -> tuple:
         reasons.append("power sequence " + t["signs"])
     if ref.property == "achromat":
         from optics.materials import abbe_number
+
         try:
             v = [abbe_number(m) for m in t["materials"]]
         except ValueError:
@@ -541,7 +732,9 @@ def _matches(ref: ReferenceDesign, n_elem: int, t: dict) -> tuple:
     return True, reasons
 
 
-def verify_prescription(system: OpticalSystem, tolerance: float = 0.25) -> PrescriptionComparison:
+def verify_prescription(
+    system: OpticalSystem, tolerance: float = 0.25
+) -> PrescriptionComparison:
     """
     Identify which classic design classes the system belongs to from its
     structure (element count, power signs, afocality, telephoto/retrofocus
@@ -566,17 +759,22 @@ def verify_prescription(system: OpticalSystem, tolerance: float = 0.25) -> Presc
     comparison.deltas = deltas
     if not matches:
         comparison.score = float("inf")
-        comparison.summary = ("No classic design class matches this structure "
-                              f"({n_elem} elements, powers {t['signs']}"
-                              + (", afocal" if t["afocal"] else "") + ").")
+        comparison.summary = (
+            "No classic design class matches this structure "
+            f"({n_elem} elements, powers {t['signs']}"
+            + (", afocal" if t["afocal"] else "")
+            + ")."
+        )
         return comparison
     best, reasons = matches[0]
     comparison.closest = best
     comparison.score = 0.0
     comparison.within_tolerance = True
-    comparison.notes = (["Matches " + best.name + ": " + ", ".join(reasons) + "."]
-                        + ["Also matches " + m.name + "." for m, _ in matches[1:]]
-                        + ["Characteristic behaviour: " + best.description])
+    comparison.notes = (
+        ["Matches " + best.name + ": " + ", ".join(reasons) + "."]
+        + ["Also matches " + m.name + "." for m, _ in matches[1:]]
+        + ["Characteristic behaviour: " + best.description]
+    )
     comparison.summary = " ".join(comparison.notes)
     return comparison
 

@@ -32,12 +32,12 @@ from . import raytrace as rt
 
 @dataclass
 class WavefrontGrid:
-    px: np.ndarray            # (n, n) normalised pupil x
-    py: np.ndarray            # (n, n) normalised pupil y
-    W: np.ndarray             # (n, n) OPD in meters, NaN outside / vignetted
-    mask: np.ndarray          # (n, n) bool, rays that reached the image
+    px: np.ndarray  # (n, n) normalised pupil x
+    py: np.ndarray  # (n, n) normalised pupil y
+    W: np.ndarray  # (n, n) OPD in meters, NaN outside / vignetted
+    mask: np.ndarray  # (n, n) bool, rays that reached the image
     wavelength: float
-    na_image: float           # real image-space NA (n' sin U')
+    na_image: float  # real image-space NA (n' sin U')
     field_fraction: float
     first_order: rt.FirstOrder
 
@@ -58,15 +58,17 @@ class WavefrontGrid:
         return float(np.ptp(v)) if v.size else 0.0
 
 
-def image_space_na(system: OpticalSystem, wavelength: Optional[float] = None,
-                   seq=None, fo=None) -> float:
+def image_space_na(
+    system: OpticalSystem, wavelength: Optional[float] = None, seq=None, fo=None
+) -> float:
     """n' sin U' of the real on-axis marginal ray."""
     if seq is None:
         seq = rt.build_sequence(system, wavelength)
     if fo is None:
         fo = rt.first_order(system, seq=seq)
-    b, _, _ = rt.trace_field_rays(system, 0.0, 0.0, np.array([0.0]), np.array([1.0]),
-                                  seq=seq, fo=fo, clip=False)
+    b, _, _ = rt.trace_field_rays(
+        system, 0.0, 0.0, np.array([0.0]), np.array([1.0]), seq=seq, fo=fo, clip=False
+    )
     if not b.valid[0]:
         raise ValueError("The marginal ray cannot be traced")
     axis = seq.image_rotation[:, 2]
@@ -74,8 +76,13 @@ def image_space_na(system: OpticalSystem, wavelength: Optional[float] = None,
     return seq.n_image * math.sqrt(max(0.0, 1.0 - cos_u * cos_u))
 
 
-def wavefront_grid(system: OpticalSystem, field_fraction: float = 0.0, n: int = 64,
-                   wavelength: Optional[float] = None, defocus: float = 0.0) -> WavefrontGrid:
+def wavefront_grid(
+    system: OpticalSystem,
+    field_fraction: float = 0.0,
+    n: int = 64,
+    wavelength: Optional[float] = None,
+    defocus: float = 0.0,
+) -> WavefrontGrid:
     """
     OPD on an n x n pupil grid for the field point at ``field_fraction`` of
     the object height. ``defocus`` moves the image plane along the axis
@@ -85,15 +92,23 @@ def wavefront_grid(system: OpticalSystem, field_fraction: float = 0.0, n: int = 
         wavelength = system.analysis_settings.wavelength
     if defocus:
         seq0 = rt.build_sequence(system, wavelength)
-        system = system.model_copy(update={"image_plane": ImagePlane(
-            position=system.image_plane.position + defocus * seq0.image_direction)})
+        system = system.model_copy(
+            update={
+                "image_plane": ImagePlane(
+                    position=system.image_plane.position
+                    + defocus * seq0.image_direction
+                )
+            }
+        )
     seq = rt.build_sequence(system, wavelength)
     fo = rt.first_order(system, seq=seq)
     g = np.linspace(-1.0, 1.0, n)
     PX, PY = np.meshgrid(g, g)
-    inside = PX ** 2 + PY ** 2 <= 1.0 + 1e-12
+    inside = PX**2 + PY**2 <= 1.0 + 1e-12
     W = np.full((n, n), np.nan)
-    w, ok, _ = rt.opd(system, 0.0, field_fraction, PX[inside], PY[inside], seq=seq, fo=fo)
+    w, ok, _ = rt.opd(
+        system, 0.0, field_fraction, PX[inside], PY[inside], seq=seq, fo=fo
+    )
     vals = np.where(ok, w, np.nan)
     W[inside] = vals
     mask = np.isfinite(W)
@@ -113,19 +128,23 @@ def _pupil_field(grid: WavefrontGrid, pad: int):
     n = grid.W.shape[0]
     N = pad * n
     P = np.zeros((N, N), dtype=complex)
-    phase = np.where(grid.mask, 2.0 * math.pi * np.nan_to_num(grid.W) / grid.wavelength, 0.0)
+    phase = np.where(
+        grid.mask, 2.0 * math.pi * np.nan_to_num(grid.W) / grid.wavelength, 0.0
+    )
     P[:n, :n] = grid.mask * np.exp(1j * phase)
     if not grid.na_image > 0:
-        raise ValueError("Image space is afocal (no image-space NA): the PSF and MTF "
-                         "in image-plane units are undefined")
+        raise ValueError(
+            "Image space is afocal (no image-space NA): the PSF and MTF "
+            "in image-plane units are undefined"
+        )
     d_alpha = 2.0 * grid.na_image / (n - 1)
     return P, N, d_alpha
 
 
 @dataclass
 class PSFResult:
-    x: np.ndarray              # image-plane coordinates (meters), centred
-    intensity: np.ndarray      # (N, N), normalised so the unaberrated peak = 1
+    x: np.ndarray  # image-plane coordinates (meters), centred
+    intensity: np.ndarray  # (N, N), normalised so the unaberrated peak = 1
     strehl: float
     spacing: float
 
@@ -144,10 +163,10 @@ def psf(grid: WavefrontGrid, pad: int = 4) -> PSFResult:
 
 @dataclass
 class MTFResult:
-    frequency: np.ndarray       # cycles/m
-    tangential: np.ndarray      # MTF along y (meridional)
-    sagittal: np.ndarray        # MTF along x
-    cutoff: float               # 2 NA' / lambda
+    frequency: np.ndarray  # cycles/m
+    tangential: np.ndarray  # MTF along y (meridional)
+    sagittal: np.ndarray  # MTF along x
+    cutoff: float  # 2 NA' / lambda
     otf_tangential: np.ndarray  # complex
     otf_sagittal: np.ndarray
 
@@ -179,9 +198,14 @@ def mtf_at(result: MTFResult, frequency: float, direction: str = "tangential") -
     return float(np.interp(frequency, result.frequency, curve))
 
 
-def polychromatic_mtf(system: OpticalSystem, field_fraction: float = 0.0,
-                      wavelengths: Optional[list] = None, weights: Optional[list] = None,
-                      n: int = 64, frequencies: Optional[np.ndarray] = None) -> dict:
+def polychromatic_mtf(
+    system: OpticalSystem,
+    field_fraction: float = 0.0,
+    wavelengths: Optional[list] = None,
+    weights: Optional[list] = None,
+    n: int = 64,
+    frequencies: Optional[np.ndarray] = None,
+) -> dict:
     """
     Polychromatic MTF: weighted sum of the complex OTFs of each wavelength
     (each normalised to 1 at zero frequency), interpolated onto common
@@ -203,5 +227,9 @@ def polychromatic_mtf(system: OpticalSystem, field_fraction: float = 0.0,
             re = np.interp(frequencies, r.frequency, otf.real, right=0.0)
             im = np.interp(frequencies, r.frequency, otf.imag, right=0.0)
             acc += w / wsum * (re + 1j * im)
-    return {"frequency": np.asarray(frequencies), "tangential": np.abs(tan),
-            "sagittal": np.abs(sag), "cutoff": fmax}
+    return {
+        "frequency": np.asarray(frequencies),
+        "tangential": np.abs(tan),
+        "sagittal": np.abs(sag),
+        "cutoff": fmax,
+    }

@@ -16,10 +16,11 @@ from typing import Optional
 @dataclass
 class Layer:
     """A single thin-film layer."""
+
     material: str
-    thickness: float                     # physical thickness, nm
-    n: Optional[complex] = None          # complex index n - ik
-    design_wavelength: float = 550.0     # nm, used only for the database lookup
+    thickness: float  # physical thickness, nm
+    n: Optional[complex] = None  # complex index n - ik
+    design_wavelength: float = 550.0  # nm, used only for the database lookup
 
     def __post_init__(self):
         if self.n is None:
@@ -28,25 +29,30 @@ class Layer:
 
     def _get_refractive_index(self) -> complex:
         from optics.materials import refractive_index
+
         try:
-            return complex(refractive_index(self.material, self.design_wavelength * 1e-9))
+            return complex(
+                refractive_index(self.material, self.design_wavelength * 1e-9)
+            )
         except ValueError as e:
             raise ValueError(
                 f"No index data for coating material '{self.material}' at "
-                f"{self.design_wavelength} nm; pass n explicitly ({e})") from e
+                f"{self.design_wavelength} nm; pass n explicitly ({e})"
+            ) from e
 
     @property
     def optical_thickness(self) -> float:
         """Optical thickness n d (nm)."""
-        assert self.n is not None   # set in __post_init__
+        assert self.n is not None  # set in __post_init__
         return self.n.real * self.thickness
 
 
 @dataclass
 class MaterialLayer(Layer):
     """Layer with an explicit extinction coefficient and roughness."""
-    absorption: float = 0.0     # extinction coefficient k
-    roughness: float = 0.0      # RMS roughness (nm), informational
+
+    absorption: float = 0.0  # extinction coefficient k
+    roughness: float = 0.0  # RMS roughness (nm), informational
 
     def __post_init__(self):
         super().__post_init__()

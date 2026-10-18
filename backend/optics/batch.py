@@ -35,18 +35,20 @@ def batch_analyze_systems(systems: list[OpticalSystem]) -> list[dict]:
     results: list[dict] = []
     for i, system in enumerate(systems):
         analysis = analyze_system(system)
-        results.append({
-            "index": i,
-            "analysis": analysis,
-            "summary": {
-                "magnification": analysis.magnification,
-                "efl_mm": analysis.effective_focal_length * 1000.0,
-                "f_number": analysis.f_number,
-                "numerical_aperture": analysis.numerical_aperture,
-                "rms_spot_um": analysis.rms_spot_radius * 1e6,
-                "image_distance_mm": analysis.image_distance * 1000.0,
-            },
-        })
+        results.append(
+            {
+                "index": i,
+                "analysis": analysis,
+                "summary": {
+                    "magnification": analysis.magnification,
+                    "efl_mm": analysis.effective_focal_length * 1000.0,
+                    "f_number": analysis.f_number,
+                    "numerical_aperture": analysis.numerical_aperture,
+                    "rms_spot_um": analysis.rms_spot_radius * 1e6,
+                    "image_distance_mm": analysis.image_distance * 1000.0,
+                },
+            }
+        )
     return results
 
 
@@ -74,19 +76,24 @@ def batch_sweep_and_analyze(
         List of dicts (one per value) with "value", "analysis", "summary".
     """
     swept = parameter_sweep(
-        system, param_spec, values,
-        num_rays=num_rays, aperture_fraction=aperture_fraction,
+        system,
+        param_spec,
+        values,
+        num_rays=num_rays,
+        aperture_fraction=aperture_fraction,
     )
     out: list[dict] = []
     for value, analysis in swept:
-        out.append({
-            "value": value,
-            "analysis": analysis,
-            "summary": {
-                "magnification": analysis.magnification,
-                "efl_mm": analysis.effective_focal_length * 1000.0,
-                "f_number": analysis.f_number,
-                "rms_spot_um": analysis.rms_spot_radius * 1e6,
-            },
-        })
+        out.append(
+            {
+                "value": value,
+                "analysis": analysis,
+                "summary": {
+                    "magnification": analysis.magnification,
+                    "efl_mm": analysis.effective_focal_length * 1000.0,
+                    "f_number": analysis.f_number,
+                    "rms_spot_um": analysis.rms_spot_radius * 1e6,
+                },
+            }
+        )
     return out

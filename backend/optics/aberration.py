@@ -47,8 +47,10 @@ def longitudinal_chromatic_aberration(
     """
     seq = rt.build_sequence(system, wavelength_blue)
     d = seq.image_direction
-    return (image_position_at_wavelength(system, wavelength_blue)
-            - image_position_at_wavelength(system, wavelength_red)) * d
+    return (
+        image_position_at_wavelength(system, wavelength_blue)
+        - image_position_at_wavelength(system, wavelength_red)
+    ) * d
 
 
 def lateral_chromatic_aberration(
@@ -62,8 +64,9 @@ def lateral_chromatic_aberration(
     red wavelength, both in the reference wavelength's paraxial image plane.
     """
     z_ref = image_position_at_wavelength(system, reference_wavelength)
-    return (_chief_height_at(system, wavelength_blue, z_ref)
-            - _chief_height_at(system, wavelength_red, z_ref))
+    return _chief_height_at(system, wavelength_blue, z_ref) - _chief_height_at(
+        system, wavelength_red, z_ref
+    )
 
 
 def chromatic_aberration_analysis(
@@ -86,6 +89,10 @@ def chromatic_aberration_analysis(
         "wavelengths": wavelengths,
         "image_positions": positions,
         "image_heights": heights,
-        "lca": longitudinal_chromatic_aberration(system, wavelengths[0], wavelengths[-1]),
-        "tca": lateral_chromatic_aberration(system, wavelengths[0], wavelengths[-1], ref),
+        "lca": longitudinal_chromatic_aberration(
+            system, wavelengths[0], wavelengths[-1]
+        ),
+        "tca": lateral_chromatic_aberration(
+            system, wavelengths[0], wavelengths[-1], ref
+        ),
     }

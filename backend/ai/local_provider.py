@@ -23,13 +23,19 @@ import re
 from typing import Optional
 
 from .commands import (
-    AICommand, ModifyComponentCommand, AddComponentCommand,
-    RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
-    AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
+    AICommand,
+    ModifyComponentCommand,
+    AddComponentCommand,
+    RemoveComponentCommand,
+    SetObjectCommand,
+    SetImagePlaneCommand,
+    AnalyzeCommand,
+    OptimizeCommand,
+    ExplainCommand,
+    DiagnoseCommand,
     DesignCommand,
 )
 from .interpreter import LLMInterpreter
-
 
 # ---------------------------------------------------------------------------
 # Unit parsing helpers
@@ -76,6 +82,7 @@ def _parse_length(text: str) -> Optional[float]:
 # ---------------------------------------------------------------------------
 # Rule-based parser
 # ---------------------------------------------------------------------------
+
 
 class RuleBasedParser:
     """
@@ -166,47 +173,56 @@ class RuleBasedParser:
                 aperture = _parse_length(
                     ap_match.group(1) + (ap_match.group(2) or "mm")
                 )
-            return [DesignCommand(
-                magnification=magnification,
-                wavelength=wavelength,
-                aperture_diameter=aperture,
-                objective="rms_spot",
-            )]
+            return [
+                DesignCommand(
+                    magnification=magnification,
+                    wavelength=wavelength,
+                    aperture_diameter=aperture,
+                    objective="rms_spot",
+                )
+            ]
 
         # Analyze
         if re.search(r"\banalyz", text):
             return [AnalyzeCommand()]
 
         # Optimize
-        opt_match = re.search(
-            r"optimize\s+(\w+)\s+(\w+)\s+(?:for|to|at)\s+(\w+)", text
-        )
+        opt_match = re.search(r"optimize\s+(\w+)\s+(\w+)\s+(?:for|to|at)\s+(\w+)", text)
         if opt_match:
             component_id = opt_match.group(1)
             field = opt_match.group(2)
             objective = opt_match.group(3)
             if objective in ("rms", "spot", "rms_spot"):
-                return [OptimizeCommand(
-                    objective="rms_spot",
-                    params=[{"component_id": component_id, "field": field}],
-                    # Use bounds that exclude zero to avoid division by zero
-                    bounds=[[0.001, 1.0]],
-                )]
+                return [
+                    OptimizeCommand(
+                        objective="rms_spot",
+                        params=[{"component_id": component_id, "field": field}],
+                        # Use bounds that exclude zero to avoid division by zero
+                        bounds=[[0.001, 1.0]],
+                    )
+                ]
             raise ValueError(f"Unsupported optimize objective: {objective}")
 
         # Move component to position
-        move_match = re.search(r"move\s+(\w+)\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)", text)
+        move_match = re.search(
+            r"move\s+(\w+)\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)", text
+        )
         if move_match:
             component_id = move_match.group(1)
             position = _parse_length(move_match.group(2))
             if position is None:
                 raise ValueError(f"Could not parse position: {move_match.group(2)}")
-            return [ModifyComponentCommand(
-                component_id=component_id, field="position", value=position
-            )]
+            return [
+                ModifyComponentCommand(
+                    component_id=component_id, field="position", value=position
+                )
+            ]
 
         # Set object position
-        obj_pos = re.search(r"set\s+object\s+position\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)", text)
+        obj_pos = re.search(
+            r"set\s+object\s+position\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)",
+            text,
+        )
         if obj_pos:
             position = _parse_length(obj_pos.group(1))
             if position is None:
@@ -214,7 +230,10 @@ class RuleBasedParser:
             return [SetObjectCommand(position=position)]
 
         # Set object height
-        obj_height = re.search(r"set\s+object\s+height\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)", text)
+        obj_height = re.search(
+            r"set\s+object\s+height\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)",
+            text,
+        )
         if obj_height:
             height = _parse_length(obj_height.group(1))
             if height is None:
@@ -222,7 +241,9 @@ class RuleBasedParser:
             return [SetObjectCommand(height=height)]
 
         # Set image plane
-        img_plane = re.search(r"set\s+image\s+plane\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)", text)
+        img_plane = re.search(
+            r"set\s+image\s+plane\s+to\s+([-+]?\d*\.?\d+\s*(?:nm|um|µm|mm|cm|m)?)", text
+        )
         if img_plane:
             position = _parse_length(img_plane.group(1))
             if position is None:
@@ -240,9 +261,11 @@ class RuleBasedParser:
             value = _parse_length(set_match.group(3))
             if value is None:
                 raise ValueError(f"Could not parse value: {set_match.group(3)}")
-            return [ModifyComponentCommand(
-                component_id=component_id, field=field, value=value
-            )]
+            return [
+                ModifyComponentCommand(
+                    component_id=component_id, field=field, value=value
+                )
+            ]
 
         # Remove component
         remove_match = re.search(r"remove\s+(\w+)", text)
@@ -255,6 +278,7 @@ class RuleBasedParser:
 # ---------------------------------------------------------------------------
 # Local LLM Provider
 # ---------------------------------------------------------------------------
+
 
 class LocalLLMProvider(LLMInterpreter):
     """
@@ -343,11 +367,13 @@ class LocalLLMProvider(LLMInterpreter):
             "All lengths must be in meters. Return ONLY valid JSON, no other text."
         )
 
-        payload = json.dumps({
-            "model": self.model,
-            "prompt": f"{system_prompt}\n\nUser: {prompt}",
-            "stream": False,
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "prompt": f"{system_prompt}\n\nUser: {prompt}",
+                "stream": False,
+            }
+        ).encode("utf-8")
 
         req = urllib.request.Request(
             f"{self.ollama_url}/api/generate",

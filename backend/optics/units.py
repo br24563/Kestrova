@@ -28,18 +28,18 @@ from typing import Union
 # To convert a value FROM the base unit TO a unit, divide by the factor.
 
 LENGTH_UNITS: dict[str, float] = {
-    "nm": 1e-9,       # nanometer
-    "um": 1e-6,       # micrometer (micron)
-    "mm": 1e-3,       # millimeter
-    "cm": 1e-2,       # centimeter
-    "m": 1.0,         # meter (base unit)
-    "km": 1e3,        # kilometer
+    "nm": 1e-9,  # nanometer
+    "um": 1e-6,  # micrometer (micron)
+    "mm": 1e-3,  # millimeter
+    "cm": 1e-2,  # centimeter
+    "m": 1.0,  # meter (base unit)
+    "km": 1e3,  # kilometer
 }
 
 ANGLE_UNITS: dict[str, float] = {
-    "rad": 1.0,                   # radian (base unit)
-    "deg": math.pi / 180.0,       # degree
-    "mrad": 1e-3,                 # milliradian
+    "rad": 1.0,  # radian (base unit)
+    "deg": math.pi / 180.0,  # degree
+    "mrad": 1e-3,  # milliradian
 }
 
 # Wavelength units (same as length, but kept separate for clarity)
@@ -54,6 +54,7 @@ WAVELENGTH_UNITS: dict[str, float] = {
 # ---------------------------------------------------------------------------
 # Quantity class
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Quantity:
@@ -108,6 +109,7 @@ class Quantity:
 # Conversion functions
 # ---------------------------------------------------------------------------
 
+
 def to_meters(value: float, unit: str) -> float:
     """Convert a length value to meters (the base unit)."""
     if unit not in LENGTH_UNITS:
@@ -154,6 +156,7 @@ def from_meters_wavelength(value: float, unit: str) -> float:
 # Convenience: auto-detect unit type
 # ---------------------------------------------------------------------------
 
+
 def convert(value: float, from_unit: str, to_unit: str) -> float:
     """
     Convert a value from one unit to another.
@@ -174,7 +177,9 @@ def convert(value: float, from_unit: str, to_unit: str) -> float:
         return to_radians(value, from_unit) * (1.0 / ANGLE_UNITS[to_unit])
     # Try wavelength
     if from_unit in WAVELENGTH_UNITS and to_unit in WAVELENGTH_UNITS:
-        return to_meters_wavelength(value, from_unit) * (1.0 / WAVELENGTH_UNITS[to_unit])
+        return to_meters_wavelength(value, from_unit) * (
+            1.0 / WAVELENGTH_UNITS[to_unit]
+        )
     raise ValueError(
         f"Cannot convert from '{from_unit}' to '{to_unit}': "
         f"units must be of the same type (length, angle, or wavelength)."
@@ -184,6 +189,7 @@ def convert(value: float, from_unit: str, to_unit: str) -> float:
 # ---------------------------------------------------------------------------
 # Unit validation
 # ---------------------------------------------------------------------------
+
 
 def is_length_unit(unit: str) -> bool:
     """Return True if the unit is a recognized length unit."""

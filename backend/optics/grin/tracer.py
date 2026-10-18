@@ -13,6 +13,7 @@ from .profile import GRINProfile, RadialGRIN
 @dataclass
 class GRINRay:
     """Ray state in GRIN media."""
+
     position: np.ndarray  # [x, y, z]
     direction: np.ndarray  # [dx, dy, dz] (unit vector)
     optical_path: float = 0.0
@@ -25,7 +26,7 @@ def trace_grin(
     profile: GRINProfile,
     length: float,
     step_size: float = 1e-4,
-    method: str = 'rk4',
+    method: str = "rk4",
 ) -> List[GRINRay]:
     """
     Trace ray through GRIN media.
@@ -45,7 +46,7 @@ def trace_grin(
     num_steps = int(length / step_size)
 
     for _ in range(num_steps):
-        if method == 'rk4':
+        if method == "rk4":
             current = _rk4_step(current, profile, step_size)
         else:
             current = _euler_step(current, profile, step_size)
@@ -78,12 +79,13 @@ def _euler_step(ray: GRINRay, profile: GRINProfile, ds: float) -> GRINRay:
         direction=new_dir,
         optical_path=ray.optical_path + n * ds,
         intensity=ray.intensity,
-        wavelength=ray.wavelength
+        wavelength=ray.wavelength,
     )
 
 
 def _rk4_step(ray: GRINRay, profile: GRINProfile, ds: float) -> GRINRay:
     """Single 4th-order Runge-Kutta integration step."""
+
     def derivatives(state):
         pos = state[:3]
         dir = state[3:6]
@@ -102,12 +104,12 @@ def _rk4_step(ray: GRINRay, profile: GRINProfile, ds: float) -> GRINRay:
 
     # RK4 coefficients
     k1 = derivatives(state)
-    k2 = derivatives(state + ds/2 * k1)
-    k3 = derivatives(state + ds/2 * k2)
+    k2 = derivatives(state + ds / 2 * k1)
+    k3 = derivatives(state + ds / 2 * k2)
     k4 = derivatives(state + ds * k3)
 
     # Update state
-    new_state = state + ds/6 * (k1 + 2*k2 + 2*k3 + k4)
+    new_state = state + ds / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
 
     new_pos = new_state[:3]
     new_dir = new_state[3:6]
@@ -123,7 +125,7 @@ def _rk4_step(ray: GRINRay, profile: GRINProfile, ds: float) -> GRINRay:
         direction=new_dir,
         optical_path=ray.optical_path + n_avg * ds,
         intensity=ray.intensity,
-        wavelength=ray.wavelength
+        wavelength=ray.wavelength,
     )
 
 
@@ -147,10 +149,10 @@ def grin_lens_focus(
     """
     ray = GRINRay(
         position=np.array([r0, 0.0, 0.0]),
-        direction=np.array([np.sin(theta0), 0.0, np.cos(theta0)])
+        direction=np.array([np.sin(theta0), 0.0, np.cos(theta0)]),
     )
 
-    path = trace_grin(ray, profile, length, step_size=length/1000)
+    path = trace_grin(ray, profile, length, step_size=length / 1000)
 
     z = [r.position[2] for r in path]
     r = [r.position[0] for r in path]

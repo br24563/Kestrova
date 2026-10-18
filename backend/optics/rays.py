@@ -21,10 +21,10 @@ from typing import Optional
 from .models import OpticalSystem, Ray, RayPath, RayTraceResult
 from . import raytrace as rt
 
-
 # ---------------------------------------------------------------------------
 # Elementary paraxial operations
 # ---------------------------------------------------------------------------
+
 
 def propagate(y: float, theta: float, distance: float) -> tuple[float, float]:
     """Paraxial transfer: y' = y + d*theta, theta unchanged."""
@@ -42,7 +42,9 @@ def reflect_at_mirror(y: float, theta: float) -> tuple[float, float]:
     return y, -theta
 
 
-def refract_at_thin_lens(y: float, theta: float, focal_length: float) -> tuple[float, float]:
+def refract_at_thin_lens(
+    y: float, theta: float, focal_length: float
+) -> tuple[float, float]:
     """Thin lens in air: y unchanged, theta' = theta - y/f."""
     return y, theta - y / focal_length
 
@@ -50,6 +52,7 @@ def refract_at_thin_lens(y: float, theta: float, focal_length: float) -> tuple[f
 # ---------------------------------------------------------------------------
 # Ray generation
 # ---------------------------------------------------------------------------
+
 
 def generate_rays(
     system: OpticalSystem,
@@ -98,15 +101,26 @@ def generate_rays(
             if math.isfinite(ep_z) and abs(ep_z - system.object.position) > 1e-15:
                 theta = (p * ep_r - h) / (ep_z - system.object.position)
             else:
-                theta = fo.chief.u_object_space + p * fo.marginal.u_object_space * aperture_fraction
-            rays.append(Ray(y=h, theta=theta, z=system.object.position,
-                            wavelength=wavelength, ray_type=kind))
+                theta = (
+                    fo.chief.u_object_space
+                    + p * fo.marginal.u_object_space * aperture_fraction
+                )
+            rays.append(
+                Ray(
+                    y=h,
+                    theta=theta,
+                    z=system.object.position,
+                    wavelength=wavelength,
+                    ray_type=kind,
+                )
+            )
     return rays
 
 
 # ---------------------------------------------------------------------------
 # Ray tracing
 # ---------------------------------------------------------------------------
+
 
 def trace_ray(system: OpticalSystem, ray: Ray) -> RayPath:
     """
@@ -153,15 +167,20 @@ def trace_system(
     chief = next((p for p in ray_paths if p.ray_type == "chief"), None)
     return RayTraceResult(
         ray_paths=ray_paths,
-        image_position=calculate_paraxial_image_position(system, system.analysis_settings.wavelength),
+        image_position=calculate_paraxial_image_position(
+            system, system.analysis_settings.wavelength
+        ),
         image_height=chief.final_y if chief is not None else 0.0,
-        paraxial_image_height=calculate_paraxial_image_height(system, system.analysis_settings.wavelength),
+        paraxial_image_height=calculate_paraxial_image_height(
+            system, system.analysis_settings.wavelength
+        ),
     )
 
 
 # ---------------------------------------------------------------------------
 # Paraxial image
 # ---------------------------------------------------------------------------
+
 
 def calculate_paraxial_image_position(
     system: OpticalSystem, wavelength: Optional[float] = None
@@ -189,6 +208,7 @@ def calculate_paraxial_image_height(
 # ---------------------------------------------------------------------------
 # Spot of the bench rays
 # ---------------------------------------------------------------------------
+
 
 def calculate_spot_diagram(
     ray_paths: list[RayPath],

@@ -38,12 +38,18 @@ import math
 from typing import Optional
 
 from optics.models import (
-    OpticalSystem, ThinLens, Object, ImagePlane, AnalysisSettings,
+    OpticalSystem,
+    ThinLens,
+    Object,
+    ImagePlane,
+    AnalysisSettings,
 )
 from optics.systems import validate_system, sort_components
 from optics.analysis import analyze_system
 from optics.optimization import (
-    multi_objective_optimize, minimize_rms_spot, target_magnification,
+    multi_objective_optimize,
+    minimize_rms_spot,
+    target_magnification,
 )
 
 # Default wavelength when the request does not specify one (green).
@@ -55,6 +61,7 @@ _DEFAULT_OBJECT_HEIGHT = 0.010
 # ---------------------------------------------------------------------------
 # Building the starting system
 # ---------------------------------------------------------------------------
+
 
 def _build_starting_system(
     wavelength: float, aperture_diameter: Optional[float]
@@ -71,12 +78,18 @@ def _build_starting_system(
     return OpticalSystem(
         components=[
             ThinLens(
-                id="lens_1", position=0.100, focal_length=0.050,
-                aperture_diameter=ap, material="N-BK7",
+                id="lens_1",
+                position=0.100,
+                focal_length=0.050,
+                aperture_diameter=ap,
+                material="N-BK7",
             ),
             ThinLens(
-                id="lens_2", position=0.200, focal_length=0.050,
-                aperture_diameter=ap, material="N-BK7",
+                id="lens_2",
+                position=0.200,
+                focal_length=0.050,
+                aperture_diameter=ap,
+                material="N-BK7",
             ),
         ],
         wavelengths=[wavelength],
@@ -112,6 +125,7 @@ def _design_objectives(magnification: Optional[float], objective: str):
 # ---------------------------------------------------------------------------
 # Design search
 # ---------------------------------------------------------------------------
+
 
 def design_from_requirements(
     magnification: Optional[float] = None,
@@ -156,10 +170,10 @@ def design_from_requirements(
         {"component_id": "lens_2", "field": "position"},
     ]
     bounds = [
-        (0.010, 0.200),   # lens_1 focal length
-        (0.050, 0.150),   # lens_1 position
-        (0.010, 0.200),   # lens_2 focal length
-        (0.150, 0.280),   # lens_2 position
+        (0.010, 0.200),  # lens_1 focal length
+        (0.050, 0.150),  # lens_1 position
+        (0.010, 0.200),  # lens_2 focal length
+        (0.150, 0.280),  # lens_2 position
     ]
 
     # Constraint: keep the achieved magnification near the target (so the
@@ -167,10 +181,14 @@ def design_from_requirements(
     constraints = []
     if magnification is not None and abs(magnification) > 1e-9:
         tol = max(0.05, abs(magnification) * 0.25)
-        constraints.append({
-            "type": "range", "field": "magnification",
-            "min": magnification - tol, "max": magnification + tol,
-        })
+        constraints.append(
+            {
+                "type": "range",
+                "field": "magnification",
+                "min": magnification - tol,
+                "max": magnification + tol,
+            }
+        )
 
     try:
         result = multi_objective_optimize(
@@ -191,16 +209,18 @@ def design_from_requirements(
     analysis = analyze_system(designed)
     warnings = validate_system(designed)
 
-    candidates = [{
-        "index": 0,
-        "system": designed,
-        "analysis": analysis,
-        "warnings": warnings,
-        "magnification": analysis.magnification,
-        "efl_mm": analysis.effective_focal_length * 1000.0,
-        "rms_spot_um": analysis.rms_spot_radius * 1e6,
-        "f_number": analysis.f_number,
-    }]
+    candidates = [
+        {
+            "index": 0,
+            "system": designed,
+            "analysis": analysis,
+            "warnings": warnings,
+            "magnification": analysis.magnification,
+            "efl_mm": analysis.effective_focal_length * 1000.0,
+            "rms_spot_um": analysis.rms_spot_radius * 1e6,
+            "f_number": analysis.f_number,
+        }
+    ]
 
     # If multiple candidates requested, append the starting system analysis
     # as a baseline reference (kept small and deterministic).
@@ -211,27 +231,31 @@ def design_from_requirements(
         ref_analysis = None
     for i in range(1, num_candidates):
         if ref_analysis is not None:
-            candidates.append({
-                "index": i,
-                "system": base_system,
-                "analysis": ref_analysis,
-                "warnings": validate_system(base_system),
-                "magnification": ref_analysis.magnification,
-                "efl_mm": ref_analysis.effective_focal_length * 1000.0,
-                "rms_spot_um": ref_analysis.rms_spot_radius * 1e6,
-                "f_number": ref_analysis.f_number,
-            })
+            candidates.append(
+                {
+                    "index": i,
+                    "system": base_system,
+                    "analysis": ref_analysis,
+                    "warnings": validate_system(base_system),
+                    "magnification": ref_analysis.magnification,
+                    "efl_mm": ref_analysis.effective_focal_length * 1000.0,
+                    "rms_spot_um": ref_analysis.rms_spot_radius * 1e6,
+                    "f_number": ref_analysis.f_number,
+                }
+            )
         else:
-            candidates.append({
-                "index": i,
-                "system": base_system,
-                "analysis": None,
-                "warnings": validate_system(base_system),
-                "magnification": float("nan"),
-                "efl_mm": float("inf"),
-                "rms_spot_um": float("nan"),
-                "f_number": float("nan"),
-            })
+            candidates.append(
+                {
+                    "index": i,
+                    "system": base_system,
+                    "analysis": None,
+                    "warnings": validate_system(base_system),
+                    "magnification": float("nan"),
+                    "efl_mm": float("inf"),
+                    "rms_spot_um": float("nan"),
+                    "f_number": float("nan"),
+                }
+            )
 
     return {
         "candidates": candidates,

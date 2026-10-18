@@ -23,7 +23,6 @@ from optics.aberration import chromatic_aberration_analysis
 from optics.seidel import seidel_analysis
 from optics.diffraction import diffraction_limited_check
 
-
 _MM = 1e-3
 _UM = 1e-6
 
@@ -41,6 +40,7 @@ def _fmt_um(value: float) -> str:
 # ---------------------------------------------------------------------------
 # Explanation of the system
 # ---------------------------------------------------------------------------
+
 
 def explain_system(system: OpticalSystem) -> dict:
     """
@@ -175,6 +175,7 @@ def explain_system(system: OpticalSystem) -> dict:
 # Troubleshooting
 # ---------------------------------------------------------------------------
 
+
 def diagnose_system(system: OpticalSystem) -> dict:
     """
     Troubleshoot the current system and produce actionable findings.
@@ -195,32 +196,37 @@ def diagnose_system(system: OpticalSystem) -> dict:
     # 1. Validation warnings
     warnings = validate_system(system)
     for w in warnings:
-        findings.append({
-            "level": "warning",
-            "message": f"Validation: {w}",
-            "suggestion": "Review the component positions and parameters.",
-        })
+        findings.append(
+            {
+                "level": "warning",
+                "message": f"Validation: {w}",
+                "suggestion": "Review the component positions and parameters.",
+            }
+        )
 
     analysis = analyze_system(system)
 
     # 2. Image plane misalignment
     try:
         from optics.rays import calculate_paraxial_image_position
+
         paraxial_pos = calculate_paraxial_image_position(system)
         plane_pos = system.image_plane.position
         offset = paraxial_pos - plane_pos
         if abs(offset) > 1.0e-3:
-            findings.append({
-                "level": "recommendation",
-                "message": (
-                    f"The image plane is {_fmt_mm(abs(offset))} away from "
-                    f"the paraxial focus."
-                ),
-                "suggestion": (
-                    f"Move the image plane to {paraxial_pos * 1000.0:.1f} mm "
-                    f"for the sharpest image."
-                ),
-            })
+            findings.append(
+                {
+                    "level": "recommendation",
+                    "message": (
+                        f"The image plane is {_fmt_mm(abs(offset))} away from "
+                        f"the paraxial focus."
+                    ),
+                    "suggestion": (
+                        f"Move the image plane to {paraxial_pos * 1000.0:.1f} mm "
+                        f"for the sharpest image."
+                    ),
+                }
+            )
     except Exception:
         pass
 
@@ -228,17 +234,19 @@ def diagnose_system(system: OpticalSystem) -> dict:
     try:
         dl = diffraction_limited_check(system)
         if not dl["is_diffraction_limited"]:
-            findings.append({
-                "level": "recommendation",
-                "message": (
-                    f"Strehl ratio {dl['strehl_ratio']:.3f} is below 0.8 "
-                    f"(Marechal criterion); aberrations limit image quality."
-                ),
-                "suggestion": (
-                    "Try a smaller aperture, optimize the lens positions, or "
-                    "reduce the field height."
-                ),
-            })
+            findings.append(
+                {
+                    "level": "recommendation",
+                    "message": (
+                        f"Strehl ratio {dl['strehl_ratio']:.3f} is below 0.8 "
+                        f"(Marechal criterion); aberrations limit image quality."
+                    ),
+                    "suggestion": (
+                        "Try a smaller aperture, optimize the lens positions, or "
+                        "reduce the field height."
+                    ),
+                }
+            )
     except Exception:
         pass
 
@@ -246,17 +254,19 @@ def diagnose_system(system: OpticalSystem) -> dict:
     try:
         chroma = chromatic_aberration_analysis(system)
         if abs(chroma["lca"]) > 1.0e-3:
-            findings.append({
-                "level": "recommendation",
-                "message": (
-                    f"Longitudinal chromatic aberration of "
-                    f"{_fmt_mm(chroma['lca'])} is noticeable."
-                ),
-                "suggestion": (
-                    "Consider an achromatic doublet or a lower-dispersion "
-                    "material."
-                ),
-            })
+            findings.append(
+                {
+                    "level": "recommendation",
+                    "message": (
+                        f"Longitudinal chromatic aberration of "
+                        f"{_fmt_mm(chroma['lca'])} is noticeable."
+                    ),
+                    "suggestion": (
+                        "Consider an achromatic doublet or a lower-dispersion "
+                        "material."
+                    ),
+                }
+            )
     except Exception:
         pass
 
@@ -265,25 +275,29 @@ def diagnose_system(system: OpticalSystem) -> dict:
         seidel = seidel_analysis(system)
         sa_long = seidel["spherical_aberration"]["longitudinal"]
         if abs(sa_long) > 1.0e-3:
-            findings.append({
-                "level": "recommendation",
-                "message": (
-                    f"Longitudinal spherical aberration of "
-                    f"{_fmt_mm(sa_long)} is present."
-                ),
-                "suggestion": (
-                    "Use an aspheric surface, shift the stop, or reduce the "
-                    "aperture."
-                ),
-            })
+            findings.append(
+                {
+                    "level": "recommendation",
+                    "message": (
+                        f"Longitudinal spherical aberration of "
+                        f"{_fmt_mm(sa_long)} is present."
+                    ),
+                    "suggestion": (
+                        "Use an aspheric surface, shift the stop, or reduce the "
+                        "aperture."
+                    ),
+                }
+            )
     except Exception:
         pass
 
     if not findings:
-        findings.append({
-            "level": "ok",
-            "message": "No obvious problems found.",
-            "suggestion": "The system looks well-formed.",
-        })
+        findings.append(
+            {
+                "level": "ok",
+                "message": "No obvious problems found.",
+                "suggestion": "The system looks well-formed.",
+            }
+        )
 
     return {"findings": findings, "summary": f"Found {len(findings)} finding(s)."}

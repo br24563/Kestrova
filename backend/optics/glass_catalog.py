@@ -32,40 +32,40 @@ from typing import Optional
 from .materials import refractive_index
 from .materials_expanded import ALL_MATERIALS, MaterialProperties
 
-
 # =============================================================================
 # Enumerations
 # =============================================================================
 
+
 class Availability(str, Enum):
     """How readily a glass can be sourced, from the vendor's classification."""
 
-    IN_STOCK = "in_stock"            # CDGM "MA": in stock all year round
-    STANDARD = "standard"            # vendor preferred / recommended glass
+    IN_STOCK = "in_stock"  # CDGM "MA": in stock all year round
+    STANDARD = "standard"  # vendor preferred / recommended glass
     MADE_TO_ORDER = "made_to_order"  # Schott inquiry glass; CDGM melt A-D
     LIMITED = "limited"
     OBSOLETE = "obsolete"
-    UNKNOWN = "unknown"              # vendor publishes no classification
+    UNKNOWN = "unknown"  # vendor publishes no classification
 
 
 class RestrictionClass(str, Enum):
     """Regulatory restriction applying to a material."""
 
     UNRESTRICTED = "unrestricted"
-    DECLARABLE = "declarable"   # must be declared, may still be used
-    RESTRICTED = "restricted"   # restricted under RoHS / REACH
-    PROHIBITED = "prohibited"   # do not use in new designs
+    DECLARABLE = "declarable"  # must be declared, may still be used
+    RESTRICTED = "restricted"  # restricted under RoHS / REACH
+    PROHIBITED = "prohibited"  # do not use in new designs
 
     @property
     def is_compliant(self) -> bool:
         """True when the class allows unrestricted use in a new design."""
-        return self in (RestrictionClass.UNRESTRICTED,
-                        RestrictionClass.DECLARABLE)
+        return self in (RestrictionClass.UNRESTRICTED, RestrictionClass.DECLARABLE)
 
 
 # =============================================================================
 # Restricted substances
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class RestrictedSubstance:
@@ -75,7 +75,7 @@ class RestrictedSubstance:
     name: str
     restriction: RestrictionClass
     regulation: str
-    limit_ppm: Optional[float] = None   # maximum concentration, ppm by weight
+    limit_ppm: Optional[float] = None  # maximum concentration, ppm by weight
     comment: str = ""
 
 
@@ -85,25 +85,33 @@ class RestrictedSubstance:
 #: Annex III item 13(a); it is still reported here so a design can avoid it.
 RESTRICTED_SUBSTANCES: dict[str, RestrictedSubstance] = {
     "Pb": RestrictedSubstance(
-        "Pb", "Lead", RestrictionClass.RESTRICTED,
+        "Pb",
+        "Lead",
+        RestrictionClass.RESTRICTED,
         "RoHS 2011/65/EU Annex II (optical glass exempt under Annex III 13(a))",
         1000.0,
-        "Constituent of the classic lead-silicate flints (F, LF, LLF, SF)."),
+        "Constituent of the classic lead-silicate flints (F, LF, LLF, SF).",
+    ),
     "Cd": RestrictedSubstance(
-        "Cd", "Cadmium", RestrictionClass.RESTRICTED,
-        "RoHS 2011/65/EU Annex II", 100.0),
+        "Cd", "Cadmium", RestrictionClass.RESTRICTED, "RoHS 2011/65/EU Annex II", 100.0
+    ),
     "Hg": RestrictedSubstance(
-        "Hg", "Mercury", RestrictionClass.RESTRICTED,
-        "RoHS 2011/65/EU Annex II", 1000.0),
+        "Hg", "Mercury", RestrictionClass.RESTRICTED, "RoHS 2011/65/EU Annex II", 1000.0
+    ),
     "Cr6+": RestrictedSubstance(
-        "Cr6+", "Hexavalent chromium", RestrictionClass.RESTRICTED,
-        "RoHS 2011/65/EU Annex II", 1000.0),
+        "Cr6+",
+        "Hexavalent chromium",
+        RestrictionClass.RESTRICTED,
+        "RoHS 2011/65/EU Annex II",
+        1000.0,
+    ),
 }
 
 
 # =============================================================================
 # Per-glass data
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class GlassData:
@@ -112,12 +120,12 @@ class GlassData:
     name: str
     availability: Availability = Availability.UNKNOWN
     restriction: RestrictionClass = RestrictionClass.UNRESTRICTED
-    relative_price: Optional[float] = None   # vendor index, reference glass = 1
-    lead_time_days: Optional[float] = None   # only from a recorded quote
+    relative_price: Optional[float] = None  # vendor index, reference glass = 1
+    lead_time_days: Optional[float] = None  # only from a recorded quote
     suppliers: tuple = ()
     substances: tuple = ()
-    vendor_status: Optional[str] = None      # as published by the vendor
-    melt_frequency: Optional[str] = None     # CDGM code, as published
+    vendor_status: Optional[str] = None  # as published by the vendor
+    melt_frequency: Optional[str] = None  # CDGM code, as published
     notes: str = ""
 
     @property
@@ -152,8 +160,11 @@ def resolve_glass_name(name: str) -> str:
 
 def _availability(props: MaterialProperties) -> Availability:
     if props.melt_frequency:
-        return (Availability.IN_STOCK if props.melt_frequency == "MA"
-                else Availability.MADE_TO_ORDER)
+        return (
+            Availability.IN_STOCK
+            if props.melt_frequency == "MA"
+            else Availability.MADE_TO_ORDER
+        )
     return {
         "preferred": Availability.STANDARD,
         "recommended": Availability.STANDARD,
@@ -168,8 +179,11 @@ def catalog_glass_data(props: MaterialProperties) -> GlassData:
     if props.manufacturer == "Schott" and _LEAD_FAMILY.match(props.name):
         substances = ("Pb",)
         restriction = RestrictionClass.RESTRICTED
-    vendor = props.manufacturer if props.manufacturer in (
-        "Schott", "Ohara", "Hoya", "CDGM") else None
+    vendor = (
+        props.manufacturer
+        if props.manufacturer in ("Schott", "Ohara", "Hoya", "CDGM")
+        else None
+    )
     return GlassData(
         name=props.name,
         availability=_availability(props),
@@ -192,17 +206,22 @@ _VENDOR_DATA: dict[str, GlassData] = {}
 _REFERENCE_PRICE: dict[str, Optional[float]] = {"per_kg": None}
 
 
-def set_vendor_quote(name: str, price_per_kg: float,
-                     supplier: Optional[str] = None,
-                     lead_time_days: Optional[float] = None,
-                     minimum_order_kg: Optional[float] = None) -> dict:
+def set_vendor_quote(
+    name: str,
+    price_per_kg: float,
+    supplier: Optional[str] = None,
+    lead_time_days: Optional[float] = None,
+    minimum_order_kg: Optional[float] = None,
+) -> dict:
     """Record a real supplier quotation for a glass."""
     quote = {
         "glass": name,
         "price_per_kg": float(price_per_kg),
         "supplier": supplier,
         "lead_time_days": None if lead_time_days is None else float(lead_time_days),
-        "minimum_order_kg": None if minimum_order_kg is None else float(minimum_order_kg),
+        "minimum_order_kg": (
+            None if minimum_order_kg is None else float(minimum_order_kg)
+        ),
     }
     _VENDOR_QUOTES[name] = quote
     return quote
@@ -276,8 +295,9 @@ def load_vendor_data(payload, replace: bool = False) -> int:
             notes=entry.get("notes", "Loaded from vendor data."),
         )
         if "price_per_kg" in entry:
-            set_vendor_quote(name, entry["price_per_kg"],
-                             lead_time_days=entry.get("lead_time_days"))
+            set_vendor_quote(
+                name, entry["price_per_kg"], lead_time_days=entry.get("lead_time_days")
+            )
         loaded += 1
     return loaded
 
@@ -289,6 +309,7 @@ def clear_vendor_data() -> None:
 # =============================================================================
 # Pricing
 # =============================================================================
+
 
 def unit_price_per_kg(name: str) -> Optional[float]:
     """
@@ -308,8 +329,9 @@ def unit_price_per_kg(name: str) -> Optional[float]:
     return data.relative_price * ref
 
 
-def element_blank_mass(diameter: float, thickness: float,
-                       density: float, blank_factor: float = 1.0) -> float:
+def element_blank_mass(
+    diameter: float, thickness: float, density: float, blank_factor: float = 1.0
+) -> float:
     """
     Mass in kilograms of a cylindrical blank (density in g/cm^3).
 
@@ -317,12 +339,13 @@ def element_blank_mass(diameter: float, thickness: float,
     curve generation; it is the caller's input (default 1, the bare cylinder).
     """
     radius_m = max(0.0, diameter) / 2.0
-    volume_m3 = math.pi * radius_m ** 2 * max(0.0, thickness)
+    volume_m3 = math.pi * radius_m**2 * max(0.0, thickness)
     return volume_m3 * density * 1000.0 * max(0.0, blank_factor)
 
 
-def element_material_cost(diameter: float, thickness: float, glass: str,
-                          blank_factor: float = 1.0) -> Optional[float]:
+def element_material_cost(
+    diameter: float, thickness: float, glass: str, blank_factor: float = 1.0
+) -> Optional[float]:
     """Material cost of one element, or None without density or price data."""
     props = ALL_MATERIALS.get(resolve_glass_name(glass))
     price = unit_price_per_kg(glass)
@@ -334,6 +357,7 @@ def element_material_cost(diameter: float, thickness: float, glass: str,
 # =============================================================================
 # System-level summaries
 # =============================================================================
+
 
 def _component_glass(component) -> Optional[str]:
     material = getattr(component, "material", None)
@@ -363,7 +387,7 @@ def _component_geometry(component) -> tuple:
             radius = 2.0 * (n - 1.0) * abs(f)
             semi = diameter / 2.0
             if 0.0 < semi < radius:
-                thickness = 2.0 * (radius - math.sqrt(radius ** 2 - semi ** 2))
+                thickness = 2.0 * (radius - math.sqrt(radius**2 - semi**2))
     return diameter, thickness
 
 
@@ -397,19 +421,21 @@ def system_glass_cost(system, quantity: int = 1, blank_factor: float = 1.0) -> d
             total += cost
         if data is not None and not data.is_compliant:
             restricted.append(glass)
-        elements.append({
-            "id": getattr(comp, "id", ""),
-            "type": getattr(comp, "type", ""),
-            "glass": glass,
-            "diameter_mm": diameter * 1e3,
-            "thickness_mm": thickness * 1e3,
-            "relative_price": data.relative_price if data else None,
-            "unit_price_per_kg": unit_price_per_kg(glass),
-            "material_cost": cost,
-            "availability": data.availability.value if data else "unknown",
-            "restriction": data.restriction.value if data else "unknown",
-            "suppliers": list(data.suppliers) if data else [],
-        })
+        elements.append(
+            {
+                "id": getattr(comp, "id", ""),
+                "type": getattr(comp, "type", ""),
+                "glass": glass,
+                "diameter_mm": diameter * 1e3,
+                "thickness_mm": thickness * 1e3,
+                "relative_price": data.relative_price if data else None,
+                "unit_price_per_kg": unit_price_per_kg(glass),
+                "material_cost": cost,
+                "availability": data.availability.value if data else "unknown",
+                "restriction": data.restriction.value if data else "unknown",
+                "suppliers": list(data.suppliers) if data else [],
+            }
+        )
     q = max(1, int(quantity))
     return {
         "elements": elements,
@@ -420,9 +446,11 @@ def system_glass_cost(system, quantity: int = 1, blank_factor: float = 1.0) -> d
         "restricted_glasses": restricted,
         "unknown_glasses": unknown,
         "is_compliant": not restricted,
-        "notes": ("Material cost needs a recorded quote (set_vendor_quote) or a "
-                  "reference price (set_reference_price); vendors publish only "
-                  "relative price indices."),
+        "notes": (
+            "Material cost needs a recorded quote (set_vendor_quote) or a "
+            "reference price (set_reference_price); vendors publish only "
+            "relative price indices."
+        ),
     }
 
 
@@ -434,14 +462,22 @@ def availability_status(name: str) -> dict:
     data = get_glass_data(name)
     if data is None:
         return {
-            "glass": name, "known": False,
+            "glass": name,
+            "known": False,
             "availability": Availability.UNKNOWN.value,
             "restriction": RestrictionClass.UNRESTRICTED.value,
-            "vendor_status": None, "melt_frequency": None,
-            "relative_price": None, "price_per_kg": None,
-            "lead_time_days": None, "suppliers": [], "supplier_count": 0,
-            "substances": [], "sourcable": False, "compliant": False,
-            "lead_free_equivalent": None, "notes": "",
+            "vendor_status": None,
+            "melt_frequency": None,
+            "relative_price": None,
+            "price_per_kg": None,
+            "lead_time_days": None,
+            "suppliers": [],
+            "supplier_count": 0,
+            "substances": [],
+            "sourcable": False,
+            "compliant": False,
+            "lead_free_equivalent": None,
+            "notes": "",
             "warning": "Glass is not present in the materials catalog.",
         }
     quote = get_vendor_quote(resolve_glass_name(name))
@@ -449,10 +485,16 @@ def availability_status(name: str) -> dict:
     if data.availability is Availability.UNKNOWN:
         warnings.append("Vendor publishes no availability classification.")
     if data.substances:
-        warnings.append("Contains " + ", ".join(
-            f"{RESTRICTED_SUBSTANCES[s].name} ({s})" for s in data.substances) + ".")
+        warnings.append(
+            "Contains "
+            + ", ".join(
+                f"{RESTRICTED_SUBSTANCES[s].name} ({s})" for s in data.substances
+            )
+            + "."
+        )
     return {
-        "glass": name, "known": True,
+        "glass": name,
+        "known": True,
         "availability": data.availability.value,
         "restriction": data.restriction.value,
         "vendor_status": data.vendor_status,
@@ -477,12 +519,14 @@ def restricted_glasses() -> list:
     for name in ALL_MATERIALS:
         data = get_glass_data(name)
         if data is not None and not data.is_compliant:
-            found.append({
-                "glass": name,
-                "restriction": data.restriction.value,
-                "substances": list(data.substances),
-                "lead_free_equivalent": LEAD_FREE_EQUIVALENTS.get(name),
-            })
+            found.append(
+                {
+                    "glass": name,
+                    "restriction": data.restriction.value,
+                    "substances": list(data.substances),
+                    "lead_free_equivalent": LEAD_FREE_EQUIVALENTS.get(name),
+                }
+            )
     return sorted(found, key=lambda row: row["glass"])
 
 
@@ -494,23 +538,28 @@ def compliance_report(system) -> dict:
         if glass is None:
             continue
         status = availability_status(glass)
-        rows.append({
-            "id": getattr(comp, "id", ""),
-            "glass": glass,
-            "compliant": status["compliant"],
-            "restriction": status["restriction"],
-            "substances": status["substances"],
-            "regulation": sorted({RESTRICTED_SUBSTANCES[s].regulation
-                                  for s in status["substances"]}),
-            "warning": status["warning"],
-        })
+        rows.append(
+            {
+                "id": getattr(comp, "id", ""),
+                "glass": glass,
+                "compliant": status["compliant"],
+                "restriction": status["restriction"],
+                "substances": status["substances"],
+                "regulation": sorted(
+                    {RESTRICTED_SUBSTANCES[s].regulation for s in status["substances"]}
+                ),
+                "warning": status["warning"],
+            }
+        )
     non_compliant = [r["glass"] for r in rows if not r["compliant"]]
     return {
         "elements": rows,
         "element_count": len(rows),
         "non_compliant_glasses": non_compliant,
         "is_compliant": not non_compliant,
-        "notes": ("Engineering guidance from vendor naming conventions, not a "
-                  "legal declaration: confirm with the vendor's material "
-                  "declaration."),
+        "notes": (
+            "Engineering guidance from vendor naming conventions, not a "
+            "legal declaration: confirm with the vendor's material "
+            "declaration."
+        ),
     }

@@ -26,14 +26,13 @@ from typing import Optional
 
 import numpy as np
 
-
 # Physical constants
-H_PLANCK = 6.62607015e-34      # J s
-C_LIGHT = 2.99792458e8          # m / s
-K_BOLTZMANN = 1.380649e-23      # J / K
+H_PLANCK = 6.62607015e-34  # J s
+C_LIGHT = 2.99792458e8  # m / s
+K_BOLTZMANN = 1.380649e-23  # J / K
 
 # Maximum luminous efficacy: the photopic peak is defined as 683 lm/W.
-MAX_LUMINOUS_EFFICACY = 683.0   # lm / W
+MAX_LUMINOUS_EFFICACY = 683.0  # lm / W
 
 # Domain over which CIE 1931 defines the photopic luminosity function.
 VISIBLE_MIN_NM = 360.0
@@ -43,6 +42,7 @@ VISIBLE_MAX_NM = 830.0
 # =============================================================================
 # Photopic luminosity function
 # =============================================================================
+
 
 def _piecewise_gaussian(x: float, mu: float, sigma_lo: float, sigma_hi: float) -> float:
     """
@@ -127,6 +127,7 @@ def photon_flux(power_watts: float, wavelength: float) -> float:
 # =============================================================================
 # Geometric radiometry
 # =============================================================================
+
 
 def solid_angle_cone(half_angle: float) -> float:
     """
@@ -273,8 +274,8 @@ def relative_illumination_cos4(field_angle: float) -> float:
 # Blackbody radiation
 # =============================================================================
 
-STEFAN_BOLTZMANN = 5.670374419e-8   # W / (m^2 K^4)
-WIEN_B = 2.897771955e-3             # m K
+STEFAN_BOLTZMANN = 5.670374419e-8  # W / (m^2 K^4)
+WIEN_B = 2.897771955e-3  # m K
 
 
 def wien_peak_wavelength(temperature: float) -> float:
@@ -303,7 +304,7 @@ def planck_spectral_radiance(temperature: float, wavelength: float) -> float:
     if exp_arg > 700.0:
         return 0.0
     numerator = 2.0 * H_PLANCK * C_LIGHT * C_LIGHT
-    denominator = (wavelength ** 5) * (math.exp(exp_arg) - 1.0)
+    denominator = (wavelength**5) * (math.exp(exp_arg) - 1.0)
     return numerator / denominator
 
 
@@ -316,7 +317,7 @@ def stefan_boltzmann_exitance(temperature: float) -> float:
     """Total hemispherical exitance sigma T^4 (W / m^2)."""
     if temperature <= 0:
         return 0.0
-    return STEFAN_BOLTZMANN * temperature ** 4
+    return STEFAN_BOLTZMANN * temperature**4
 
 
 def _trapezoid(y, x) -> float:
@@ -325,8 +326,9 @@ def _trapezoid(y, x) -> float:
     return float(fn(y, x))
 
 
-def band_integrated_radiance(temperature: float, wl_min: float, wl_max: float,
-                             num_samples: int = 200) -> float:
+def band_integrated_radiance(
+    temperature: float, wl_min: float, wl_max: float, num_samples: int = 200
+) -> float:
     """Integrate Planck spectral radiance over a wavelength band."""
     if wl_max <= wl_min or num_samples < 2:
         return 0.0
@@ -335,18 +337,25 @@ def band_integrated_radiance(temperature: float, wl_min: float, wl_max: float,
     return _trapezoid(ys, xs)
 
 
-def band_integrated_flux(temperature: float, wl_min: float, wl_max: float,
-                         area: float, solid_angle: float,
-                         num_samples: int = 200) -> float:
+def band_integrated_flux(
+    temperature: float,
+    wl_min: float,
+    wl_max: float,
+    area: float,
+    solid_angle: float,
+    num_samples: int = 200,
+) -> float:
     """Radiant flux (W) collected from a blackbody over a band."""
     radiance = band_integrated_radiance(temperature, wl_min, wl_max, num_samples)
     return radiance * area * solid_angle
 
 
-def blackbody_luminous_efficacy(temperature: float,
-                                wl_min: float = 380e-9,
-                                wl_max: float = 780e-9,
-                                num_samples: int = 200) -> float:
+def blackbody_luminous_efficacy(
+    temperature: float,
+    wl_min: float = 380e-9,
+    wl_max: float = 780e-9,
+    num_samples: int = 200,
+) -> float:
     """
     Luminous efficacy of a blackbody radiator (lm / W).
 
@@ -372,6 +381,7 @@ def blackbody_luminous_efficacy(temperature: float,
 # BRDF models and reference database
 # =============================================================================
 
+
 @dataclass
 class BRDFParameters:
     """
@@ -386,21 +396,22 @@ class BRDFParameters:
     analysis: it describes the smooth-angle-scattering tail of a polished
     or blasted surface.
     """
+
     model: str = "lambertian"
-    diffuse_fraction: float = 0.1     # rho for lambertian
-    A: float = 1.0e-2                 # ABg amplitude
-    B: float = 1.0e-2                 # ABg shoulder
-    g: float = 2.0                    # ABg slope exponent
+    diffuse_fraction: float = 0.1  # rho for lambertian
+    A: float = 1.0e-2  # ABg amplitude
+    B: float = 1.0e-2  # ABg shoulder
+    g: float = 2.0  # ABg slope exponent
     name: str = "custom"
     wavelength_range: tuple = (0.0, 0.0)
     source: str = ""
 
-
     target_tis: float = 0.0
 
     @classmethod
-    def from_tis(cls, tis: float, B: float = 1.0e-3, g: float = 2.0,
-                 **kwargs) -> "BRDFParameters":
+    def from_tis(
+        cls, tis: float, B: float = 1.0e-3, g: float = 2.0, **kwargs
+    ) -> "BRDFParameters":
         """
         Build an ABg entry from a total integrated scatter, not from A.
 
@@ -415,9 +426,15 @@ class BRDFParameters:
             g: ABg slope exponent.
             **kwargs: Passed through to :class:`BRDFParameters`.
         """
-        return cls(model="abg",
-                   A=abg_amplitude_for_tis(tis, B, g),
-                   B=B, g=g, target_tis=tis, **kwargs)
+        return cls(
+            model="abg",
+            A=abg_amplitude_for_tis(tis, B, g),
+            B=B,
+            g=g,
+            target_tis=tis,
+            **kwargs
+        )
+
 
 def brdf_lambertian(reflectance: float) -> float:
     """BRDF of a perfectly diffuse (Lambertian) surface: rho / pi."""
@@ -469,13 +486,11 @@ def _abg_hemisphere_integral(A, B, g, beta_max, num_samples):
         if denom <= 0:
             values.append(0.0)
             continue
-        values.append((A / denom) * math.cos(beta)
-                      * 2.0 * math.pi * math.sin(beta))
+        values.append((A / denom) * math.cos(beta) * 2.0 * math.pi * math.sin(beta))
     return _trapezoid(values, betas)
 
 
-def abg_tis_per_unit_amplitude(B, g, beta_max=math.radians(85.0),
-                               num_samples=400):
+def abg_tis_per_unit_amplitude(B, g, beta_max=math.radians(85.0), num_samples=400):
     """
     Hemispherical integral of the ABg shape evaluated at A = 1.
 
@@ -485,8 +500,7 @@ def abg_tis_per_unit_amplitude(B, g, beta_max=math.radians(85.0),
     return _abg_hemisphere_integral(1.0, B, g, beta_max, num_samples)
 
 
-def abg_amplitude_for_tis(tis, B, g, beta_max=math.radians(85.0),
-                          num_samples=400):
+def abg_amplitude_for_tis(tis, B, g, beta_max=math.radians(85.0), num_samples=400):
     """
     ABg amplitude A that produces the requested total integrated scatter.
 
@@ -512,8 +526,7 @@ def _is_abg(parameters):
     return model in ("abg", "harvey-shack", "harveyshack")
 
 
-def total_integrated_scatter(parameters, beta_max=math.radians(85.0),
-                             num_samples=400):
+def total_integrated_scatter(parameters, beta_max=math.radians(85.0), num_samples=400):
     """
     Fraction of incident power scattered into the hemisphere.
 
@@ -529,8 +542,9 @@ def total_integrated_scatter(parameters, beta_max=math.radians(85.0),
     construction, because they are defined from a target TIS.
     """
     if _is_abg(parameters):
-        total = _abg_hemisphere_integral(parameters.A, parameters.B,
-                                         parameters.g, beta_max, num_samples)
+        total = _abg_hemisphere_integral(
+            parameters.A, parameters.B, parameters.g, beta_max, num_samples
+        )
     else:
         total = parameters.diffuse_fraction
     return max(0.0, min(1.0, total))
@@ -552,39 +566,74 @@ def total_integrated_scatter(parameters, beta_max=math.radians(85.0),
 #   TIS ~ 0.1-0.5 blasted, anodised, or machined metal
 BRDF_DATABASE = {
     "superpolished_glass": BRDFParameters.from_tis(
-        1.0e-5, B=1.0e-3, g=2.0, name="superpolished_glass",
-        source="illustrative: assumed TIS 1e-5, superpolished low-scatter glass"),
+        1.0e-5,
+        B=1.0e-3,
+        g=2.0,
+        name="superpolished_glass",
+        source="illustrative: assumed TIS 1e-5, superpolished low-scatter glass",
+    ),
     "polished_glass": BRDFParameters.from_tis(
-        1.0e-3, B=1.0e-3, g=2.0, name="polished_glass",
-        source="illustrative: assumed TIS 1e-3, commercial polish in the visible"),
+        1.0e-3,
+        B=1.0e-3,
+        g=2.0,
+        name="polished_glass",
+        source="illustrative: assumed TIS 1e-3, commercial polish in the visible",
+    ),
     "fine_ground_glass": BRDFParameters.from_tis(
-        3.0e-1, B=1.0e-2, g=2.0, name="fine_ground_glass",
-        source="illustrative: assumed TIS 0.3, fine ground glass"),
+        3.0e-1,
+        B=1.0e-2,
+        g=2.0,
+        name="fine_ground_glass",
+        source="illustrative: assumed TIS 0.3, fine ground glass",
+    ),
     "black_anodized_aluminum": BRDFParameters.from_tis(
-        1.0e-1, B=1.0e-2, g=2.0, name="black_anodized_aluminum",
-        source="illustrative: assumed TIS 0.1, anodised aluminium in the visible"),
+        1.0e-1,
+        B=1.0e-2,
+        g=2.0,
+        name="black_anodized_aluminum",
+        source="illustrative: assumed TIS 0.1, anodised aluminium in the visible",
+    ),
     "rough_aluminum": BRDFParameters.from_tis(
-        5.0e-1, B=5.0e-2, g=2.0, name="rough_aluminum",
-        source="illustrative: assumed TIS 0.5, roughened machined aluminium"),
+        5.0e-1,
+        B=5.0e-2,
+        g=2.0,
+        name="rough_aluminum",
+        source="illustrative: assumed TIS 0.5, roughened machined aluminium",
+    ),
     "matte_black_paint": BRDFParameters.from_tis(
-        2.0e-1, B=2.0e-2, g=2.0, name="matte_black_paint",
-        source="illustrative: assumed TIS 0.2, flat black paint"),
+        2.0e-1,
+        B=2.0e-2,
+        g=2.0,
+        name="matte_black_paint",
+        source="illustrative: assumed TIS 0.2, flat black paint",
+    ),
     "polished_gold": BRDFParameters.from_tis(
-        1.0e-3, B=1.0e-3, g=2.0, name="polished_gold",
-        source="illustrative: assumed TIS 1e-3, evaporated gold, infrared band"),
+        1.0e-3,
+        B=1.0e-3,
+        g=2.0,
+        name="polished_gold",
+        source="illustrative: assumed TIS 1e-3, evaporated gold, infrared band",
+    ),
     "spectralon": BRDFParameters(
-        model="lambertian", diffuse_fraction=0.99,
+        model="lambertian",
+        diffuse_fraction=0.99,
         name="spectralon",
-        source="PTFE reflectance standard, TIS = reflectance"),
+        source="PTFE reflectance standard, TIS = reflectance",
+    ),
     "barium_sulfate": BRDFParameters(
-        model="lambertian", diffuse_fraction=0.95,
+        model="lambertian",
+        diffuse_fraction=0.95,
         name="barium_sulfate",
-        source="BaSO4 reflectance coating, TIS = reflectance"),
+        source="BaSO4 reflectance coating, TIS = reflectance",
+    ),
     "black_felt": BRDFParameters(
-        model="lambertian", diffuse_fraction=0.02,
+        model="lambertian",
+        diffuse_fraction=0.02,
         name="black_felt",
-        source="black felt light trap, TIS = reflectance"),
+        source="black felt light trap, TIS = reflectance",
+    ),
 }
+
 
 def get_brdf(name: str) -> Optional[BRDFParameters]:
     """Look up a reference BRDF by name (case-insensitive)."""

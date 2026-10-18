@@ -39,6 +39,7 @@ def _fo(system: OpticalSystem) -> rt.FirstOrder:
 # System matrix and focal lengths
 # ---------------------------------------------------------------------------
 
+
 def build_system_matrix(system: OpticalSystem) -> np.ndarray:
     """
     Paraxial transfer matrix [[A, B], [C, D]] from the first surface to the
@@ -47,13 +48,15 @@ def build_system_matrix(system: OpticalSystem) -> np.ndarray:
     C = -power, so the effective focal length is -1/C.
     """
     seq = rt.build_sequence(system, _wl(system))
-    a = rt.paraxial_trace(seq, 1.0, 0.0)     # (y, nu) = (1, 0)
-    b = rt.paraxial_trace(seq, 0.0, 1.0)     # (y, nu) = (0, n0)
+    a = rt.paraxial_trace(seq, 1.0, 0.0)  # (y, nu) = (1, 0)
+    b = rt.paraxial_trace(seq, 0.0, 1.0)  # (y, nu) = (0, n0)
     n0 = rt.signed_indices(seq)[0][0]
-    return np.array([
-        [a.y[-1], b.y[-1] / n0],
-        [a.nu_after[-1], b.nu_after[-1] / n0],
-    ])
+    return np.array(
+        [
+            [a.y[-1], b.y[-1] / n0],
+            [a.nu_after[-1], b.nu_after[-1] / n0],
+        ]
+    )
 
 
 def effective_focal_length(system: OpticalSystem) -> float:
@@ -84,6 +87,7 @@ def front_focal_length(system: OpticalSystem) -> float:
 # Magnification and distances
 # ---------------------------------------------------------------------------
 
+
 def system_magnification(system: OpticalSystem) -> float:
     """Paraxial transverse magnification (0 for an object at infinity)."""
     return _fo(system).magnification
@@ -113,6 +117,7 @@ def working_distance(system: OpticalSystem) -> float:
 # F-number and numerical aperture
 # ---------------------------------------------------------------------------
 
+
 def system_f_number(system: OpticalSystem) -> float:
     """F-number = EFL / entrance-pupil diameter (the infinite-conjugate F/#)."""
     return _fo(system).f_number
@@ -127,8 +132,9 @@ def working_f_number(system: OpticalSystem) -> float:
 def _real_marginal_sin(system: OpticalSystem, image_side: bool) -> float:
     seq = rt.build_sequence(system, _wl(system))
     fo = rt.first_order(system, seq=seq)
-    b, _, _ = rt.trace_field_rays(system, 0.0, 0.0, np.array([0.0]), np.array([1.0]),
-                                  seq=seq, fo=fo, clip=False)
+    b, _, _ = rt.trace_field_rays(
+        system, 0.0, 0.0, np.array([0.0]), np.array([1.0]), seq=seq, fo=fo, clip=False
+    )
     if not b.valid[0]:
         raise ValueError("The marginal ray cannot be traced")
     if image_side:
@@ -160,8 +166,14 @@ def object_numerical_aperture(system: OpticalSystem) -> float:
 # Real-ray spot
 # ---------------------------------------------------------------------------
 
-def real_spot(system: OpticalSystem, field_fraction: float = 1.0, grid: int = 15,
-              aperture_fraction: float = 1.0, wavelength: Optional[float] = None):
+
+def real_spot(
+    system: OpticalSystem,
+    field_fraction: float = 1.0,
+    grid: int = 15,
+    aperture_fraction: float = 1.0,
+    wavelength: Optional[float] = None,
+):
     """
     Real-ray spot at the image plane for the field point at
     ``field_fraction`` of the object height.
@@ -181,13 +193,14 @@ def real_spot(system: OpticalSystem, field_fraction: float = 1.0, grid: int = 15
         return [], 0.0, (0.0, 0.0), len(px), len(px)
     c = pts.mean(axis=0)
     rel = pts - c
-    rms = float(np.sqrt(np.mean(np.sum(rel ** 2, axis=1))))
+    rms = float(np.sqrt(np.mean(np.sum(rel**2, axis=1))))
     return rel.tolist(), rms, (float(c[0]), float(c[1])), len(px), int((~b.valid).sum())
 
 
 # ---------------------------------------------------------------------------
 # Full analysis
 # ---------------------------------------------------------------------------
+
 
 def analyze_system(
     system: OpticalSystem,
@@ -218,9 +231,14 @@ def analyze_system(
         f_number=fo.f_number,
         numerical_aperture=na,
         aperture_diameter=2.0 * fo.entrance_pupil_semi_diameter,
-        working_distance=(system.image_plane.position - seq.surfaces[-1].z) * seq.image_direction,
+        working_distance=(system.image_plane.position - seq.surfaces[-1].z)
+        * seq.image_direction,
         rms_spot_radius=rms,
         spot_points=points,
         is_image_real=img_dist > 0,
-        is_image_inverted=fo.magnification < 0 if not seq.object_infinite else fo.image_height * system.object.height < 0,
+        is_image_inverted=(
+            fo.magnification < 0
+            if not seq.object_infinite
+            else fo.image_height * system.object.height < 0
+        ),
     )

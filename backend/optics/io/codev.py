@@ -86,9 +86,15 @@ def import_seq(filepath) -> OpticalSystem:
                 glass = args[2] if len(args) > 2 else None
                 if glass is not None and glass.upper() == "AIR":
                     glass = None
-                rows.append(Row(radius=r * unit, thickness=t * unit,
-                                glass=resolve_glass(glass) if glass else None,
-                                stop=(cmd == "STO"), label=f"S{len(rows) + 1}"))
+                rows.append(
+                    Row(
+                        radius=r * unit,
+                        thickness=t * unit,
+                        glass=resolve_glass(glass) if glass else None,
+                        stop=(cmd == "STO"),
+                        label=f"S{len(rows) + 1}",
+                    )
+                )
             elif cmd == "SI":
                 image_seen = True
             elif cmd == "K" and rows:
@@ -125,7 +131,7 @@ def import_seq(filepath) -> OpticalSystem:
     if epd is not None:
         stop = next((r for r in rows if r.stop), None)
         if stop is not None and stop.semi_aperture is None:
-            stop.semi_aperture = epd / 2.0   # exact when the stop is the first surface
+            stop.semi_aperture = epd / 2.0  # exact when the stop is the first surface
     return rows_to_system(rows, obj_dist, height, wavelengths, ref - 1)
 
 
@@ -133,14 +139,27 @@ def export_seq(system: OpticalSystem, filepath) -> None:
     """Write an OpticalSystem as a Code V sequence file (millimetres)."""
     for c in system.components:
         if c.type == "thin_lens":
-            raise ValueError(f"Thin lens '{c.id}' (ideal lens) has no Code V surface equivalent")
+            raise ValueError(
+                f"Thin lens '{c.id}' (ideal lens) has no Code V surface equivalent"
+            )
     rows, obj_dist, fo = system_to_rows(system)
     mm = 1e3
     wl = system.wavelengths or [system.analysis_settings.wavelength]
-    ref = min(range(len(wl)), key=lambda k: abs(wl[k] - system.analysis_settings.wavelength)) + 1
-    lines = ["LEN NEW", "TITLE 'Exported design'", "DIM M",
-             "WL " + " ".join(f"{w * 1e9:.4f}" for w in wl), f"REF {ref}",
-             f"EPD {2 * fo.entrance_pupil_semi_diameter * mm:.6f}"]
+    ref = (
+        min(
+            range(len(wl)),
+            key=lambda k: abs(wl[k] - system.analysis_settings.wavelength),
+        )
+        + 1
+    )
+    lines = [
+        "LEN NEW",
+        "TITLE 'Exported design'",
+        "DIM M",
+        "WL " + " ".join(f"{w * 1e9:.4f}" for w in wl),
+        f"REF {ref}",
+        f"EPD {2 * fo.entrance_pupil_semi_diameter * mm:.6f}",
+    ]
     if fo.object_infinite:
         lines.append(f"YAN 0.0 {math.degrees(fo.field_angle):.6f}")
         lines.append("SO 0.0 1.0E+20")

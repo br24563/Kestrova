@@ -28,7 +28,6 @@ from .models import OpticalSystem, AnalysisResult
 from .analysis import analyze_system, effective_focal_length, system_magnification
 from .systems import update_component
 
-
 # ---------------------------------------------------------------------------
 # Constraint Handling
 # ---------------------------------------------------------------------------
@@ -122,7 +121,10 @@ def _constraint_penalty(system: OpticalSystem, constraints: list[dict]) -> float
 # Parameter Specification
 # ---------------------------------------------------------------------------
 
-def _set_parameter(system: OpticalSystem, param_spec: dict, value: float) -> OpticalSystem:
+
+def _set_parameter(
+    system: OpticalSystem, param_spec: dict, value: float
+) -> OpticalSystem:
     """
     Return a copy of the system with a single parameter set to a value.
 
@@ -151,11 +153,19 @@ def _set_parameter(system: OpticalSystem, param_spec: dict, value: float) -> Opt
 
     field = param_spec.get("field", "")
     if field == "object.position":
-        return system.model_copy(update={"object": system.object.model_copy(update={"position": value})})
+        return system.model_copy(
+            update={"object": system.object.model_copy(update={"position": value})}
+        )
     if field == "object.height":
-        return system.model_copy(update={"object": system.object.model_copy(update={"height": value})})
+        return system.model_copy(
+            update={"object": system.object.model_copy(update={"height": value})}
+        )
     if field == "image_plane.position":
-        return system.model_copy(update={"image_plane": system.image_plane.model_copy(update={"position": value})})
+        return system.model_copy(
+            update={
+                "image_plane": system.image_plane.model_copy(update={"position": value})
+            }
+        )
 
     raise ValueError(f"Unsupported param_spec: {param_spec}")
 
@@ -163,6 +173,7 @@ def _set_parameter(system: OpticalSystem, param_spec: dict, value: float) -> Opt
 # ---------------------------------------------------------------------------
 # Parameter Sweep
 # ---------------------------------------------------------------------------
+
 
 def parameter_sweep(
     system: OpticalSystem,
@@ -199,6 +210,7 @@ def parameter_sweep(
 # ---------------------------------------------------------------------------
 # Objective Functions
 # ---------------------------------------------------------------------------
+
 
 def minimize_rms_spot(system: OpticalSystem) -> float:
     """
@@ -253,6 +265,7 @@ def target_efl(system: OpticalSystem, target: float) -> float:
 # ---------------------------------------------------------------------------
 # Numerical Optimization
 # ---------------------------------------------------------------------------
+
 
 def optimize_system(
     system: OpticalSystem,
@@ -351,6 +364,7 @@ def optimize_system(
 # Multi-Objective Optimization
 # ---------------------------------------------------------------------------
 
+
 def multi_objective_optimize(
     system: OpticalSystem,
     objectives: list[Callable[[OpticalSystem], float]],
@@ -415,10 +429,8 @@ def multi_objective_optimize(
     # Default params: first lens focal length
     if params is None:
         from .models import ThinLens, ThickLens
-        lenses = [
-            c for c in system.components
-            if isinstance(c, (ThinLens, ThickLens))
-        ]
+
+        lenses = [c for c in system.components if isinstance(c, (ThinLens, ThickLens))]
         if not lenses:
             raise ValueError("System has no lens to optimize.")
         first = min(lenses, key=lambda l: l.position)
@@ -431,7 +443,9 @@ def multi_objective_optimize(
         for spec in params:
             current = _current_parameter(system, spec)
             if current == 0:
-                raise ValueError(f"Cannot derive default bounds for a zero parameter: {spec}")
+                raise ValueError(
+                    f"Cannot derive default bounds for a zero parameter: {spec}"
+                )
             lo, hi = current * 0.5, current * 2.0
             bounds.append((min(lo, hi), max(lo, hi)))
 

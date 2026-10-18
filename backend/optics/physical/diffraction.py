@@ -23,7 +23,7 @@ def fresnel_diffraction(
     Fresnel diffraction by the transfer-function (convolution) method:
     U2 = IFFT{ FFT{U1} exp(i k z) exp(-i pi lambda z (fx^2 + fy^2)) }.
     The output sampling equals the input sampling.
-    
+
     Args:
         field: Input complex field (2D array)
         wavelength: Wavelength (m)
@@ -67,7 +67,7 @@ def fraunhofer_diffraction(
     Fraunhofer (far-field) diffraction:
     U2(x) = exp(ikz) exp(ik x^2 / 2z) / (i lambda z) * FT{U1}(x / lambda z).
     Output sampling is lambda z / (N dx); energy is conserved.
-    
+
     Args:
         field: Input complex field (2D array)
         wavelength: Wavelength (m)
@@ -86,8 +86,13 @@ def fraunhofer_diffraction(
     x = (np.arange(nx) - nx // 2) * out_dx
     X, Y = np.meshgrid(x, x)
     field_fft = fftshift(fft2(ifftshift(field)))
-    return (np.exp(1j * k * distance) * np.exp(1j * k * (X ** 2 + Y ** 2) / (2 * distance))
-            / (1j * wavelength * distance) * field_fft * pixel_size ** 2)
+    return (
+        np.exp(1j * k * distance)
+        * np.exp(1j * k * (X**2 + Y**2) / (2 * distance))
+        / (1j * wavelength * distance)
+        * field_fft
+        * pixel_size**2
+    )
 
 
 def angular_spectrum_propagation(
@@ -119,7 +124,7 @@ def angular_spectrum_propagation(
 
     # Transfer function; evanescent components (kz imaginary) decay.
     k = 2 * np.pi / wavelength
-    kz = np.sqrt((k**2 - (2*np.pi*FX)**2 - (2*np.pi*FY)**2).astype(complex))
+    kz = np.sqrt((k**2 - (2 * np.pi * FX) ** 2 - (2 * np.pi * FY) ** 2).astype(complex))
     H = np.exp(1j * kz * distance)
 
     # Propagation
@@ -150,12 +155,12 @@ def propagate_to_waist(
     """
     # Simple approach: propagate in steps and find minimum beam width
     distance = initial_distance
-    min_width = float('inf')
+    min_width = float("inf")
     best_field = field.copy()
 
     for d in np.linspace(0, 10 * pixel_size * field.shape[0], 100):
         propagated = angular_spectrum_propagation(field, wavelength, d, pixel_size)
-        intensity = np.abs(propagated)**2
+        intensity = np.abs(propagated) ** 2
 
         # Calculate beam width (second moment)
         ny, nx = intensity.shape
@@ -167,7 +172,7 @@ def propagate_to_waist(
         if total_power > 0:
             cx = np.sum(X * intensity) / total_power
             cy = np.sum(Y * intensity) / total_power
-            width = 2 * np.sqrt(np.sum((X - cx)**2 * intensity) / total_power)
+            width = 2 * np.sqrt(np.sum((X - cx) ** 2 * intensity) / total_power)
 
             if width < min_width:
                 min_width = width
@@ -215,7 +220,7 @@ def point_spread_function(
         PSF intensity
     """
     # PSF is |FFT(pupil)|²
-    psf = np.abs(fftshift(fft2(ifftshift(pupil_function))))**2
+    psf = np.abs(fftshift(fft2(ifftshift(pupil_function)))) ** 2
 
     # Normalize
     psf /= np.sum(psf)

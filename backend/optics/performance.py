@@ -29,10 +29,12 @@ def _trace_one(system, ray):
 def trace_rays_parallel(system, rays, max_workers=None, use_processes=False):
     """Trace multiple rays in parallel using thread or process pools."""
     from functools import partial
+
     if not rays:
         return []
     if max_workers is None:
         import os
+
         max_workers = os.cpu_count() or 4
     max_workers = max(1, min(max_workers, len(rays)))
     executor = ProcessPoolExecutor if use_processes else ThreadPoolExecutor
@@ -45,7 +47,7 @@ def trace_rays_batched(system, rays, batch_size=100):
     """Trace rays in batches to limit memory usage."""
     all_paths = []
     for i in range(0, len(rays), batch_size):
-        all_paths.extend(trace_rays_parallel(system, rays[i:i + batch_size]))
+        all_paths.extend(trace_rays_parallel(system, rays[i : i + batch_size]))
     return all_paths
 
 
@@ -62,12 +64,26 @@ class RayTraceCache:
         comps = [c.model_dump() for c in system.components]
         # the analysis settings matter: a ThinLens focal length is defined at
         # the analysis wavelength
-        data = (repr(comps) + repr(system.object.model_dump()) + repr(system.image_plane.model_dump())
-                + repr(system.analysis_settings.model_dump()))
+        data = (
+            repr(comps)
+            + repr(system.object.model_dump())
+            + repr(system.image_plane.model_dump())
+            + repr(system.analysis_settings.model_dump())
+        )
         return hashlib.md5(data.encode()).hexdigest()
 
     def _ray_key(self, sys_hash, ray):
-        return sys_hash + "|" + str(round(ray.y, 12)) + "|" + str(round(ray.theta, 12)) + "|" + str(round(ray.z, 12)) + "|" + str(round(ray.wavelength, 12))
+        return (
+            sys_hash
+            + "|"
+            + str(round(ray.y, 12))
+            + "|"
+            + str(round(ray.theta, 12))
+            + "|"
+            + str(round(ray.z, 12))
+            + "|"
+            + str(round(ray.wavelength, 12))
+        )
 
     def trace(self, system, ray):
         """Trace a ray with caching."""
@@ -125,9 +141,11 @@ class AABB:
         dx, dy, dz = direction
         tmin = 0.0
         tmax = 1e30
-        slabs = ((ox, dx, self.min_x, self.max_x),
-                 (oy, dy, self.min_y, self.max_y),
-                 (oz, dz, self.min_z, self.max_z))
+        slabs = (
+            (ox, dx, self.min_x, self.max_x),
+            (oy, dy, self.min_y, self.max_y),
+            (oz, dz, self.min_z, self.max_z),
+        )
         for o, d, lo, hi in slabs:
             if abs(d) < 1e-15:
                 if o < lo or o > hi:
@@ -184,8 +202,10 @@ class BSPNode:
                 right.append(obj)
         if not left or not right:
             return True
-        self.children = (BSPNode(self.depth + 1, self.max_depth, self.max_objects),
-                         BSPNode(self.depth + 1, self.max_depth, self.max_objects))
+        self.children = (
+            BSPNode(self.depth + 1, self.max_depth, self.max_objects),
+            BSPNode(self.depth + 1, self.max_depth, self.max_objects),
+        )
         self.children[0].build(left, get_bounds)
         self.children[1].build(right, get_bounds)
         return True
@@ -210,12 +230,14 @@ class SpatialAccelerator:
 
     def build(self, objects):
         """Build the BSP tree from a list of objects."""
+
         def get_bounds(obj):
             p = getattr(obj, "position", None)
             if p is None:
                 return None
             r = getattr(obj, "aperture_radius", 0.1)
             return (p.x - r, p.y - r, p.z - r, p.x + r, p.y + r, p.z + r)
+
         self.root.build(objects, get_bounds)
         self.built = True
 
@@ -229,6 +251,7 @@ class SpatialAccelerator:
 @dataclass
 class BenchmarkResult:
     """Result of a performance benchmark."""
+
     name: str
     duration_s: float
     rays_traced: int
@@ -243,8 +266,15 @@ def benchmark_ray_tracing(system, num_rays=1000, use_cache=True, parallel=True):
     for i in range(num_rays):
         y = 0.0125 * (2.0 * np.random.random() - 1.0)
         theta = 0.1 * (2.0 * np.random.random() - 1.0)
-        rays.append(Ray(y=y, theta=theta, z=system.object.position,
-                        wavelength=550e-9, ray_type="fill"))
+        rays.append(
+            Ray(
+                y=y,
+                theta=theta,
+                z=system.object.position,
+                wavelength=550e-9,
+                ray_type="fill",
+            )
+        )
 
     cache = RayTraceCache(max_size=max(100, num_rays * 2))
 

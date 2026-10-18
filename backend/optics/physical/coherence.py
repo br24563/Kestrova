@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 """
 Coherence modeling.
 
@@ -16,13 +17,14 @@ import numpy as np
 @dataclass
 class TemporalCoherence:
     """Temporal coherence properties."""
+
     wavelength: float = 550e-9  # m
     bandwidth: float = 1e-9  # m (spectral width)
 
     @property
     def coherence_length(self) -> float:
         """Coherence length."""
-        return self.wavelength**2 / self.bandwidth   # L_c = lambda^2 / delta-lambda
+        return self.wavelength**2 / self.bandwidth  # L_c = lambda^2 / delta-lambda
 
     @property
     def coherence_time(self) -> float:
@@ -39,6 +41,7 @@ class TemporalCoherence:
 @dataclass
 class SpatialCoherence:
     """Spatial coherence properties."""
+
     wavelength: float = 550e-9  # m
     source_size: float = 1e-3  # m
     distance: float = 1.0  # m
@@ -55,7 +58,13 @@ class SpatialCoherence:
         # van Cittert-Zernike theorem, uniform circular source of diameter D:
         # |mu| = |2 J1(v) / v|, v = pi D s / (lambda z)
         from scipy.special import j1
-        v = np.pi * self.source_size * abs(separation) / (self.wavelength * self.distance)
+
+        v = (
+            np.pi
+            * self.source_size
+            * abs(separation)
+            / (self.wavelength * self.distance)
+        )
         return 1.0 if v < 1e-12 else float(abs(2.0 * j1(v) / v))
 
 
@@ -85,7 +94,7 @@ def interference_pattern(
     Returns:
         (positions, intensities)
     """
-    x = np.linspace(-screen_width/2, screen_width/2, num_points)
+    x = np.linspace(-screen_width / 2, screen_width / 2, num_points)
 
     # Phase difference
     d = slit_separation
@@ -143,7 +152,7 @@ def michelson_interferometer(
     Returns:
         (positions, intensities)
     """
-    x = np.linspace(-beam_diameter/2, beam_diameter/2, num_points)
+    x = np.linspace(-beam_diameter / 2, beam_diameter / 2, num_points)
 
     # Path difference varies across beam due to tilt
     path_diff = 2 * mirror_displacement
@@ -175,15 +184,17 @@ def fabry_perot_interferometer(
     Returns:
         (wavelengths, transmission)
     """
-    wavelengths = np.linspace(wavelength - wavelength_range/2, wavelength + wavelength_range/2, num_points)
+    wavelengths = np.linspace(
+        wavelength - wavelength_range / 2, wavelength + wavelength_range / 2, num_points
+    )
 
     # Phase difference
     phase = 2 * np.pi * 2 * mirror_separation / wavelengths
 
     # Finesse
-    F = 4 * reflectivity / (1 - reflectivity)**2
+    F = 4 * reflectivity / (1 - reflectivity) ** 2
 
     # Airy function
-    transmission = 1 / (1 + F * np.sin(phase/2)**2)
+    transmission = 1 / (1 + F * np.sin(phase / 2) ** 2)
 
     return wavelengths, transmission

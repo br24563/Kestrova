@@ -37,17 +37,26 @@ class ISO10110Drawing:
     dimensions: dict = field(default_factory=dict)
 
 
-def generate_lens_mount(lens_diameter, lens_thickness, clearance=0.05e-3, edge_width=0.5e-3):
+def generate_lens_mount(
+    lens_diameter, lens_thickness, clearance=0.05e-3, edge_width=0.5e-3
+):
     inner_diameter = lens_diameter + 2 * clearance
     outer_diameter = inner_diameter + 2 * edge_width
     return LensMount(
-        inner_diameter=inner_diameter, outer_diameter=outer_diameter,
-        thickness=lens_thickness + 0.5e-3, edge_width=edge_width,
+        inner_diameter=inner_diameter,
+        outer_diameter=outer_diameter,
+        thickness=lens_thickness + 0.5e-3,
+        edge_width=edge_width,
     )
 
 
-def generate_barrel_from_system(system, wall_thickness=2.0e-3, clearance=0.1e-3,
-                                thread_pitch=0.5e-3, seat_allowance=1.0e-3):
+def generate_barrel_from_system(
+    system,
+    wall_thickness=2.0e-3,
+    clearance=0.1e-3,
+    thread_pitch=0.5e-3,
+    seat_allowance=1.0e-3,
+):
     """Barrel sections around each lens; ``seat_allowance`` is added to the
     element thickness for the seat (a mechanical design choice)."""
     sections = []
@@ -56,15 +65,20 @@ def generate_barrel_from_system(system, wall_thickness=2.0e-3, clearance=0.1e-3,
         if isinstance(comp, (ThinLens, ThickLens)):
             lens_diameter = getattr(comp, "aperture_diameter", 25e-3)
             from .glass_catalog import _component_geometry
+
             lens_thickness = _component_geometry(comp)[1]
             inner_d = lens_diameter + 2 * clearance
             outer_d = inner_d + 2 * wall_thickness
             length = lens_thickness + seat_allowance
-            sections.append(BarrelSection(
-                inner_diameter=inner_d, outer_diameter=outer_d,
-                length=length, position=comp.position,
-                thread_pitch=thread_pitch,
-            ))
+            sections.append(
+                BarrelSection(
+                    inner_diameter=inner_d,
+                    outer_diameter=outer_d,
+                    length=length,
+                    position=comp.position,
+                    thread_pitch=thread_pitch,
+                )
+            )
     return sections
 
 
@@ -106,6 +120,7 @@ def create_iso10110_drawing(system, element_index=0, tolerance_codes=None):
     the equiconvex lens of zero edge thickness.
     """
     from .glass_catalog import _component_geometry
+
     components = sorted(system.components, key=lambda c: c.position)
     lenses = [c for c in components if isinstance(c, (ThinLens, ThickLens))]
     if element_index >= len(lenses):
@@ -123,12 +138,73 @@ def create_iso10110_drawing(system, element_index=0, tolerance_codes=None):
 
 def iso10110_to_svg(drawing, filename):
     svg = []
-    svg.append(chr(60) + "svg xmlns=" + chr(34) + "http://www.w3.org/2000/svg" + chr(34) + " width=" + chr(34) + "400" + chr(34) + " height=" + chr(34) + "300" + chr(34) + chr(62))
-    svg.append(chr(60) + "rect width=" + chr(34) + "100%" + chr(34) + " height=" + chr(34) + "100%" + chr(34) + " fill=" + chr(34) + "white" + chr(34) + "/" + chr(62))
-    svg.append(chr(60) + "text x=" + chr(34) + "10" + chr(34) + " y=" + chr(34) + "20" + chr(34) + chr(62) + drawing.element_name + chr(60) + "/text" + chr(62))
+    svg.append(
+        chr(60)
+        + "svg xmlns="
+        + chr(34)
+        + "http://www.w3.org/2000/svg"
+        + chr(34)
+        + " width="
+        + chr(34)
+        + "400"
+        + chr(34)
+        + " height="
+        + chr(34)
+        + "300"
+        + chr(34)
+        + chr(62)
+    )
+    svg.append(
+        chr(60)
+        + "rect width="
+        + chr(34)
+        + "100%"
+        + chr(34)
+        + " height="
+        + chr(34)
+        + "100%"
+        + chr(34)
+        + " fill="
+        + chr(34)
+        + "white"
+        + chr(34)
+        + "/"
+        + chr(62)
+    )
+    svg.append(
+        chr(60)
+        + "text x="
+        + chr(34)
+        + "10"
+        + chr(34)
+        + " y="
+        + chr(34)
+        + "20"
+        + chr(34)
+        + chr(62)
+        + drawing.element_name
+        + chr(60)
+        + "/text"
+        + chr(62)
+    )
     y_pos = 50
     for sym in drawing.symbols:
-        svg.append(chr(60) + "text x=" + chr(34) + "10" + chr(34) + " y=" + chr(34) + str(y_pos) + chr(34) + chr(62) + sym.label + chr(60) + "/text" + chr(62))
+        svg.append(
+            chr(60)
+            + "text x="
+            + chr(34)
+            + "10"
+            + chr(34)
+            + " y="
+            + chr(34)
+            + str(y_pos)
+            + chr(34)
+            + chr(62)
+            + sym.label
+            + chr(60)
+            + "/text"
+            + chr(62)
+        )
         y_pos += 20
     svg.append(chr(60) + "/svg" + chr(62))
     with open(filename, "w") as f:

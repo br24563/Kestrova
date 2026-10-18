@@ -17,7 +17,6 @@ import numpy as np
 
 from .system import Ray, Vector3, HitPoint
 
-
 # =============================================================================
 # Beer-Lambert Volumetric Absorption
 # =============================================================================
@@ -26,8 +25,9 @@ from .system import Ray, Vector3, HitPoint
 @dataclass
 class VolumeProperties:
     """Volumetric material properties for absorption."""
+
     absorption_coeff: float = 0.0  # 1/meter
-    scatter_coeff: float = 0.0      # 1/meter
+    scatter_coeff: float = 0.0  # 1/meter
     fluorescence_efficiency: float = 0.0
     fluorescence_wavelength: float = 600e-9
     fluorescence_decay: float = 1e-8  # seconds
@@ -46,8 +46,10 @@ def apply_volumetric_absorption(ray: Ray, distance: float, material: str) -> flo
     wavelength (raises ValueError when no data covers it).
     """
     from ..materials import get_material
+
     alpha = get_material(material).absorption_coefficient(ray.wavelength)
     return ray.intensity * beer_lambert_transmittance(distance, alpha)
+
 
 # =============================================================================
 # Fluorescence Modeling
@@ -57,6 +59,7 @@ def apply_volumetric_absorption(ray: Ray, distance: float, material: str) -> flo
 @dataclass
 class FluorescenceModel:
     """Fluorescence emission model."""
+
     absorption_wl: float = 400e-9
     emission_wl: float = 550e-9
     quantum_yield: float = 0.8
@@ -81,12 +84,20 @@ def generate_fluorescent_rays(ray, hit, model, n_rays=5):
         dy = math.sin(theta) * math.sin(phi)
         dz = math.cos(theta)
         # emission_bandwidth is a FWHM
-        wl = model.emission_wl + np.random.normal(0, model.emission_bandwidth / (2 * math.sqrt(2 * math.log(2))))
-        emitted.append(Ray(
-            origin=hit.point, direction=Vector3(dx, dy, dz),
-            intensity=per_ray, wavelength=wl, order=ray.order + 1,
-        ))
+        wl = model.emission_wl + np.random.normal(
+            0, model.emission_bandwidth / (2 * math.sqrt(2 * math.log(2)))
+        )
+        emitted.append(
+            Ray(
+                origin=hit.point,
+                direction=Vector3(dx, dy, dz),
+                intensity=per_ray,
+                wavelength=wl,
+                order=ray.order + 1,
+            )
+        )
     return emitted
+
 
 # =============================================================================
 # Source Spectrum and Color
@@ -96,6 +107,7 @@ def generate_fluorescent_rays(ray, hit, model, n_rays=5):
 @dataclass
 class SpectralSource:
     """Spectral source definition."""
+
     wavelengths: list = field(default_factory=list)
     intensities: list = field(default_factory=list)
     name: str = "White"
@@ -105,7 +117,7 @@ def create_blackbody_spectrum(temperature, wl_range=None, n_samples=50):
     """Create blackbody radiation spectrum."""
     if wl_range is None:
         wl_range = (380e-9, 780e-9)
-    h = 6.62607015e-34      # exact SI values
+    h = 6.62607015e-34  # exact SI values
     c = 299792458.0
     k = 1.380649e-23
     wavelengths = np.linspace(wl_range[0], wl_range[1], n_samples)
@@ -115,15 +127,19 @@ def create_blackbody_spectrum(temperature, wl_range=None, n_samples=50):
         intensities.append(i)
     intensities = np.array(intensities)
     intensities /= intensities.max() if intensities.max() > 0 else 1
-    return SpectralSource(wavelengths=wavelengths.tolist(), intensities=intensities.tolist())
+    return SpectralSource(
+        wavelengths=wavelengths.tolist(), intensities=intensities.tolist()
+    )
 
 
 def create_gaussian_spectrum(center_wl, fwhm, n_samples=50):
     """Create Gaussian spectral source."""
     sigma = fwhm / (2 * math.sqrt(2 * math.log(2)))
-    wavelengths = np.linspace(center_wl - 3*fwhm, center_wl + 3*fwhm, n_samples)
-    intensities = np.exp(-0.5 * ((wavelengths - center_wl) / sigma)**2)
-    return SpectralSource(wavelengths=wavelengths.tolist(), intensities=intensities.tolist())
+    wavelengths = np.linspace(center_wl - 3 * fwhm, center_wl + 3 * fwhm, n_samples)
+    intensities = np.exp(-0.5 * ((wavelengths - center_wl) / sigma) ** 2)
+    return SpectralSource(
+        wavelengths=wavelengths.tolist(), intensities=intensities.tolist()
+    )
 
 
 def wavelength_to_rgb(wl):
@@ -160,8 +176,9 @@ def compute_rgb_from_spectrum(spectrum):
         b_sum += b * intensity
         total += intensity
     if total > 0:
-        return (r_sum/total, g_sum/total, b_sum/total)
+        return (r_sum / total, g_sum / total, b_sum / total)
     return (0, 0, 0)
+
 
 # =============================================================================
 # NSC Ray File I/O
@@ -170,30 +187,41 @@ def compute_rgb_from_spectrum(spectrum):
 
 def export_rays_to_file(rays, filename):
     """Export ray data to a simple ray file format."""
-    with open(filename, 'w') as f:
-        f.write('# NSC Ray File' + chr(10))
+    with open(filename, "w") as f:
+        f.write("# NSC Ray File" + chr(10))
         for ray in rays:
-            parts = [str(ray.origin.x), str(ray.origin.y), str(ray.origin.z),
-                     str(ray.direction.x), str(ray.direction.y), str(ray.direction.z),
-                     str(ray.intensity), str(ray.wavelength)]
-            f.write(' '.join(parts) + chr(10))
+            parts = [
+                str(ray.origin.x),
+                str(ray.origin.y),
+                str(ray.origin.z),
+                str(ray.direction.x),
+                str(ray.direction.y),
+                str(ray.direction.z),
+                str(ray.intensity),
+                str(ray.wavelength),
+            ]
+            f.write(" ".join(parts) + chr(10))
 
 
 def import_rays_from_file(filename):
     """Import ray data from file."""
     rays = []
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
             parts = line.split()
             if len(parts) >= 8:
                 x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
                 dx, dy, dz = float(parts[3]), float(parts[4]), float(parts[5])
                 intensity, wl = float(parts[6]), float(parts[7])
-                rays.append(Ray(
-                    origin=Vector3(x, y, z), direction=Vector3(dx, dy, dz),
-                    intensity=intensity, wavelength=wl,
-                ))
+                rays.append(
+                    Ray(
+                        origin=Vector3(x, y, z),
+                        direction=Vector3(dx, dy, dz),
+                        intensity=intensity,
+                        wavelength=wl,
+                    )
+                )
     return rays

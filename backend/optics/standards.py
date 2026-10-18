@@ -28,45 +28,57 @@ from .systems import update_component
 from .tolerance import ToleranceSpec, tolerance_analysis, compute_yield
 from .units import LENGTH_UNITS, convert
 
-
 # =============================================================================
 # Zemax-style Tolerance Operands
 # =============================================================================
 
+
 class OperandType(str, Enum):
     """Zemax OpticStudio tolerance operand names."""
-    TRAD = "TRAD"      # radius
-    TCUR = "TCUR"      # curvature
-    TFRN = "TFRN"      # radius as power fringes
-    TTHI = "TTHI"      # thickness / spacing
-    TCON = "TCON"      # conic constant
-    TSDX = "TSDX"      # surface decenter x
-    TSDY = "TSDY"      # surface decenter y
-    TSTX = "TSTX"      # surface tilt about x
-    TSTY = "TSTY"      # surface tilt about y
-    TIRR = "TIRR"      # surface irregularity
-    TEXI = "TEXI"      # surface irregularity (Zernike)
-    TEDX = "TEDX"      # element decenter x
-    TEDY = "TEDY"      # element decenter y
-    TETX = "TETX"      # element tilt about x
-    TETY = "TETY"      # element tilt about y
-    TIND = "TIND"      # index of refraction
-    TABB = "TABB"      # Abbe number
+
+    TRAD = "TRAD"  # radius
+    TCUR = "TCUR"  # curvature
+    TFRN = "TFRN"  # radius as power fringes
+    TTHI = "TTHI"  # thickness / spacing
+    TCON = "TCON"  # conic constant
+    TSDX = "TSDX"  # surface decenter x
+    TSDY = "TSDY"  # surface decenter y
+    TSTX = "TSTX"  # surface tilt about x
+    TSTY = "TSTY"  # surface tilt about y
+    TIRR = "TIRR"  # surface irregularity
+    TEXI = "TEXI"  # surface irregularity (Zernike)
+    TEDX = "TEDX"  # element decenter x
+    TEDY = "TEDY"  # element decenter y
+    TETX = "TETX"  # element tilt about x
+    TETY = "TETY"  # element tilt about y
+    TIND = "TIND"  # index of refraction
+    TABB = "TABB"  # Abbe number
 
 
-_ANGULAR_OR_DIMENSIONLESS = {"TIND", "TABB", "TCON", "TFRN", "TIRR", "TEXI",
-                             "TSTX", "TSTY", "TETX", "TETY"}
+_ANGULAR_OR_DIMENSIONLESS = {
+    "TIND",
+    "TABB",
+    "TCON",
+    "TFRN",
+    "TIRR",
+    "TEXI",
+    "TSTX",
+    "TSTY",
+    "TETX",
+    "TETY",
+}
 
 
 @dataclass
 class ToleranceOperand:
     """A single Zemax-style tolerance operand."""
+
     op_type: OperandType
-    surface: int = 0          # Surface number (1-based, 0 = all/element)
-    value: float = 0.0        # Tolerance value (units depend on op_type)
-    unit: str = "mm"          # Unit for the value
+    surface: int = 0  # Surface number (1-based, 0 = all/element)
+    value: float = 0.0  # Tolerance value (units depend on op_type)
+    unit: str = "mm"  # Unit for the value
     distribution: str = "gaussian"  # gaussian, uniform, truncated
-    compensator: bool = False # Is this a compensator?
+    compensator: bool = False  # Is this a compensator?
     min_val: float = 0.0
     max_val: float = 0.0
 
@@ -83,8 +95,13 @@ class ToleranceOperand:
 # PartBuilder: Parametric Lens Element Generator
 # =============================================================================
 
-_SHAPE_FACTOR = {"biconvex": 0.0, "biconcave": 0.0, "plano_convex": 1.0,
-                 "plano_concave": 1.0, "meniscus": 2.0}
+_SHAPE_FACTOR = {
+    "biconvex": 0.0,
+    "biconcave": 0.0,
+    "plano_convex": 1.0,
+    "plano_concave": 1.0,
+    "meniscus": 2.0,
+}
 
 
 @dataclass
@@ -97,10 +114,13 @@ class PartDefinition:
     by default; set ``shape_factor`` to override). The radii are solved
     exactly from the thick-lens power at the reference wavelength.
     """
+
     part_number: str = "LENS-001"
-    shape: str = "biconvex"   # biconvex, biconcave, meniscus, plano_convex, plano_concave
+    shape: str = (
+        "biconvex"  # biconvex, biconcave, meniscus, plano_convex, plano_concave
+    )
     aperture_diameter: float = 0.025
-    edge_thickness: float = 2.0e-3      # informational minimum; checked
+    edge_thickness: float = 2.0e-3  # informational minimum; checked
     center_thickness: float = 5.0e-3
     focal_length: float = 0.050
     material: str = "N-BK7"
@@ -121,6 +141,7 @@ class PartDefinition:
         is returned as 1e10. Raises ValueError if no real solution exists.
         """
         from .materials import refractive_index
+
         if n is None:
             n = refractive_index(self.material, self.wavelength)
         f = self.focal_length
@@ -143,7 +164,7 @@ class PartDefinition:
             disc = 1.0 - 4.0 * a * b
             if disc < 0:
                 raise ValueError("No real lens of this shape, thickness and power")
-            K = 2.0 * b / (1.0 + math.sqrt(disc))   # root continuous with the thin lens
+            K = 2.0 * b / (1.0 + math.sqrt(disc))  # root continuous with the thin lens
         c1, c2 = K * (X + 1.0) / 2.0, K * (X - 1.0) / 2.0
         return (1.0 / c1 if c1 else 1e10, 1.0 / c2 if c2 else 1e10)
 
@@ -172,7 +193,8 @@ class PartDefinition:
         if edge < self.edge_thickness:
             raise ValueError(
                 f"Edge thickness {edge * 1e3:.3f} mm is below the required "
-                f"{self.edge_thickness * 1e3:.3f} mm; increase centre thickness")
+                f"{self.edge_thickness * 1e3:.3f} mm; increase centre thickness"
+            )
         return ThickLens(
             id=component_id,
             position=position,
@@ -203,9 +225,11 @@ def build_part_from_spec(spec: dict) -> PartDefinition:
 # Lens Data Editor (surface table model)
 # =============================================================================
 
+
 @dataclass
 class SurfaceRow:
     """One row in the Lens Data Editor (surface table)."""
+
     surface: int
     comment: str = ""
     radius: float = 1e30
@@ -213,9 +237,9 @@ class SurfaceRow:
     glass: str = "AIR"
     semi_diameter: float = 12.5e-3
     conic: float = 0.0
-    surface_type: str = "STANDARD"     # STANDARD, EVENASPH or PARAXIAL
+    surface_type: str = "STANDARD"  # STANDARD, EVENASPH or PARAXIAL
     is_stop: bool = False
-    paraxial_focal_length: Optional[float] = None   # PARAXIAL (ideal lens) only
+    paraxial_focal_length: Optional[float] = None  # PARAXIAL (ideal lens) only
     coating: str = ""
     decenter_x: float = 0.0
     decenter_y: float = 0.0
@@ -234,24 +258,47 @@ class LensDataEditor:
     def build_from_system(self, system: OpticalSystem):
         """Populate the editor with the system's sequential surface table."""
         from .io.prescription import system_to_rows
+
         rows, obj_dist, fo = system_to_rows(system)
-        self.rows = [SurfaceRow(surface=0, comment="OBJECT",
-                                thickness=obj_dist if not fo.object_infinite else 1e30,
-                                semi_diameter=abs(system.object.height))]
+        self.rows = [
+            SurfaceRow(
+                surface=0,
+                comment="OBJECT",
+                thickness=obj_dist if not fo.object_infinite else 1e30,
+                semi_diameter=abs(system.object.height),
+            )
+        ]
         for k, r in enumerate(rows, start=1):
-            stype = ("PARAXIAL" if r.paraxial_focal_length is not None
-                     else ("EVENASPH" if r.asphere else "STANDARD"))
-            self.rows.append(SurfaceRow(
-                surface=k, comment=r.label,
-                radius=r.radius if r.radius else 1e30,
-                thickness=r.thickness,
-                glass=r.glass or "AIR",
-                semi_diameter=r.semi_aperture if r.semi_aperture is not None else 0.0,
-                conic=r.conic, surface_type=stype, is_stop=r.stop,
-                paraxial_focal_length=r.paraxial_focal_length,
-            ))
-        self.rows.append(SurfaceRow(surface=len(self.rows), comment="IMAGE",
-                                    semi_diameter=abs(fo.image_height) if math.isfinite(fo.image_height) else 0.0))
+            stype = (
+                "PARAXIAL"
+                if r.paraxial_focal_length is not None
+                else ("EVENASPH" if r.asphere else "STANDARD")
+            )
+            self.rows.append(
+                SurfaceRow(
+                    surface=k,
+                    comment=r.label,
+                    radius=r.radius if r.radius else 1e30,
+                    thickness=r.thickness,
+                    glass=r.glass or "AIR",
+                    semi_diameter=(
+                        r.semi_aperture if r.semi_aperture is not None else 0.0
+                    ),
+                    conic=r.conic,
+                    surface_type=stype,
+                    is_stop=r.stop,
+                    paraxial_focal_length=r.paraxial_focal_length,
+                )
+            )
+        self.rows.append(
+            SurfaceRow(
+                surface=len(self.rows),
+                comment="IMAGE",
+                semi_diameter=(
+                    abs(fo.image_height) if math.isfinite(fo.image_height) else 0.0
+                ),
+            )
+        )
         return self.rows
 
     def to_dicts(self) -> list:
@@ -261,13 +308,22 @@ class LensDataEditor:
     def summary_text(self) -> str:
         """Render the editor as an ASCII table."""
         header = "{:>4} {:>14} {:>12} {:>10} {:>12} {:>10} {}".format(
-            "SURF", "RADIUS", "THICKNESS", "GLASS", "SEMI-DIA", "TYPE", "COMMENT")
+            "SURF", "RADIUS", "THICKNESS", "GLASS", "SEMI-DIA", "TYPE", "COMMENT"
+        )
         lines = [header, "-" * len(header)]
         for r in self.rows:
             radius_str = "Inf" if abs(r.radius) > 1e20 else "{:.6g}".format(r.radius)
-            lines.append("{:>4} {:>14} {:>12} {:>10} {:>12} {:>10} {}".format(
-                "STO" if r.is_stop else r.surface, radius_str, "{:.6g}".format(r.thickness), r.glass,
-                "{:.6g}".format(r.semi_diameter), r.surface_type, r.comment))
+            lines.append(
+                "{:>4} {:>14} {:>12} {:>10} {:>12} {:>10} {}".format(
+                    "STO" if r.is_stop else r.surface,
+                    radius_str,
+                    "{:.6g}".format(r.thickness),
+                    r.glass,
+                    "{:.6g}".format(r.semi_diameter),
+                    r.surface_type,
+                    r.comment,
+                )
+            )
         return "\n".join(lines)
 
 
@@ -275,11 +331,13 @@ class LensDataEditor:
 # Merit Function Editor
 # =============================================================================
 
+
 @dataclass
 class MeritOperandRow:
     """One row in the Merit Function Editor."""
+
     row: int
-    operand: str = "RMS"        # e.g. RMS, EFFL, DIST, MTFT
+    operand: str = "RMS"  # e.g. RMS, EFFL, DIST, MTFT
     target: float = 0.0
     weight: float = 1.0
     value: float = 0.0
@@ -307,7 +365,9 @@ class MeritFunctionEditor:
     def __init__(self):
         self.rows: list = []
 
-    def add(self, operand: str, target: float, weight: float = 1.0, comment: str = "") -> MeritOperandRow:
+    def add(
+        self, operand: str, target: float, weight: float = 1.0, comment: str = ""
+    ) -> MeritOperandRow:
         """Append an operand row."""
         row = MeritOperandRow(
             row=len(self.rows),
@@ -322,13 +382,16 @@ class MeritFunctionEditor:
     def evaluate(self, system: OpticalSystem) -> float:
         """Weighted sum of squared deviations; unknown operands raise."""
         from .analysis import back_focal_length
+
         analysis = analyze_system(system)
         total = 0.0
         for row in self.rows:
             field = MERIT_OPERAND_MAP.get(row.operand)
             if field is None:
-                raise ValueError(f"Unknown merit operand '{row.operand}'. "
-                                 f"Supported: {sorted(MERIT_OPERAND_MAP)}")
+                raise ValueError(
+                    f"Unknown merit operand '{row.operand}'. "
+                    f"Supported: {sorted(MERIT_OPERAND_MAP)}"
+                )
             if field == "back_focal_length":
                 row.value = float(back_focal_length(system))
             else:
@@ -347,17 +410,28 @@ class MeritFunctionEditor:
         if system is not None:
             self.evaluate(system)
         header = "{:>4} {:>8} {:>16} {:>10} {:>16} {:>16} {}".format(
-            "ROW", "TYPE", "TARGET", "WEIGHT", "VALUE", "CONTRIB", "COMMENT")
+            "ROW", "TYPE", "TARGET", "WEIGHT", "VALUE", "CONTRIB", "COMMENT"
+        )
         lines = [header, "-" * len(header)]
         for r in self.rows:
-            lines.append("{:>4} {:>8} {:>16.6g} {:>10.3g} {:>16.6g} {:>16.6g} {}".format(
-                r.row, r.operand, r.target, r.weight, r.value, r.contribution, r.comment))
+            lines.append(
+                "{:>4} {:>8} {:>16.6g} {:>10.3g} {:>16.6g} {:>16.6g} {}".format(
+                    r.row,
+                    r.operand,
+                    r.target,
+                    r.weight,
+                    r.value,
+                    r.contribution,
+                    r.comment,
+                )
+            )
         return "\n".join(lines)
 
 
 # =============================================================================
 # Sensitivity Analysis with Automatic Compensator Selection
 # =============================================================================
+
 
 def operand_to_parameter(op_type: OperandType, surface: int) -> Optional[str]:
     """Map a tolerance operand to a system parameter field."""
@@ -406,7 +480,9 @@ def select_compensators(
     # Candidate 2: each lens position (air-space adjustment)
     for comp in system.components:
         if isinstance(comp, (ThinLens, ThickLens)):
-            candidates.append(("air_space_" + comp.id, comp.id + ".position", comp.position))
+            candidates.append(
+                ("air_space_" + comp.id, comp.id + ".position", comp.position)
+            )
 
     results = []
     for name, field, current in candidates:
@@ -418,9 +494,13 @@ def select_compensators(
             trial = current + span * (k / 40.0 - 0.5)
             try:
                 if field == "image_plane.position":
-                    cand = system.model_copy(update={
-                        "image_plane": system.image_plane.model_copy(update={"position": trial})
-                    })
+                    cand = system.model_copy(
+                        update={
+                            "image_plane": system.image_plane.model_copy(
+                                update={"position": trial}
+                            )
+                        }
+                    )
                 else:
                     comp_id, attr = field.split(".")
                     cand = update_component(system, comp_id, **{attr: trial})
@@ -431,13 +511,15 @@ def select_compensators(
                 best_metric = val
                 best_val = trial
         improvement = (base - best_metric) / base if base > 0 else 0.0
-        results.append({
-            "name": name,
-            "field": field,
-            "current": current,
-            "best": best_val,
-            "improvement": improvement,
-        })
+        results.append(
+            {
+                "name": name,
+                "field": field,
+                "current": current,
+                "best": best_val,
+                "improvement": improvement,
+            }
+        )
 
     results.sort(key=lambda r: r["improvement"], reverse=True)
     return results[:max_compensators]
@@ -446,6 +528,7 @@ def select_compensators(
 # =============================================================================
 # Inverse Sensitivity Tolerancing
 # =============================================================================
+
 
 def inverse_sensitivity_tolerance(
     system: OpticalSystem,
@@ -547,23 +630,38 @@ def build_tolerance_operands(
     """
     ops = []
     for s in range(1, n_surfaces + 1):
-        ops.append(ToleranceOperand(OperandType.TRAD, surface=s,
-                                    value=default_tol_mm, unit="mm"))
-        ops.append(ToleranceOperand(OperandType.TTHI, surface=s,
-                                    value=default_tol_mm, unit="mm"))
+        ops.append(
+            ToleranceOperand(
+                OperandType.TRAD, surface=s, value=default_tol_mm, unit="mm"
+            )
+        )
+        ops.append(
+            ToleranceOperand(
+                OperandType.TTHI, surface=s, value=default_tol_mm, unit="mm"
+            )
+        )
         if include_index:
-            ops.append(ToleranceOperand(OperandType.TIND, surface=s,
-                                        value=0.001, unit=""))
+            ops.append(
+                ToleranceOperand(OperandType.TIND, surface=s, value=0.001, unit="")
+            )
         if include_decenter:
-            ops.append(ToleranceOperand(OperandType.TEDX, surface=s,
-                                        value=default_tol_mm, unit="mm"))
-            ops.append(ToleranceOperand(OperandType.TEDY, surface=s,
-                                        value=default_tol_mm, unit="mm"))
+            ops.append(
+                ToleranceOperand(
+                    OperandType.TEDX, surface=s, value=default_tol_mm, unit="mm"
+                )
+            )
+            ops.append(
+                ToleranceOperand(
+                    OperandType.TEDY, surface=s, value=default_tol_mm, unit="mm"
+                )
+            )
         if include_tilt:
-            ops.append(ToleranceOperand(OperandType.TETX, surface=s,
-                                        value=0.001, unit="rad"))
-            ops.append(ToleranceOperand(OperandType.TETY, surface=s,
-                                        value=0.001, unit="rad"))
+            ops.append(
+                ToleranceOperand(OperandType.TETX, surface=s, value=0.001, unit="rad")
+            )
+            ops.append(
+                ToleranceOperand(OperandType.TETY, surface=s, value=0.001, unit="rad")
+            )
     return ops
 
 
@@ -588,6 +686,7 @@ def operands_to_tolerance_specs(
     rows = None
     if system is not None:
         from .io.prescription import system_to_rows
+
         rows, _, _ = system_to_rows(system)
     for op in operands:
         si = op.to_si()
@@ -600,11 +699,18 @@ def operands_to_tolerance_specs(
         else:
             if not component_ids:
                 raise ValueError("Give a system or component_ids")
-            comp_id, part = component_ids[min(op.surface - 1, len(component_ids) - 1)], ""
+            comp_id, part = (
+                component_ids[min(op.surface - 1, len(component_ids) - 1)],
+                "",
+            )
         if t == OperandType.TRAD:
             if part not in ("front", "back"):
-                raise ValueError(f"TRAD on surface {op.surface} needs a ThickLens surface")
-            specs[f"{comp_id}.radius1" if part == "front" else f"{comp_id}.radius2"] = si
+                raise ValueError(
+                    f"TRAD on surface {op.surface} needs a ThickLens surface"
+                )
+            specs[f"{comp_id}.radius1" if part == "front" else f"{comp_id}.radius2"] = (
+                si
+            )
         elif t == OperandType.TTHI:
             specs[f"{comp_id}.thickness"] = si
         elif t == OperandType.TEDX:
@@ -644,6 +750,7 @@ EXTRA_LENGTH_UNITS = {
 @dataclass
 class UnitSystem:
     """A named unit system for display and input."""
+
     name: str = "metric"
     length: str = "mm"
     wavelength: str = "nm"
@@ -653,8 +760,12 @@ class UnitSystem:
     def from_name(cls, name: str) -> "UnitSystem":
         """Build a UnitSystem from a known system name."""
         spec = UNIT_SYSTEMS.get(name, UNIT_SYSTEMS["metric"])
-        return cls(name=name, length=spec["length"],
-                   wavelength=spec["wavelength"], angle=spec["angle"])
+        return cls(
+            name=name,
+            length=spec["length"],
+            wavelength=spec["wavelength"],
+            angle=spec["angle"],
+        )
 
     def to_display_length(self, value_m: float) -> float:
         """Convert a value in meters into this system's length unit."""

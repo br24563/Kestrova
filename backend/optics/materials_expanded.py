@@ -12,7 +12,9 @@ Properties a source does not publish are ``None`` rather than a guess.
 from typing import Optional
 
 from .materials import (
-    MATERIALS, Material, D_LINE,
+    MATERIALS,
+    Material,
+    D_LINE,
     refractive_index as _refractive_index,
     refractive_index_sellmeier as _refractive_index_sellmeier,
     get_material,
@@ -31,8 +33,7 @@ OHARA_MATERIALS = _by_vendor("Ohara")
 HOYA_MATERIALS = _by_vendor("Hoya")
 CDGM_MATERIALS = _by_vendor("CDGM")
 SPECIAL_MATERIALS = {
-    k: m for k, m in MATERIALS.items()
-    if m.manufacturer in ("Literature", "N/A")
+    k: m for k, m in MATERIALS.items() if m.manufacturer in ("Literature", "N/A")
 }
 
 ALL_MATERIALS: dict[str, Material] = dict(MATERIALS)

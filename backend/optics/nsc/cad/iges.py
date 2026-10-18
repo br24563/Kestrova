@@ -25,11 +25,11 @@ def import_iges(filepath: Union[str, Path]) -> Mesh:
 
     mesh = Mesh(name=filepath.stem)
 
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         lines = f.readlines()
 
     # Check for IGES format
-    if not lines or lines[-1].strip() != 'S':
+    if not lines or lines[-1].strip() != "S":
         # Try to parse anyway
         pass
 
@@ -40,9 +40,9 @@ def import_iges(filepath: Union[str, Path]) -> Mesh:
     for line in lines:
         if len(line) >= 73:
             section_type = line[72]
-            if section_type == 'D':
+            if section_type == "D":
                 directory_lines.append(line[:72])
-            elif section_type == 'P':
+            elif section_type == "P":
                 parameter_lines.append(line[:64])
 
     # Parse entities (basic)
@@ -62,4 +62,6 @@ def import_iges(filepath: Union[str, Path]) -> Mesh:
     # 510: Face
     # 514: Shell
 
-    raise NotImplementedError("IGES geometry import is not implemented; convert to STL instead")
+    raise NotImplementedError(
+        "IGES geometry import is not implemented; convert to STL instead"
+    )

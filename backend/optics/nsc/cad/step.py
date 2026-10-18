@@ -82,12 +82,13 @@ def _import_step_basic(filepath: Path, mesh: Mesh) -> Mesh:
     # This is a placeholder for basic STEP parsing
     # Full STEP support requires a dedicated library
 
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         content = f.read()
 
     # Check for basic structure
-    if 'ISO-10303-21' not in content:
+    if "ISO-10303-21" not in content:
         raise ValueError("Not a valid STEP file")
 
     raise NotImplementedError(
-        "STEP geometry import needs OpenCascade (pythonocc-core); convert to STL instead")
+        "STEP geometry import needs OpenCascade (pythonocc-core); convert to STL instead"
+    )

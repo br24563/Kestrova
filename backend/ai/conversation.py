@@ -29,19 +29,26 @@ from optics.models import OpticalSystem, ThinLens, ThickLens, ApertureStop
 from optics.analysis import analyze_system
 
 from .commands import (
-    AICommand, ModifyComponentCommand, AddComponentCommand,
-    RemoveComponentCommand, SetImagePlaneCommand, AnalyzeCommand,
-    OptimizeCommand, DiagnoseCommand, DesignCommand,
+    AICommand,
+    ModifyComponentCommand,
+    AddComponentCommand,
+    RemoveComponentCommand,
+    SetImagePlaneCommand,
+    AnalyzeCommand,
+    OptimizeCommand,
+    DiagnoseCommand,
+    DesignCommand,
 )
 from .engine import execute_command
-
 
 # =============================================================================
 # Refinement intents
 # =============================================================================
 
+
 class Intent(str, Enum):
     """What the user is asking for in a refinement turn."""
+
     ADD_ELEMENT = "add_element"
     REMOVE_ELEMENT = "remove_element"
     MAKE_FASTER = "make_faster"
@@ -62,22 +69,86 @@ class Intent(str, Enum):
 # must appear before more generic ones.
 INTENT_KEYWORDS = (
     (Intent.UNDO, ("undo", "revert", "go back", "roll back")),
-    (Intent.ADD_ELEMENT, ("add another element", "add a lens", "add an element",
-                          "add another lens", "another element", "one more element",
-                          "insert a lens", "add lens")),
-    (Intent.REMOVE_ELEMENT, ("remove the last", "remove a lens", "remove an element",
-                            "delete the last", "fewer elements", "simplify")),
-    (Intent.WIDEN_APERTURE, ("widen the aperture", "widen aperture", "open the aperture", "increase the aperture", "wider aperture", "bigger aperture", "larger aperture",
-                             "open up the aperture", "more light", "faster aperture")),
-    (Intent.NARROW_APERTURE, ("narrow the aperture", "reduce the aperture", "decrease the aperture", "narrower aperture", "smaller aperture", "stop down",
-                              "close down the aperture", "less light")),
-    (Intent.MAKE_FASTER, ("make it faster", "faster", "shorter exposure", "brighter image")),
-    (Intent.MAKE_SMALLER, ("make it smaller", "smaller", "more compact", "compact",
-                           "shorter", "reduce the length")),
+    (
+        Intent.ADD_ELEMENT,
+        (
+            "add another element",
+            "add a lens",
+            "add an element",
+            "add another lens",
+            "another element",
+            "one more element",
+            "insert a lens",
+            "add lens",
+        ),
+    ),
+    (
+        Intent.REMOVE_ELEMENT,
+        (
+            "remove the last",
+            "remove a lens",
+            "remove an element",
+            "delete the last",
+            "fewer elements",
+            "simplify",
+        ),
+    ),
+    (
+        Intent.WIDEN_APERTURE,
+        (
+            "widen the aperture",
+            "widen aperture",
+            "open the aperture",
+            "increase the aperture",
+            "wider aperture",
+            "bigger aperture",
+            "larger aperture",
+            "open up the aperture",
+            "more light",
+            "faster aperture",
+        ),
+    ),
+    (
+        Intent.NARROW_APERTURE,
+        (
+            "narrow the aperture",
+            "reduce the aperture",
+            "decrease the aperture",
+            "narrower aperture",
+            "smaller aperture",
+            "stop down",
+            "close down the aperture",
+            "less light",
+        ),
+    ),
+    (
+        Intent.MAKE_FASTER,
+        ("make it faster", "faster", "shorter exposure", "brighter image"),
+    ),
+    (
+        Intent.MAKE_SMALLER,
+        (
+            "make it smaller",
+            "smaller",
+            "more compact",
+            "compact",
+            "shorter",
+            "reduce the length",
+        ),
+    ),
     (Intent.SHIFT_FOCUS, ("refocus", "focus", "move the image plane", "shift focus")),
     (Intent.SCALE_SYSTEM, ("scale by", "scale up", "scale down")),
-    (Intent.OPTIMIZE, ("optimize", "improve it", "improve the design", "better performance",
-                       "minimize the spot", "reduce aberration")),
+    (
+        Intent.OPTIMIZE,
+        (
+            "optimize",
+            "improve it",
+            "improve the design",
+            "better performance",
+            "minimize the spot",
+            "reduce aberration",
+        ),
+    ),
     (Intent.DIAGNOSE, ("diagnose", "what is wrong", "what is the problem", "issues")),
     (Intent.ANALYZE, ("analyze", "analysis", "how good", "evaluate", "assess")),
     (Intent.DESIGN, ("design", "create", "build me", "make me a system")),
@@ -116,9 +187,24 @@ WAVELENGTH_BANDS = {
 }
 
 MATERIAL_KEYWORDS = (
-    "n-bk7", "n-sf11", "n-sf6", "n-lak22", "fused silica", "fused-silica",
-    "caf2", "zns", "znse", "silicon", "germanium", "pmma", "polycarbonate",
-    "n-sf5", "n-lasf9", "n-baf10", "sf11", "bk7",
+    "n-bk7",
+    "n-sf11",
+    "n-sf6",
+    "n-lak22",
+    "fused silica",
+    "fused-silica",
+    "caf2",
+    "zns",
+    "znse",
+    "silicon",
+    "germanium",
+    "pmma",
+    "polycarbonate",
+    "n-sf5",
+    "n-lasf9",
+    "n-baf10",
+    "sf11",
+    "bk7",
 )
 
 
@@ -160,7 +246,7 @@ def number_after(text: str, marker: str) -> Optional[float]:
     idx = low.find(marker)
     if idx == -1:
         return None
-    nums = extract_numbers(low[idx + len(marker):])
+    nums = extract_numbers(low[idx + len(marker) :])
     return nums[0] if nums else None
 
 
@@ -168,16 +254,17 @@ def number_after(text: str, marker: str) -> Optional[float]:
 # Design brief
 # =============================================================================
 
+
 @dataclass
 class DesignBrief:
     """Requirements accumulated across conversation turns."""
 
     magnification: Optional[float] = None
-    efl: Optional[float] = None                 # meters
+    efl: Optional[float] = None  # meters
     f_number: Optional[float] = None
-    aperture_diameter: Optional[float] = None   # meters
-    wavelength_min: Optional[float] = None       # meters
-    wavelength_max: Optional[float] = None       # meters
+    aperture_diameter: Optional[float] = None  # meters
+    wavelength_min: Optional[float] = None  # meters
+    wavelength_max: Optional[float] = None  # meters
     element_budget: Optional[int] = None
     objective: str = "rms_spot"
     materials: list = field(default_factory=list)
@@ -201,8 +288,8 @@ class DesignBrief:
 
         # magnification:  5x , 0.5x
         for idx, ch in enumerate(low):
-            if ch == "x" and idx > 0 and not low[idx:idx + 2] == "xp":
-                prior = extract_numbers(low[max(0, idx - 8):idx])
+            if ch == "x" and idx > 0 and not low[idx : idx + 2] == "xp":
+                prior = extract_numbers(low[max(0, idx - 8) : idx])
                 if prior:
                     self.magnification = prior[-1]
                     changes.append("magnification = " + str(prior[-1]) + "x")
@@ -225,8 +312,16 @@ class DesignBrief:
                     break
 
         # element count:  "3 elements", "three-element"
-        for word, count in (("one", 1), ("two", 2), ("three", 3), ("four", 4),
-                            ("five", 5), ("six", 6), ("7", 7), ("8", 8)):
+        for word, count in (
+            ("one", 1),
+            ("two", 2),
+            ("three", 3),
+            ("four", 4),
+            ("five", 5),
+            ("six", 6),
+            ("7", 7),
+            ("8", 8),
+        ):
             if word in low and ("element" in low or "lens" in low):
                 self.element_budget = count
                 changes.append("element budget = " + str(count))
@@ -274,7 +369,13 @@ class DesignBrief:
         if self.aperture_diameter is not None:
             parts.append("aperture " + str(self.aperture_diameter) + "m")
         if self.wavelength_min is not None:
-            parts.append("band " + str(self.wavelength_min) + "-" + str(self.wavelength_max) + " m")
+            parts.append(
+                "band "
+                + str(self.wavelength_min)
+                + "-"
+                + str(self.wavelength_max)
+                + " m"
+            )
         if self.element_budget is not None:
             parts.append(str(self.element_budget) + " elements")
         if self.materials:
@@ -287,16 +388,28 @@ class DesignBrief:
 # =============================================================================
 
 ORDINALS = {
-    "first": 0, "1st": 0, "second": 1, "2nd": 1, "third": 2, "3rd": 2,
-    "fourth": 3, "4th": 3, "fifth": 4, "5th": 4,
-    "last": -1, "final": -1, "front": 0, "rear": -1, "back": -1,
+    "first": 0,
+    "1st": 0,
+    "second": 1,
+    "2nd": 1,
+    "third": 2,
+    "3rd": 2,
+    "fourth": 3,
+    "4th": 3,
+    "fifth": 4,
+    "5th": 4,
+    "last": -1,
+    "final": -1,
+    "front": 0,
+    "rear": -1,
+    "back": -1,
 }
 
 # "Faster / slower" change the aperture diameter by one full f-stop
 # (diameter ratio sqrt(2), i.e. twice / half the light). "Smaller" is a
 # uniform 0.8x scale, a user-interface step size rather than a physical value.
-APERTURE_OPEN_FACTOR = 2.0 ** 0.5
-APERTURE_CLOSE_FACTOR = 2.0 ** -0.5
+APERTURE_OPEN_FACTOR = 2.0**0.5
+APERTURE_CLOSE_FACTOR = 2.0**-0.5
 COMPACT_SCALE_FACTOR = 0.80
 
 
@@ -314,6 +427,7 @@ def _scaled_system(system: OpticalSystem, factor: float):
     any component type is unsupported.
     """
     from optics.models import Mirror, ApertureStop, SphericalSurface
+
     fields = dict(_SCALED_LENGTHS)
     fields[Mirror] = ("position", "radius", "width", "aperture_diameter")
     fields[ApertureStop] = ("position", "diameter")
@@ -329,14 +443,20 @@ def _scaled_system(system: OpticalSystem, factor: float):
             if v is not None:
                 upd[name] = v * factor
         comps.append(c.model_copy(update=upd))
-    new = system.model_copy(update={
-        "components": comps,
-        "object": system.object.model_copy(update={
-            "position": system.object.position * factor,
-            "height": system.object.height * factor}),
-        "image_plane": system.image_plane.model_copy(update={
-            "position": system.image_plane.position * factor}),
-    })
+    new = system.model_copy(
+        update={
+            "components": comps,
+            "object": system.object.model_copy(
+                update={
+                    "position": system.object.position * factor,
+                    "height": system.object.height * factor,
+                }
+            ),
+            "image_plane": system.image_plane.model_copy(
+                update={"position": system.image_plane.position * factor}
+            ),
+        }
+    )
     return OpticalSystem.model_validate(new.model_dump()), []
 
 
@@ -351,6 +471,7 @@ def _lenses(system: OpticalSystem) -> list:
 @dataclass
 class ConversationTurn:
     """One exchange in a design conversation."""
+
     index: int
     user_text: str
     intent: Intent
@@ -417,8 +538,11 @@ class ConversationSession:
                 index=len(self.turns),
                 user_text=text,
                 intent=intent,
-                assistant_text=("Reverted to the previous design." if restored
-                                 else "Nothing to undo."),
+                assistant_text=(
+                    "Reverted to the previous design."
+                    if restored
+                    else "Nothing to undo."
+                ),
                 system=self.system,
                 brief_changes=changes,
                 ok=restored,
@@ -427,8 +551,13 @@ class ConversationSession:
             return turn
 
         referenced = None
-        if intent in (Intent.REMOVE_ELEMENT, Intent.MAKE_FASTER, Intent.MAKE_SMALLER,
-                      Intent.WIDEN_APERTURE, Intent.NARROW_APERTURE):
+        if intent in (
+            Intent.REMOVE_ELEMENT,
+            Intent.MAKE_FASTER,
+            Intent.MAKE_SMALLER,
+            Intent.WIDEN_APERTURE,
+            Intent.NARROW_APERTURE,
+        ):
             referenced = self.resolve_component(text)
 
         before = self.system
@@ -436,10 +565,14 @@ class ConversationSession:
             new_system, message = self._dispatch(intent, text, referenced)
         except Exception as exc:
             turn = ConversationTurn(
-                index=len(self.turns), user_text=text, intent=intent,
+                index=len(self.turns),
+                user_text=text,
+                intent=intent,
                 assistant_text="Could not apply that request: " + str(exc),
-                system=self.system, brief_changes=changes,
-                referenced=referenced, ok=False,
+                system=self.system,
+                brief_changes=changes,
+                referenced=referenced,
+                ok=False,
             )
             self._record(turn)
             return turn
@@ -453,9 +586,14 @@ class ConversationSession:
             prefix = "(recorded: " + "; ".join(changes) + ") "
 
         turn = ConversationTurn(
-            index=len(self.turns), user_text=text, intent=intent,
-            assistant_text=prefix + message, system=self.system,
-            brief_changes=changes, referenced=referenced, ok=True,
+            index=len(self.turns),
+            user_text=text,
+            intent=intent,
+            assistant_text=prefix + message,
+            system=self.system,
+            brief_changes=changes,
+            referenced=referenced,
+            ok=True,
         )
         self._record(turn)
         return turn
@@ -525,12 +663,12 @@ class ConversationSession:
         """Append a turn, trimming the oldest if the history is long."""
         self.turns.append(turn)
         if len(self.turns) > self.max_history:
-            self.turns = self.turns[-self.max_history:]
+            self.turns = self.turns[-self.max_history :]
 
     def _push_undo(self, system: OpticalSystem):
         self._undo_stack.append(system)
         if len(self._undo_stack) > self.max_history:
-            self._undo_stack = self._undo_stack[-self.max_history:]
+            self._undo_stack = self._undo_stack[-self.max_history :]
 
     def _dispatch(self, intent: Intent, text: str, referenced: Optional[str]):
         """Turn an intent into a system modification plus a message."""
@@ -557,24 +695,34 @@ class ConversationSession:
             return self._remove_element(referenced)
 
         if intent in (Intent.MAKE_FASTER, Intent.WIDEN_APERTURE):
-            return self._scale_aperture(referenced, APERTURE_OPEN_FACTOR,
-                                        "Opened the aperture")
+            return self._scale_aperture(
+                referenced, APERTURE_OPEN_FACTOR, "Opened the aperture"
+            )
 
         if intent == Intent.NARROW_APERTURE:
-            return self._scale_aperture(referenced, APERTURE_CLOSE_FACTOR,
-                                        "Stopped down the aperture")
+            return self._scale_aperture(
+                referenced, APERTURE_CLOSE_FACTOR, "Stopped down the aperture"
+            )
 
         if intent == Intent.MAKE_SMALLER:
             return self._compact()
 
         if intent == Intent.SHIFT_FOCUS:
             from optics.raytrace import first_order
+
             image_z = first_order(self.system).image_z
             if not math.isfinite(image_z) or abs(image_z) > 1e6:
-                return self.system, "The system is afocal: there is no finite paraxial focus."
-            new_system = self.system.model_copy(update={
-                "image_plane": self.system.image_plane.model_copy(update={"position": image_z})
-            })
+                return (
+                    self.system,
+                    "The system is afocal: there is no finite paraxial focus.",
+                )
+            new_system = self.system.model_copy(
+                update={
+                    "image_plane": self.system.image_plane.model_copy(
+                        update={"position": image_z}
+                    )
+                }
+            )
             return new_system, "Moved the image plane to the paraxial focus."
 
         if intent == Intent.SCALE_SYSTEM:
@@ -582,17 +730,21 @@ class ConversationSession:
             return self._scale_all(factor)
 
         if intent == Intent.DESIGN:
-            out = execute_command(self.system, DesignCommand(
-                magnification=self.brief.magnification,
-                wavelength=self.system.analysis_settings.wavelength,
-                aperture_diameter=self.brief.aperture_diameter,
-            ))
+            out = execute_command(
+                self.system,
+                DesignCommand(
+                    magnification=self.brief.magnification,
+                    wavelength=self.system.analysis_settings.wavelength,
+                    aperture_diameter=self.brief.aperture_diameter,
+                ),
+            )
             return out["system"], out["message"]
 
         # Unknown intent: fall back to the brief note so nothing is lost.
         return self.system, (
             "I recorded that, but I am not sure which change you want. "
-            + "Current brief: " + self.brief.to_context_note()
+            + "Current brief: "
+            + self.brief.to_context_note()
         )
 
     def _add_element(self):
@@ -600,7 +752,10 @@ class ConversationSession:
         result = analyze_system(self.system)
         efl = result.effective_focal_length
         if not math.isfinite(efl) or efl == 0:
-            return self.system, "The system is afocal, so there is no EFL to match for a new element."
+            return (
+                self.system,
+                "The system is afocal, so there is no EFL to match for a new element.",
+            )
         lenses = _lenses(self.system)
         if lenses:
             last = lenses[-1]
@@ -612,11 +767,21 @@ class ConversationSession:
 
         new_id = "L" + str(len(self.system.components) + 1)
         comp = ThinLens(
-            id=new_id, position=position, focal_length=efl,
-            aperture_diameter=aperture, material="N-BK7",
+            id=new_id,
+            position=position,
+            focal_length=efl,
+            aperture_diameter=aperture,
+            material="N-BK7",
         )
         out = execute_command(self.system, AddComponentCommand(component=comp))
-        return out["system"], "Added element " + new_id + " (f = " + str(round(efl * 1000.0, 2)) + " mm)."
+        return (
+            out["system"],
+            "Added element "
+            + new_id
+            + " (f = "
+            + str(round(efl * 1000.0, 2))
+            + " mm).",
+        )
 
     def _remove_element(self, referenced: Optional[str]):
         """Remove a referenced element (defaults to the last one)."""
@@ -636,26 +801,57 @@ class ConversationSession:
         targets = [c for c in lenses if c.id == referenced] if referenced else lenses
         for comp in targets:
             new_d = getattr(comp, "aperture_diameter", 0.025) * factor
-            out = execute_command(system, ModifyComponentCommand(
-                component_id=comp.id, field="aperture_diameter", value=new_d,
-            ))
+            out = execute_command(
+                system,
+                ModifyComponentCommand(
+                    component_id=comp.id,
+                    field="aperture_diameter",
+                    value=new_d,
+                ),
+            )
             system = out["system"]
         which = referenced if referenced else "all elements"
-        stops = "one f-stop" if abs(abs(math.log2(factor)) - 0.5) < 1e-9 else "x" + str(round(factor, 3))
-        return system, verb + " on " + which + " by " + stops + " (diameter x" + str(round(factor, 3)) + ")."
+        stops = (
+            "one f-stop"
+            if abs(abs(math.log2(factor)) - 0.5) < 1e-9
+            else "x" + str(round(factor, 3))
+        )
+        return (
+            system,
+            verb
+            + " on "
+            + which
+            + " by "
+            + stops
+            + " (diameter x"
+            + str(round(factor, 3))
+            + ").",
+        )
 
     def _compact(self):
         """Uniformly scale the system down by COMPACT_SCALE_FACTOR."""
         system, unsupported = _scaled_system(self.system, COMPACT_SCALE_FACTOR)
         if unsupported:
-            return self.system, "Cannot scale components of this type: " + ", ".join(unsupported) + "."
-        return system, "Compacted the system to x" + str(COMPACT_SCALE_FACTOR) + " scale."
+            return (
+                self.system,
+                "Cannot scale components of this type: " + ", ".join(unsupported) + ".",
+            )
+        return (
+            system,
+            "Compacted the system to x" + str(COMPACT_SCALE_FACTOR) + " scale.",
+        )
 
     def _scale_all(self, factor: Optional[float]):
         """Uniformly scale the whole system by an explicit factor."""
         if not factor or factor <= 0:
-            return self.system, "Please give a positive scale factor, e.g. 'scale by 2'."
+            return (
+                self.system,
+                "Please give a positive scale factor, e.g. 'scale by 2'.",
+            )
         system, unsupported = _scaled_system(self.system, factor)
         if unsupported:
-            return self.system, "Cannot scale components of this type: " + ", ".join(unsupported) + "."
+            return (
+                self.system,
+                "Cannot scale components of this type: " + ", ".join(unsupported) + ".",
+            )
         return system, "Scaled the system by x" + str(factor) + "."

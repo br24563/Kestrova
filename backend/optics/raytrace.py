@@ -58,19 +58,34 @@ from scipy.special import eval_jacobi
 
 from .materials import refractive_index, F_LINE, C_LINE, D_LINE
 from .models import (
-    OpticalSystem, ThinLens, ThickLens, SphericalSurface, ApertureStop, Mirror,
+    OpticalSystem,
+    ThinLens,
+    ThickLens,
+    SphericalSurface,
+    ApertureStop,
+    Mirror,
 )
 from .advanced_surfaces import (
-    AsphericSurface, OddAsphericSurface, QAsphericSurface, ZernikeSurface,
-    DiffractiveOpticalElement, ToricSurface, CoordinateBreak,
+    AsphericSurface,
+    OddAsphericSurface,
+    QAsphericSurface,
+    ZernikeSurface,
+    DiffractiveOpticalElement,
+    ToricSurface,
+    CoordinateBreak,
 )
 
-INFINITE_OBJECT_DISTANCE = 1.0e4   # meters
-_FLAT_RADIUS = 1.0e9               # |R| at or above this is flat
+INFINITE_OBJECT_DISTANCE = 1.0e4  # meters
+_FLAT_RADIUS = 1.0e9  # |R| at or above this is flat
 
 
 def curvature_from_radius(radius: Optional[float]) -> float:
-    if radius is None or radius == 0 or not math.isfinite(radius) or abs(radius) >= _FLAT_RADIUS:
+    if (
+        radius is None
+        or radius == 0
+        or not math.isfinite(radius)
+        or abs(radius) >= _FLAT_RADIUS
+    ):
         return 0.0
     return 1.0 / radius
 
@@ -78,6 +93,7 @@ def curvature_from_radius(radius: Optional[float]) -> float:
 # =============================================================================
 # Surface shapes (all in the surface's local frame, vertex at origin)
 # =============================================================================
+
 
 class Shape:
     """Base shape: a plane."""
@@ -121,11 +137,11 @@ class Conicoid(Shape):
         ds = c * r / root
         for i, a in enumerate(self.even):
             p = 2 * i + 4
-            s = s + a * r ** p
+            s = s + a * r**p
             ds = ds + p * a * r ** (p - 1)
         for i, b in enumerate(self.odd):
             p = 2 * i + 1
-            s = s + b * r ** p
+            s = s + b * r**p
             ds = ds + p * b * r ** (p - 1)
         return s, ds
 
@@ -147,7 +163,7 @@ class Conicoid(Shape):
 
     def quartic_excess(self):
         a4 = self.even[0] if self.even else 0.0
-        return a4 + self.k * self.c ** 3 / 8.0
+        return a4 + self.k * self.c**3 / 8.0
 
     def conic_base(self):
         return self.c, self.k
@@ -178,7 +194,7 @@ class RadialNumeric(Shape):
         # Fit s(r) = a2 r^2 + a4 r^4 + a6 r^6 at small r.
         r = self.scale * np.array([0.02, 0.04, 0.06, 0.08])
         s = np.asarray(self.func(r), dtype=float)
-        A = np.stack([r ** 2, r ** 4, r ** 6, r ** 8], axis=1)
+        A = np.stack([r**2, r**4, r**6, r**8], axis=1)
         coef = np.linalg.solve(A, s)
         return coef[0], coef[1]
 
@@ -188,7 +204,7 @@ class RadialNumeric(Shape):
     def quartic_excess(self):
         a2, a4 = self._taylor()
         c = 2.0 * a2
-        return a4 - c ** 3 / 8.0
+        return a4 - c**3 / 8.0
 
     def conic_base(self):
         return self._c, self._k
@@ -209,9 +225,14 @@ def _qbfs_basis(m_max: int) -> list:
     def slope(coeffs):
         x = u * u
         q = np.polynomial.polynomial.polyval(x, coeffs)
-        dq = np.polynomial.polynomial.polyval(x, np.polynomial.polynomial.polyder(coeffs)) \
-            if len(coeffs) > 1 else 0.0
-        return (2 * u - 4 * u ** 3) * q + (u ** 2 - u ** 4) * dq * 2 * u
+        dq = (
+            np.polynomial.polynomial.polyval(
+                x, np.polynomial.polynomial.polyder(coeffs)
+            )
+            if len(coeffs) > 1
+            else 0.0
+        )
+        return (2 * u - 4 * u**3) * q + (u**2 - u**4) * dq * 2 * u
 
     def ip(a, b):
         return float(np.sum(slope(a) * slope(b) * w))
@@ -224,8 +245,8 @@ def _qbfs_basis(m_max: int) -> list:
         for q in basis:
             proj = ip(v, q) / norm0
             vv = np.zeros(max(len(v), len(q)))
-            vv[:len(v)] += v
-            vv[:len(q)] -= proj * q
+            vv[: len(v)] += v
+            vv[: len(q)] -= proj * q
             v = vv
         v = v / math.sqrt(ip(v, v) / norm0)
         if v[0] < 0:
@@ -246,7 +267,11 @@ def q_aspheric_sag_function(c, k, coeffs, norm_radius, q_type):
     qt = (q_type or "Qbfs").lower()
     if qt not in ("qbfs", "qcon"):
         raise ValueError(f"Unknown Q-polynomial type '{q_type}' (use 'Qbfs' or 'Qcon')")
-    basis = [np.array(b) for b in qbfs_basis(max(len(coeffs) - 1, 0))] if qt == "qbfs" else None
+    basis = (
+        [np.array(b) for b in qbfs_basis(max(len(coeffs) - 1, 0))]
+        if qt == "qbfs"
+        else None
+    )
 
     def f(r):
         r = np.asarray(r, dtype=float)
@@ -260,9 +285,14 @@ def q_aspheric_sag_function(c, k, coeffs, norm_radius, q_type):
         if qt == "qbfs":
             # Qbfs is defined on a sphere (k = 0): departure normal to it.
             arg0 = 1.0 - c * c * r2
-            dep = sum(a * np.polynomial.polynomial.polyval(u2, b) for a, b in zip(coeffs, basis))
+            dep = sum(
+                a * np.polynomial.polynomial.polyval(u2, b)
+                for a, b in zip(coeffs, basis)
+            )
             return s + u2 * (1.0 - u2) / np.sqrt(arg0) * dep
-        dep = sum(a * eval_jacobi(m, 0, 4, 2.0 * u2 - 1.0) for m, a in enumerate(coeffs))
+        dep = sum(
+            a * eval_jacobi(m, 0, 4, 2.0 * u2 - 1.0) for m, a in enumerate(coeffs)
+        )
         return s + u2 * u2 * dep
 
     return f
@@ -275,6 +305,7 @@ class ZernikeShape(Shape):
 
     def __init__(self, coeffs, norm_radius):
         from .zernike import zernike_standard
+
         self.coeffs = [float(c) for c in coeffs]
         self.rn = float(norm_radius)
         self._z = zernike_standard
@@ -301,7 +332,7 @@ class ZernikeShape(Shape):
         # sag along y
         r = self.rn * np.array([0.01, 0.02, 0.03])
         z = self.sag(np.zeros(3), r) - self.sag(0.0, 0.0)
-        A = np.stack([r, r ** 2, r ** 3], axis=1)
+        A = np.stack([r, r**2, r**3], axis=1)
         return 2.0 * np.linalg.solve(A, z)[1]
 
 
@@ -318,7 +349,7 @@ class YToroid(Shape):
         self.cy, self.cx, self.k = float(cy), float(cx), float(k)
 
     def _zy(self, y):
-        arg = 1.0 - (1.0 + self.k) * self.cy ** 2 * y * y
+        arg = 1.0 - (1.0 + self.k) * self.cy**2 * y * y
         return self.cy * y * y / (1.0 + np.sqrt(np.where(arg >= 0, arg, np.nan)))
 
     def sag(self, x, y):
@@ -336,7 +367,7 @@ class YToroid(Shape):
         return fx, fy
 
     def vertex_curvature(self):
-        return self.cy       # meridional curvature
+        return self.cy  # meridional curvature
 
     def conic_base(self):
         return 0.0, 0.0
@@ -346,25 +377,26 @@ class YToroid(Shape):
 # Surfaces and sequences
 # =============================================================================
 
+
 @dataclass
 class Surface:
     """One surface of the sequence."""
 
-    kind: str                       # refract | reflect | ideal | stop | dummy
-    z: float                        # vertex position along the local axis
+    kind: str  # refract | reflect | ideal | stop | dummy
+    z: float  # vertex position along the local axis
     shape: Shape = field(default_factory=Shape)
-    n_before: float = 1.0           # unsigned indices at the trace wavelength
+    n_before: float = 1.0  # unsigned indices at the trace wavelength
     n_after: float = 1.0
-    dn_before: float = 0.0          # n_F - n_C of the media (for colour sums)
+    dn_before: float = 0.0  # n_F - n_C of the media (for colour sums)
     dn_after: float = 0.0
     semi_aperture: Optional[float] = None
-    focal_length: Optional[float] = None    # ideal lens
-    ideal_dispersion: float = 0.0           # 1/V of an ideal lens's glass
-    phase: Optional[tuple] = None           # DOE: (coeffs, order)
+    focal_length: Optional[float] = None  # ideal lens
+    ideal_dispersion: float = 0.0  # 1/V of an ideal lens's glass
+    phase: Optional[tuple] = None  # DOE: (coeffs, order)
     component_id: str = ""
     label: str = ""
     material_after: Optional[str] = None
-    direction: int = 1                      # +1 or -1: travel along local z after
+    direction: int = 1  # +1 or -1: travel along local z after
     origin: np.ndarray = field(default_factory=lambda: np.zeros(3))
     rotation: np.ndarray = field(default_factory=lambda: np.eye(3))
 
@@ -422,8 +454,9 @@ def ordered_components(system: OpticalSystem) -> list:
     return sorted(comps, key=lambda c: c.position)
 
 
-def ideal_lens_focal_length(lens: ThinLens, wavelength: float,
-                            reference_wavelength: float) -> float:
+def ideal_lens_focal_length(
+    lens: ThinLens, wavelength: float, reference_wavelength: float
+) -> float:
     """
     Focal length of a ThinLens at a wavelength. The specified focal length
     holds at the reference wavelength and scales with the glass dispersion
@@ -441,27 +474,41 @@ def _shape_for(comp) -> Shape:
     if isinstance(comp, (SphericalSurface,)):
         return Conicoid(curvature_from_radius(comp.radius))
     if isinstance(comp, OddAsphericSurface):
-        return Conicoid(curvature_from_radius(comp.radius), comp.conic,
-                        comp.aspheric_coeffs, comp.odd_coeffs)
+        return Conicoid(
+            curvature_from_radius(comp.radius),
+            comp.conic,
+            comp.aspheric_coeffs,
+            comp.odd_coeffs,
+        )
     if isinstance(comp, AsphericSurface):
-        return Conicoid(curvature_from_radius(comp.radius), comp.conic, comp.aspheric_coeffs)
+        return Conicoid(
+            curvature_from_radius(comp.radius), comp.conic, comp.aspheric_coeffs
+        )
     if isinstance(comp, QAsphericSurface):
         c = curvature_from_radius(comp.radius)
         k = comp.conic if (comp.q_type or "").lower() == "qcon" else 0.0
-        func = q_aspheric_sag_function(c, k, comp.coefficients, comp.norm_radius, comp.q_type)
+        func = q_aspheric_sag_function(
+            c, k, comp.coefficients, comp.norm_radius, comp.q_type
+        )
         return RadialNumeric(func, c, k, scale=comp.norm_radius)
     if isinstance(comp, ZernikeSurface):
         return ZernikeShape(comp.zernike_coeffs, comp.norm_radius)
     if isinstance(comp, ToricSurface):
-        return YToroid(curvature_from_radius(comp.radius_tangential),
-                       curvature_from_radius(comp.radius_sagittal), comp.conic)
+        return YToroid(
+            curvature_from_radius(comp.radius_tangential),
+            curvature_from_radius(comp.radius_sagittal),
+            comp.conic,
+        )
     if isinstance(comp, Mirror):
         return Conicoid(curvature_from_radius(comp.radius), comp.conic)
     return Shape()
 
 
-def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
-                   index_offsets: Optional[dict] = None) -> Sequence:
+def build_sequence(
+    system: OpticalSystem,
+    wavelength: Optional[float] = None,
+    index_offsets: Optional[dict] = None,
+) -> Sequence:
     """
     Convert a system into its surface sequence at one wavelength.
 
@@ -477,12 +524,13 @@ def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
         if material and material in offsets:
             n += offsets[material]
         return n
+
     surfaces: list[Surface] = []
     medium: Optional[str] = None
     direction = 1
-    O = np.zeros(3)                 # global position of the frame's pivot
-    R = np.eye(3)                   # frame rotation
-    pivot = 0.0                     # axial coordinate of the pivot
+    O = np.zeros(3)  # global position of the frame's pivot
+    R = np.eye(3)  # frame rotation
+    pivot = 0.0  # axial coordinate of the pivot
 
     def frame(z):
         # global position of the point at axial coordinate z on the current axis
@@ -493,10 +541,20 @@ def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
         n_b = med_index(medium)
         dn_b = _medium_dn(medium)
         after = medium if keep_medium else new_medium
-        s = Surface(kind=kind, z=z, shape=shape or Shape(), n_before=n_b,
-                    n_after=med_index(after), dn_before=dn_b,
-                    dn_after=_medium_dn(after), material_after=after,
-                    direction=direction, origin=frame(z), rotation=R.copy(), **kw)
+        s = Surface(
+            kind=kind,
+            z=z,
+            shape=shape or Shape(),
+            n_before=n_b,
+            n_after=med_index(after),
+            dn_before=dn_b,
+            dn_after=_medium_dn(after),
+            material_after=after,
+            direction=direction,
+            origin=frame(z),
+            rotation=R.copy(),
+            **kw,
+        )
         surfaces.append(s)
         medium = after
         return s
@@ -516,49 +574,114 @@ def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
             pivot = comp.position
             continue
         if isinstance(comp, ThinLens):
-            f = ideal_lens_focal_length(comp, wavelength, system.analysis_settings.wavelength)
+            f = ideal_lens_focal_length(
+                comp, wavelength, system.analysis_settings.wavelength
+            )
             try:
                 nd = refractive_index(comp.material, D_LINE)
-                V = (nd - 1.0) / (refractive_index(comp.material, F_LINE)
-                                  - refractive_index(comp.material, C_LINE))
+                V = (nd - 1.0) / (
+                    refractive_index(comp.material, F_LINE)
+                    - refractive_index(comp.material, C_LINE)
+                )
                 inv_v = 1.0 / V
             except ValueError:
                 inv_v = 0.0
-            add("ideal", comp.position, focal_length=f, ideal_dispersion=inv_v,
-                semi_aperture=comp.aperture_diameter / 2.0, component_id=cid,
-                label=f"{cid}")
+            add(
+                "ideal",
+                comp.position,
+                focal_length=f,
+                ideal_dispersion=inv_v,
+                semi_aperture=comp.aperture_diameter / 2.0,
+                component_id=cid,
+                label=f"{cid}",
+            )
         elif isinstance(comp, ThickLens):
             outer = medium
             semi = comp.aperture_diameter / 2.0
             z1 = comp.position
             z2 = comp.position + direction * comp.thickness
-            add("refract", z1, Conicoid(curvature_from_radius(comp.radius1)),
-                new_medium=comp.material, keep_medium=False, semi_aperture=semi,
-                component_id=cid, label=f"{cid}.front")
-            add("refract", z2, Conicoid(curvature_from_radius(comp.radius2)),
-                new_medium=outer, keep_medium=False, semi_aperture=semi,
-                component_id=cid, label=f"{cid}.back")
+            add(
+                "refract",
+                z1,
+                Conicoid(curvature_from_radius(comp.radius1)),
+                new_medium=comp.material,
+                keep_medium=False,
+                semi_aperture=semi,
+                component_id=cid,
+                label=f"{cid}.front",
+            )
+            add(
+                "refract",
+                z2,
+                Conicoid(curvature_from_radius(comp.radius2)),
+                new_medium=outer,
+                keep_medium=False,
+                semi_aperture=semi,
+                component_id=cid,
+                label=f"{cid}.back",
+            )
         elif isinstance(comp, SphericalSurface):
             surf_semi = comp.aperture_diameter / 2.0 if comp.aperture_diameter else None
-            add("refract", comp.position, _shape_for(comp), new_medium=comp.material,
-                keep_medium=False, semi_aperture=surf_semi, component_id=cid, label=cid)
+            add(
+                "refract",
+                comp.position,
+                _shape_for(comp),
+                new_medium=comp.material,
+                keep_medium=False,
+                semi_aperture=surf_semi,
+                component_id=cid,
+                label=cid,
+            )
         elif isinstance(comp, DiffractiveOpticalElement):
-            add("refract", comp.position, Shape(), new_medium=comp.material,
-                keep_medium=False, semi_aperture=comp.aperture_diameter / 2.0,
+            add(
+                "refract",
+                comp.position,
+                Shape(),
+                new_medium=comp.material,
+                keep_medium=False,
+                semi_aperture=comp.aperture_diameter / 2.0,
                 phase=(tuple(comp.phase_coeffs), comp.diffraction_order),
-                component_id=cid, label=cid)
-        elif isinstance(comp, (AsphericSurface, OddAsphericSurface, QAsphericSurface,
-                               ZernikeSurface, ToricSurface)):
-            add("refract", comp.position, _shape_for(comp), new_medium=comp.material,
-                keep_medium=False, semi_aperture=comp.aperture_diameter / 2.0,
-                component_id=cid, label=cid)
+                component_id=cid,
+                label=cid,
+            )
+        elif isinstance(
+            comp,
+            (
+                AsphericSurface,
+                OddAsphericSurface,
+                QAsphericSurface,
+                ZernikeSurface,
+                ToricSurface,
+            ),
+        ):
+            add(
+                "refract",
+                comp.position,
+                _shape_for(comp),
+                new_medium=comp.material,
+                keep_medium=False,
+                semi_aperture=comp.aperture_diameter / 2.0,
+                component_id=cid,
+                label=cid,
+            )
         elif isinstance(comp, ApertureStop):
-            add("stop", comp.position, semi_aperture=comp.diameter / 2.0,
-                component_id=cid, label=cid)
+            add(
+                "stop",
+                comp.position,
+                semi_aperture=comp.diameter / 2.0,
+                component_id=cid,
+                label=cid,
+            )
         elif isinstance(comp, Mirror):
             semi = (comp.aperture_diameter or comp.width) / 2.0
-            s = add("reflect", comp.position, _shape_for(comp), semi_aperture=semi,
-                    component_id=cid, label=f"{cid}.mirror")
+            s = add(
+                "reflect",
+                comp.position,
+                _shape_for(comp),
+                semi_aperture=semi,
+                component_id=cid,
+                label=f"{cid}.mirror",
+            )
             direction = -direction
             s.direction = direction
         else:
@@ -572,7 +695,8 @@ def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
             raise ValueError(
                 f"Surface {s.label} at z={s.z:.6g} m lies behind the light "
                 f"travelling {'+' if d > 0 else '-'}z from z={prev_z:.6g} m; "
-                "list components in the order light meets them.")
+                "list components in the order light meets them."
+            )
         prev_z = s.z
         d = s.direction
 
@@ -584,12 +708,18 @@ def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
     infinite = obj_dist > INFINITE_OBJECT_DISTANCE
     stop_index = _find_stop(surfaces, system, wavelength)
     return Sequence(
-        surfaces=surfaces, wavelength=wavelength,
-        object_z=system.object.position, object_height=system.object.height,
-        object_infinite=infinite, image_z=system.image_plane.position,
-        image_origin=frame(system.image_plane.position), image_rotation=R.copy(),
-        image_direction=direction, n_object=1.0,
-        n_image=med_index(medium), stop_index=stop_index,
+        surfaces=surfaces,
+        wavelength=wavelength,
+        object_z=system.object.position,
+        object_height=system.object.height,
+        object_infinite=infinite,
+        image_z=system.image_plane.position,
+        image_origin=frame(system.image_plane.position),
+        image_rotation=R.copy(),
+        image_direction=direction,
+        n_object=1.0,
+        n_image=med_index(medium),
+        stop_index=stop_index,
     )
 
 
@@ -597,11 +727,12 @@ def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
 # Paraxial trace
 # =============================================================================
 
+
 def _surface_power(s: Surface, nb: float, na: float) -> float:
     """Power phi with signed indices nb, na (n'u' = nu - y phi)."""
     if s.kind == "ideal":
         f = s.focal_length
-        assert f is not None        # every ideal surface carries one
+        assert f is not None  # every ideal surface carries one
         return 0.0 if not math.isfinite(f) else 1.0 / f * abs(nb)
     if s.phase is not None:
         coeffs, order = s.phase
@@ -632,12 +763,12 @@ def signed_indices(seq: Sequence) -> list:
 
 @dataclass
 class ParaxialRay:
-    y: np.ndarray        # height at each surface
+    y: np.ndarray  # height at each surface
     nu_before: np.ndarray
     nu_after: np.ndarray
     u_before: np.ndarray
     u_after: np.ndarray
-    y_object_space: float   # height at the first surface
+    y_object_space: float  # height at the first surface
     u_object_space: float
 
 
@@ -682,9 +813,20 @@ def _find_stop(surfaces: list, system: OpticalSystem, wavelength: float) -> int:
         if s.kind == "stop":
             return i
     # No explicit stop: the surface that limits an axial ray's height.
-    seq = Sequence(surfaces, wavelength, system.object.position, system.object.height,
-                   (surfaces[0].z - system.object.position) > INFINITE_OBJECT_DISTANCE,
-                   system.image_plane.position, np.zeros(3), np.eye(3), 1, 1.0, 1.0, 0)
+    seq = Sequence(
+        surfaces,
+        wavelength,
+        system.object.position,
+        system.object.height,
+        (surfaces[0].z - system.object.position) > INFINITE_OBJECT_DISTANCE,
+        system.image_plane.position,
+        np.zeros(3),
+        np.eye(3),
+        1,
+        1.0,
+        1.0,
+        0,
+    )
     if seq.object_infinite:
         pr = paraxial_trace(seq, 1.0, 0.0)
     else:
@@ -705,10 +847,10 @@ class FirstOrder:
     """First-order (paraxial) properties of a system at one wavelength."""
 
     wavelength: float
-    efl: float                      # effective focal length (inf if afocal)
+    efl: float  # effective focal length (inf if afocal)
     power: float
-    bfl: float                      # last surface to rear focal point
-    ffl: float                      # first surface to front focal point (signed, front)
+    bfl: float  # last surface to rear focal point
+    ffl: float  # first surface to front focal point (signed, front)
     rear_principal_z: float
     front_principal_z: float
     rear_focal_z: float
@@ -719,14 +861,14 @@ class FirstOrder:
     entrance_pupil_semi_diameter: float
     exit_pupil_z: float
     exit_pupil_semi_diameter: float
-    image_z: float                  # paraxial image position
-    image_height: float             # paraxial image height of the field edge
-    magnification: float            # transverse magnification (0 at infinity)
+    image_z: float  # paraxial image position
+    image_height: float  # paraxial image height of the field edge
+    magnification: float  # transverse magnification (0 at infinity)
     object_infinite: bool
-    field_angle: float              # radians (object at infinity)
-    f_number: float                 # EFL / entrance pupil diameter
-    working_f_number: float         # 1 / (2 n' |u'|) of the marginal ray
-    na_image: float                 # n' |u'| of the marginal ray (paraxial)
+    field_angle: float  # radians (object at infinity)
+    f_number: float  # EFL / entrance pupil diameter
+    working_f_number: float  # 1 / (2 n' |u'|) of the marginal ray
+    na_image: float  # n' |u'| of the marginal ray (paraxial)
     na_object: float
     lagrange_invariant: float
     n_image: float
@@ -750,14 +892,19 @@ def _angle_is_zero(u: float, trace, span: float, z_scale: float = 0.0) -> bool:
     otherwise shows up as an image ~1e14 m away). Surface positions far
     from the origin carry absolute round-off ~eps * |z|, which perturbs the
     spacings by that relative amount."""
-    scale = max(max((abs(v) for v in trace.u_after), default=0.0),
-                max((abs(v) for v in trace.y), default=0.0) / span)
+    scale = max(
+        max((abs(v) for v in trace.u_after), default=0.0),
+        max((abs(v) for v in trace.y), default=0.0) / span,
+    )
     tol = max(_ROUNDOFF, 64.0 * np.finfo(float).eps * z_scale / span)
     return abs(u) <= tol * scale
 
 
-def first_order(system: OpticalSystem, wavelength: Optional[float] = None,
-                seq: Optional[Sequence] = None) -> FirstOrder:
+def first_order(
+    system: OpticalSystem,
+    wavelength: Optional[float] = None,
+    seq: Optional[Sequence] = None,
+) -> FirstOrder:
     """Compute all first-order properties from paraxial ray traces."""
     if seq is None:
         seq = build_sequence(system, wavelength)
@@ -782,7 +929,7 @@ def first_order(system: OpticalSystem, wavelength: Optional[float] = None,
     u_out = pr.u_after[-1]
     if not afocal:
         rear_focal_z = last.z - pr.y[-1] / u_out
-        bfl = (rear_focal_z - last.z) * seq.image_direction   # along the travel
+        bfl = (rear_focal_z - last.z) * seq.image_direction  # along the travel
     else:
         rear_focal_z = bfl = math.inf
     rear_principal_z = rear_focal_z - (n_img * efl if math.isfinite(efl) else 0.0)
@@ -861,7 +1008,9 @@ def first_order(system: OpticalSystem, wavelength: Optional[float] = None,
     if seq.object_infinite:
         ep_semi = abs(marginal.y_object_space)
     elif math.isfinite(ep_z):
-        ep_semi = abs(marginal.y_object_space + marginal.u_object_space * (ep_z - first_z))
+        ep_semi = abs(
+            marginal.y_object_space + marginal.u_object_space * (ep_z - first_z)
+        )
     else:
         ep_semi = math.inf
     uc_out = pupil_chief.u_after[-1]
@@ -886,12 +1035,21 @@ def first_order(system: OpticalSystem, wavelength: Optional[float] = None,
         magnification = 0.0
         na_object = 0.0
     else:
-        magnification = image_height / seq.object_height if seq.object_height else (
-            (marginal.nu_before[0]) / (marginal.nu_after[-1]) if abs(marginal.nu_after[-1]) > 0 else 0.0)
+        magnification = (
+            image_height / seq.object_height
+            if seq.object_height
+            else (
+                (marginal.nu_before[0]) / (marginal.nu_after[-1])
+                if abs(marginal.nu_after[-1]) > 0
+                else 0.0
+            )
+        )
         na_object = abs(marginal.nu_before[0])
 
     # Lagrange invariant H = n (u_bar y - u y_bar) at the first surface.
-    H = idx[0][0] * (chief.u_before[0] * marginal.y[0] - marginal.u_before[0] * chief.y[0])
+    H = idx[0][0] * (
+        chief.u_before[0] * marginal.y[0] - marginal.u_before[0] * chief.y[0]
+    )
     na_image = abs(marginal.nu_after[-1])
     epd = 2.0 * ep_semi
     f_number = abs(efl) / epd if math.isfinite(efl) and epd > 0 else math.inf
@@ -900,17 +1058,34 @@ def first_order(system: OpticalSystem, wavelength: Optional[float] = None,
     if not seq.object_infinite and not seq.object_height:
         image_height = 0.0
     return FirstOrder(
-        wavelength=seq.wavelength, efl=efl, power=power, bfl=bfl, ffl=ffl,
-        rear_principal_z=rear_principal_z, front_principal_z=front_principal_z,
-        rear_focal_z=rear_focal_z, front_focal_z=front_focal_z,
-        stop_index=st, stop_semi_diameter=stop.semi_aperture,
-        entrance_pupil_z=ep_z, entrance_pupil_semi_diameter=ep_semi,
-        exit_pupil_z=xp_z, exit_pupil_semi_diameter=xp_semi,
-        image_z=image_z, image_height=image_height, magnification=magnification,
-        object_infinite=seq.object_infinite, field_angle=field_angle,
-        f_number=f_number, working_f_number=working_f, na_image=na_image,
-        na_object=na_object, lagrange_invariant=H, n_image=abs(n_img),
-        marginal=marginal, chief=chief,
+        wavelength=seq.wavelength,
+        efl=efl,
+        power=power,
+        bfl=bfl,
+        ffl=ffl,
+        rear_principal_z=rear_principal_z,
+        front_principal_z=front_principal_z,
+        rear_focal_z=rear_focal_z,
+        front_focal_z=front_focal_z,
+        stop_index=st,
+        stop_semi_diameter=stop.semi_aperture,
+        entrance_pupil_z=ep_z,
+        entrance_pupil_semi_diameter=ep_semi,
+        exit_pupil_z=xp_z,
+        exit_pupil_semi_diameter=xp_semi,
+        image_z=image_z,
+        image_height=image_height,
+        magnification=magnification,
+        object_infinite=seq.object_infinite,
+        field_angle=field_angle,
+        f_number=f_number,
+        working_f_number=working_f,
+        na_image=na_image,
+        na_object=na_object,
+        lagrange_invariant=H,
+        n_image=abs(n_img),
+        marginal=marginal,
+        chief=chief,
     )
 
 
@@ -918,21 +1093,22 @@ def first_order(system: OpticalSystem, wavelength: Optional[float] = None,
 # Real ray tracing
 # =============================================================================
 
+
 @dataclass
 class RayBundle:
     """Result of tracing N rays (arrays have a leading ray axis)."""
 
-    points: np.ndarray       # (N, M+2, 3): start, each surface, image plane (global)
-    directions: np.ndarray   # (N, 3) final unit direction (global)
-    opl: np.ndarray          # (N,) optical path from the start to the image plane
-    valid: np.ndarray        # (N,) bool
-    image: np.ndarray        # (N, 3) image-plane intersection (global)
+    points: np.ndarray  # (N, M+2, 3): start, each surface, image plane (global)
+    directions: np.ndarray  # (N, 3) final unit direction (global)
+    opl: np.ndarray  # (N,) optical path from the start to the image plane
+    valid: np.ndarray  # (N,) bool
+    image: np.ndarray  # (N, 3) image-plane intersection (global)
     n_image: float
     surface_opl: np.ndarray  # (N, M+1) cumulative OPL at each surface and image
 
 
 def _to_local(s_origin, s_rot, p, d):
-    pl = (p - s_origin) @ s_rot          # R^T (p - o) via row vectors
+    pl = (p - s_origin) @ s_rot  # R^T (p - o) via row vectors
     dl = d @ s_rot
     return pl, dl
 
@@ -958,7 +1134,7 @@ def _intersect(shape: Shape, p, d):
         disc = B * B - 4.0 * A * C
         ok &= disc >= 0
         sq = np.sqrt(np.where(disc >= 0, disc, 0.0))
-        denom = B + np.where(B >= 0, 1.0, -1.0) * sq   # stable small root
+        denom = B + np.where(B >= 0, 1.0, -1.0) * sq  # stable small root
         with np.errstate(divide="ignore", invalid="ignore"):
             dt = np.where(np.abs(denom) > 0, -2.0 * C / denom, 0.0)
     else:
@@ -990,8 +1166,9 @@ def _normals(shape: Shape, pt):
     return nrm
 
 
-def trace_bundle(seq: Sequence, p0: np.ndarray, d0: np.ndarray,
-                 clip: bool = True) -> RayBundle:
+def trace_bundle(
+    seq: Sequence, p0: np.ndarray, d0: np.ndarray, clip: bool = True
+) -> RayBundle:
     """
     Trace rays exactly through the sequence to the image plane.
 
@@ -1106,7 +1283,9 @@ def _trace_bundle(seq, p0, d0, clip):
                 dn = np.stack([tx2, ty2, travel], axis=1)
                 d_out = dn / np.linalg.norm(dn, axis=1, keepdims=True)
                 tr = float(np.median(travel)) if N else 1.0
-                opl = opl + n_cur * _ideal_lens_opl(hit, dl, d_out, f, ideal_L.get(i, math.inf), tr)
+                opl = opl + n_cur * _ideal_lens_opl(
+                    hit, dl, d_out, f, ideal_L.get(i, math.inf), tr
+                )
                 dl = d_out
         elif s.kind == "reflect":
             nrm = _normals(s.shape, hit)
@@ -1121,10 +1300,14 @@ def _trace_bundle(seq, p0, d0, clip):
                 for j, cj in enumerate(coeffs):
                     pw = 2 * (j + 1)
                     dphi = dphi + pw * cj * rr ** (pw - 1)
-                    opl = opl + order * lam / (2 * math.pi) * cj * rr ** pw
+                    opl = opl + order * lam / (2 * math.pi) * cj * rr**pw
                 with np.errstate(invalid="ignore", divide="ignore"):
-                    gx = np.where(rr > 0, dphi * hit[:, 0] / np.where(rr > 0, rr, 1), 0.0)
-                    gy = np.where(rr > 0, dphi * hit[:, 1] / np.where(rr > 0, rr, 1), 0.0)
+                    gx = np.where(
+                        rr > 0, dphi * hit[:, 0] / np.where(rr > 0, rr, 1), 0.0
+                    )
+                    gy = np.where(
+                        rr > 0, dphi * hit[:, 1] / np.where(rr > 0, rr, 1), 0.0
+                    )
                 kx = n1 * dl[:, 0] + order * lam / (2 * math.pi) * gx
                 ky = n1 * dl[:, 1] + order * lam / (2 * math.pi) * gy
                 tx, ty = kx / n2, ky / n2
@@ -1169,6 +1352,7 @@ def _trace_bundle(seq, p0, d0, clip):
 # Ray generation and aiming
 # =============================================================================
 
+
 def _start_rays(seq: Sequence, fo: FirstOrder, hx: float, hy: float, a, b):
     """
     Start points and directions for rays from field (hx, hy) (fractions of
@@ -1190,10 +1374,16 @@ def _start_rays(seq: Sequence, fo: FirstOrder, hx: float, hy: float, a, b):
             e1 = np.array([1.0, 0.0, 0.0])
         e1 /= np.linalg.norm(e1)
         e2 = np.cross(dvec, e1)
-        p = np.array([0.0, 0.0, z_ref])[None, :] + a[:, None] * e1[None, :] + b[:, None] * e2[None, :]
+        p = (
+            np.array([0.0, 0.0, z_ref])[None, :]
+            + a[:, None] * e1[None, :]
+            + b[:, None] * e2[None, :]
+        )
         d = np.tile(dvec, (N, 1))
     else:
-        p = np.tile([hx * seq.object_height, hy * seq.object_height, seq.object_z], (N, 1))
+        p = np.tile(
+            [hx * seq.object_height, hy * seq.object_height, seq.object_z], (N, 1)
+        )
         d = np.stack([a, b, np.ones(N)], axis=1)
         d /= np.linalg.norm(d, axis=1, keepdims=True)
     return p, d
@@ -1206,18 +1396,35 @@ def _start_offset(seq: Sequence) -> float:
 
 def _stop_coords(seq: Sequence, p0, d0):
     """Local (x, y) where rays cross the stop surface."""
-    sub = Sequence(seq.surfaces[:seq.stop_index + 1], seq.wavelength, seq.object_z,
-                   seq.object_height, seq.object_infinite, seq.image_z,
-                   seq.surfaces[seq.stop_index].origin, seq.surfaces[seq.stop_index].rotation,
-                   1, seq.n_object, seq.n_image, seq.stop_index)
+    sub = Sequence(
+        seq.surfaces[: seq.stop_index + 1],
+        seq.wavelength,
+        seq.object_z,
+        seq.object_height,
+        seq.object_infinite,
+        seq.image_z,
+        seq.surfaces[seq.stop_index].origin,
+        seq.surfaces[seq.stop_index].rotation,
+        1,
+        seq.n_object,
+        seq.n_image,
+        seq.stop_index,
+    )
     b = trace_bundle(sub, p0, d0, clip=False)
     s = seq.surfaces[seq.stop_index]
     pl = (b.points[:, seq.stop_index + 1] - s.origin) @ s.rotation
     return pl[:, 0], pl[:, 1], b.valid
 
 
-def aim_rays(seq: Sequence, fo: FirstOrder, hx: float, hy: float,
-             px: np.ndarray, py: np.ndarray, iterations: int = 12):
+def aim_rays(
+    seq: Sequence,
+    fo: FirstOrder,
+    hx: float,
+    hy: float,
+    px: np.ndarray,
+    py: np.ndarray,
+    iterations: int = 12,
+):
     """
     Starting rays for field (hx, hy) that cross the real stop at
     (px, py) * stop radius. Returns (p0, d0, converged).
@@ -1286,9 +1493,17 @@ def aim_rays(seq: Sequence, fo: FirstOrder, hx: float, hy: float,
     return p0, d0, converged
 
 
-def trace_field_rays(system: OpticalSystem, hx: float, hy: float, px, py,
-                     wavelength: Optional[float] = None, clip: bool = True,
-                     seq: Optional[Sequence] = None, fo: Optional[FirstOrder] = None):
+def trace_field_rays(
+    system: OpticalSystem,
+    hx: float,
+    hy: float,
+    px,
+    py,
+    wavelength: Optional[float] = None,
+    clip: bool = True,
+    seq: Optional[Sequence] = None,
+    fo: Optional[FirstOrder] = None,
+):
     """Aim and trace rays for one field point. Returns (bundle, seq, fo)."""
     if seq is None:
         seq = build_sequence(system, wavelength)
@@ -1314,7 +1529,7 @@ def pupil_grid(n: int, shape: str = "square"):
         return np.array(xs), np.array(ys)
     g = np.linspace(-1.0, 1.0, n)
     X, Y = np.meshgrid(g, g)
-    inside = X ** 2 + Y ** 2 <= 1.0 + 1e-12
+    inside = X**2 + Y**2 <= 1.0 + 1e-12
     return X[inside], Y[inside]
 
 
@@ -1322,8 +1537,17 @@ def pupil_grid(n: int, shape: str = "square"):
 # Wavefront (OPD) relative to the exit-pupil reference sphere
 # =============================================================================
 
-def opd(system: OpticalSystem, hx: float, hy: float, px, py,
-        wavelength: Optional[float] = None, seq=None, fo=None):
+
+def opd(
+    system: OpticalSystem,
+    hx: float,
+    hy: float,
+    px,
+    py,
+    wavelength: Optional[float] = None,
+    seq=None,
+    fo=None,
+):
     """
     Optical path difference W = OPL(chief) - OPL(ray), both measured to the
     reference sphere centred on the chief ray's image-plane point and passing
@@ -1382,9 +1606,10 @@ def opd(system: OpticalSystem, hx: float, hy: float, px, py,
 # Seidel sums
 # =============================================================================
 
+
 @dataclass
 class SeidelSums:
-    per_surface: list            # dicts with S1..S5, CL, CT, label
+    per_surface: list  # dicts with S1..S5, CL, CT, label
     S1: float
     S2: float
     S3: float
@@ -1392,12 +1617,14 @@ class SeidelSums:
     S5: float
     CL: float
     CT: float
-    nu_image: float              # n'u' of the marginal ray in image space
+    nu_image: float  # n'u' of the marginal ray in image space
     lagrange_invariant: float
-    unsupported: list            # labels of surfaces with no Seidel description
+    unsupported: list  # labels of surfaces with no Seidel description
 
 
-def seidel_sums(system: OpticalSystem, wavelength: Optional[float] = None) -> SeidelSums:
+def seidel_sums(
+    system: OpticalSystem, wavelength: Optional[float] = None
+) -> SeidelSums:
     """
     Third-order (Seidel) aberration sums from paraxial marginal and chief
     rays (Welford, Aberrations of Optical Systems, 1986, sections 8.2-8.5).
@@ -1420,7 +1647,9 @@ def seidel_sums(system: OpticalSystem, wavelength: Optional[float] = None) -> Se
         y, yb = mr.y[i], cr.y[i]
         u, ub = mr.u_before[i], cr.u_before[i]
         up = mr.u_after[i]
-        row = dict(label=s.label, S1=0.0, S2=0.0, S3=0.0, S4=0.0, S5=0.0, CL=0.0, CT=0.0)
+        row = dict(
+            label=s.label, S1=0.0, S2=0.0, S3=0.0, S4=0.0, S5=0.0, CL=0.0, CT=0.0
+        )
         if s.kind in ("stop", "dummy"):
             rows.append(row)
             continue
@@ -1446,12 +1675,14 @@ def seidel_sums(system: OpticalSystem, wavelength: Optional[float] = None) -> Se
             S4 = -H * H * c * d_1_n
             # S_V = (Ab/A)(S_III + S_IV), written without the division using
             # u/n = A/n^2 - yc and Ab y - A yb = H:
-            S5 = Ab * (-Ab * Ab * y * (1.0 / (na * na) - 1.0 / (nb * nb))
-                       + c * yb * (A * yb + 2.0 * H) * d_1_n)
+            S5 = Ab * (
+                -Ab * Ab * y * (1.0 / (na * na) - 1.0 / (nb * nb))
+                + c * yb * (A * yb + 2.0 * H) * d_1_n
+            )
             # Aspheric (conic / polynomial) contribution.
             q4 = s.shape.quartic_excess()
             if q4:
-                dS1 = 8.0 * q4 * (na - nb) * y ** 4
+                dS1 = 8.0 * q4 * (na - nb) * y**4
                 S1 += dS1
                 if y != 0:
                     S2 += dS1 * (yb / y)
@@ -1470,16 +1701,34 @@ def seidel_sums(system: OpticalSystem, wavelength: Optional[float] = None) -> Se
         for key in tot:
             tot[key] += row[key]
         rows.append(row)
-    return SeidelSums(rows, tot["S1"], tot["S2"], tot["S3"], tot["S4"], tot["S5"],
-                      tot["CL"], tot["CT"], mr.nu_after[-1], H, unsupported)
+    return SeidelSums(
+        rows,
+        tot["S1"],
+        tot["S2"],
+        tot["S3"],
+        tot["S4"],
+        tot["S5"],
+        tot["CL"],
+        tot["CT"],
+        mr.nu_after[-1],
+        H,
+        unsupported,
+    )
 
 
 # =============================================================================
 # Real-ray focus and image measurements
 # =============================================================================
 
-def real_field_foci(system: OpticalSystem, hy: float, delta: float = 1e-3,
-                    wavelength: Optional[float] = None, seq=None, fo=None):
+
+def real_field_foci(
+    system: OpticalSystem,
+    hy: float,
+    delta: float = 1e-3,
+    wavelength: Optional[float] = None,
+    seq=None,
+    fo=None,
+):
     """
     Tangential and sagittal foci of the field point (0, hy) from exact
     differential rays about the chief ray (pupil offsets +-delta).
@@ -1514,12 +1763,14 @@ def third_order_aberrations(sums: SeidelSums, fo: FirstOrder) -> dict:
     the paraxial image plane; longitudinal values are along the axis from the
     paraxial image (positive = further along the direction of travel).
     """
-    nu = sums.nu_image                    # n' u'
+    nu = sums.nu_image  # n' u'
     n_img = fo.n_image
     if abs(nu) < 1e-300 or not math.isfinite(fo.image_z):
-        raise ValueError("Afocal image space: third-order image aberrations undefined "
-                         "(image at infinity)")
-    nuu = nu * nu / n_img                 # n' u'^2
+        raise ValueError(
+            "Afocal image space: third-order image aberrations undefined "
+            "(image at infinity)"
+        )
+    nuu = nu * nu / n_img  # n' u'^2
     h_img = fo.image_height
     out = {
         "transverse_spherical": sums.S1 / (2.0 * nu),

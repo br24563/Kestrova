@@ -35,11 +35,12 @@ _DEFAULT_TOLERANCE = 1.0e-4  # 0.1 mm (1 sigma) on element positions
 @dataclass
 class ToleranceSpec:
     """Specification for a single tolerance parameter."""
-    name: str                     # e.g. "L1.radius1"
+
+    name: str  # e.g. "L1.radius1"
     nominal: float
-    distribution: str = "gaussian"   # "gaussian", "uniform", "truncated_gaussian"
+    distribution: str = "gaussian"  # "gaussian", "uniform", "truncated_gaussian"
     sigma: float = 0.0
-    lower: float = 0.0               # bounds of the error for "uniform"
+    lower: float = 0.0  # bounds of the error for "uniform"
     upper: float = 0.0
     correlation_group: Optional[str] = None
 
@@ -53,6 +54,7 @@ class Compensator:
     the compensator may move it by an offset in [min_value, max_value] from
     its value in the perturbed system.
     """
+
     name: str
     parameter: str
     min_value: float
@@ -69,6 +71,7 @@ class ManufacturingErrors:
     radius_error_fringes: power error in fringes at test_wavelength over the
         clear aperture; converted to a radius error |dR| = 4 N lambda R^2 / D^2.
     """
+
     radius_error_fringes: float = 1.0
     test_wavelength: float = 546.1e-9
     thickness_error_mm: float = 0.05
@@ -77,8 +80,9 @@ class ManufacturingErrors:
     spacing_error_mm: float = 0.05
 
 
-def manufacturing_tolerances(system: OpticalSystem,
-                             errors: Optional[ManufacturingErrors] = None) -> dict:
+def manufacturing_tolerances(
+    system: OpticalSystem, errors: Optional[ManufacturingErrors] = None
+) -> dict:
     """Build a tolerance dict (parameter -> 1-sigma error) for every lens."""
     e = errors or ManufacturingErrors()
     tol: dict[str, float] = {}
@@ -93,7 +97,14 @@ def manufacturing_tolerances(system: OpticalSystem,
             for field in ("radius1", "radius2"):
                 R = getattr(c, field)
                 if R and math.isfinite(R) and abs(R) < 1e9:
-                    tol[f"{c.id}.{field}"] = 4.0 * e.radius_error_fringes * e.test_wavelength * R * R / (D * D)
+                    tol[f"{c.id}.{field}"] = (
+                        4.0
+                        * e.radius_error_fringes
+                        * e.test_wavelength
+                        * R
+                        * R
+                        / (D * D)
+                    )
     return tol
 
 
@@ -134,25 +145,35 @@ def get_parameter(system: OpticalSystem, name: str) -> float:
     return float(getattr(comp, field))
 
 
-def _misalign(system: OpticalSystem, comp_id: str, field: str, value: float) -> OpticalSystem:
+def _misalign(
+    system: OpticalSystem, comp_id: str, field: str, value: float
+) -> OpticalSystem:
     """Decenter or tilt one element about its front vertex, then restore the
     original axis exactly after its last surface."""
     from .raytrace import _rotation
+
     comps = list(system.components)
     i = next(k for k, c in enumerate(comps) if c.id == comp_id)
     c = comps[i]
     L = c.thickness if isinstance(c, ThickLens) else 0.0
     offset: dict[str, Any] = {field: value}
-    before = CoordinateBreak(id=f"{comp_id}__cb_in_{field}", position=c.position, **offset)
+    before = CoordinateBreak(
+        id=f"{comp_id}__cb_in_{field}", position=c.position, **offset
+    )
     R1 = _rotation(before.tilt_x, before.tilt_y, 0.0)
     O1 = np.array([before.decenter_x, before.decenter_y, 0.0])
-    p_end = O1 + R1 @ np.array([0.0, 0.0, L])          # relative to the vertex
+    p_end = O1 + R1 @ np.array([0.0, 0.0, L])  # relative to the vertex
     dec2 = R1.T @ (np.array([0.0, 0.0, L]) - p_end)
-    after = CoordinateBreak(id=f"{comp_id}__cb_out_{field}", position=c.position + L,
-                            decenter_x=float(dec2[0]), decenter_y=float(dec2[1]),
-                            decenter_z=float(dec2[2]),
-                            tilt_x=-before.tilt_x, tilt_y=-before.tilt_y)
-    comps[i:i + 1] = [before, c, after]
+    after = CoordinateBreak(
+        id=f"{comp_id}__cb_out_{field}",
+        position=c.position + L,
+        decenter_x=float(dec2[0]),
+        decenter_y=float(dec2[1]),
+        decenter_z=float(dec2[2]),
+        tilt_x=-before.tilt_x,
+        tilt_y=-before.tilt_y,
+    )
+    comps[i : i + 1] = [before, c, after]
     return system.model_copy(update={"components": comps})
 
 
@@ -160,9 +181,13 @@ def set_parameter(system: OpticalSystem, name: str, value: float) -> OpticalSyst
     """Return a copy of the system with the named parameter set to ``value``."""
     target, field = name.split(".", 1)
     if target == "image_plane":
-        return system.model_copy(update={"image_plane": system.image_plane.model_copy(update={field: value})})
+        return system.model_copy(
+            update={"image_plane": system.image_plane.model_copy(update={field: value})}
+        )
     if target == "object":
-        return system.model_copy(update={"object": system.object.model_copy(update={field: value})})
+        return system.model_copy(
+            update={"object": system.object.model_copy(update={field: value})}
+        )
     if field in _MISALIGN:
         return _misalign(system, target, field, value) if value else system
     comps = []
@@ -184,11 +209,17 @@ def perturb(system: OpticalSystem, name: str, delta: float) -> OpticalSystem:
     return set_parameter(system, name, get_parameter(system, name) + delta)
 
 
-def _perturb_system(system: OpticalSystem, tolerances: dict, rng: random.Random) -> OpticalSystem:
+def _perturb_system(
+    system: OpticalSystem, tolerances: dict, rng: random.Random
+) -> OpticalSystem:
     """Apply one Monte Carlo draw (Gaussian, sigma = tolerance) to every parameter."""
     result = system
     for name, tol in tolerances.items():
-        spec = tol if isinstance(tol, ToleranceSpec) else ToleranceSpec(name, 0.0, sigma=float(tol))
+        spec = (
+            tol
+            if isinstance(tol, ToleranceSpec)
+            else ToleranceSpec(name, 0.0, sigma=float(tol))
+        )
         result = perturb(result, name, _draw_from_distribution(spec, rng))
     return result
 
@@ -198,21 +229,31 @@ def _default_metric(s: OpticalSystem) -> float:
 
 
 def _default_tolerances(system: OpticalSystem) -> dict:
-    return {f"{c.id}.position": _DEFAULT_TOLERANCE for c in system.components
-            if isinstance(c, (ThinLens, ThickLens))}
+    return {
+        f"{c.id}.position": _DEFAULT_TOLERANCE
+        for c in system.components
+        if isinstance(c, (ThinLens, ThickLens))
+    }
 
 
 def _stats(samples: list) -> dict:
     arr = np.array(samples)
-    return {"mean": float(arr.mean()), "std": float(arr.std()), "min": float(arr.min()),
-            "max": float(arr.max()), "p95": float(np.percentile(arr, 95))}
+    return {
+        "mean": float(arr.mean()),
+        "std": float(arr.std()),
+        "min": float(arr.min()),
+        "max": float(arr.max()),
+        "p95": float(np.percentile(arr, 95)),
+    }
 
 
-def tolerance_analysis(system: OpticalSystem,
-                       metric: Optional[Callable[[OpticalSystem], float]] = None,
-                       tolerances: Optional[dict] = None,
-                       trials: int = _DEFAULT_TRIALS,
-                       seed: Optional[int] = 42) -> dict:
+def tolerance_analysis(
+    system: OpticalSystem,
+    metric: Optional[Callable[[OpticalSystem], float]] = None,
+    tolerances: Optional[dict] = None,
+    trials: int = _DEFAULT_TRIALS,
+    seed: Optional[int] = 42,
+) -> dict:
     """
     Monte Carlo tolerance analysis.
 
@@ -238,8 +279,13 @@ def tolerance_analysis(system: OpticalSystem,
         samples.append(v)
         if v > worst_val:
             worst, worst_val = perturbed, v
-    base = {"nominal": float(metric(system)), "trials": len(samples), "failed_trials": failed,
-            "trend": samples, "worst": worst}
+    base = {
+        "nominal": float(metric(system)),
+        "trials": len(samples),
+        "failed_trials": failed,
+        "trend": samples,
+        "worst": worst,
+    }
     if not samples:
         base.update({k: float("nan") for k in ("mean", "std", "min", "max", "p95")})
         return base
@@ -247,9 +293,12 @@ def tolerance_analysis(system: OpticalSystem,
     return base
 
 
-def sensitivity_analysis(system: OpticalSystem, tolerances: dict,
-                         metric: Optional[Callable[[OpticalSystem], float]] = None,
-                         delta_fraction: float = 1.0) -> dict:
+def sensitivity_analysis(
+    system: OpticalSystem,
+    tolerances: dict,
+    metric: Optional[Callable[[OpticalSystem], float]] = None,
+    delta_fraction: float = 1.0,
+) -> dict:
     """
     Tornado analysis: change each parameter by +-(delta_fraction x tolerance)
     from nominal and record the metric.
@@ -265,19 +314,42 @@ def sensitivity_analysis(system: OpticalSystem, tolerances: dict,
                 vals.append(float(metric(perturb(system, name, sgn * d))))
             except ValueError:
                 vals.append(float("nan"))
-        sens = np.nanmean([abs(v - base) for v in vals]) if np.isfinite(vals).any() else float("nan")
-        rows.append({"parameter": name, "base_value": base, "delta": d,
-                     "value_plus": vals[0], "value_minus": vals[1], "sensitivity": float(sens),
-                     "relative_sensitivity": float(sens / base) if base > 0 else 0.0})
-    rows.sort(key=lambda r: (-r["sensitivity"] if math.isfinite(r["sensitivity"]) else math.inf))
-    return {"sensitivities": rows, "ranking": [r["parameter"] for r in rows], "base_value": base}
+        sens = (
+            np.nanmean([abs(v - base) for v in vals])
+            if np.isfinite(vals).any()
+            else float("nan")
+        )
+        rows.append(
+            {
+                "parameter": name,
+                "base_value": base,
+                "delta": d,
+                "value_plus": vals[0],
+                "value_minus": vals[1],
+                "sensitivity": float(sens),
+                "relative_sensitivity": float(sens / base) if base > 0 else 0.0,
+            }
+        )
+    rows.sort(
+        key=lambda r: (
+            -r["sensitivity"] if math.isfinite(r["sensitivity"]) else math.inf
+        )
+    )
+    return {
+        "sensitivities": rows,
+        "ranking": [r["parameter"] for r in rows],
+        "base_value": base,
+    }
 
 
-def tolerance_with_compensators(system: OpticalSystem, tolerances: dict,
-                                compensators: list,
-                                metric: Optional[Callable[[OpticalSystem], float]] = None,
-                                trials: int = _DEFAULT_TRIALS,
-                                seed: Optional[int] = 42) -> dict:
+def tolerance_with_compensators(
+    system: OpticalSystem,
+    tolerances: dict,
+    compensators: list,
+    metric: Optional[Callable[[OpticalSystem], float]] = None,
+    trials: int = _DEFAULT_TRIALS,
+    seed: Optional[int] = 42,
+) -> dict:
     """
     Monte Carlo with compensation: after each perturbation, each compensator
     is adjusted (bounded 1-D minimisation, in turn) to minimise the metric,
@@ -299,8 +371,12 @@ def tolerance_with_compensators(system: OpticalSystem, tolerances: dict,
                     except ValueError:
                         return math.inf
 
-                res = minimize_scalar(f, bounds=(comp.min_value, comp.max_value),
-                                      method="bounded", options={"xatol": 1e-9})
+                res = minimize_scalar(
+                    f,
+                    bounds=(comp.min_value, comp.max_value),
+                    method="bounded",
+                    options={"xatol": 1e-9},
+                )
                 best = res.x if f(res.x) <= f(0.0) else 0.0
                 s = set_parameter(s, comp.parameter, x0 + best)
                 comp_values[comp.name].append(float(best))
@@ -309,11 +385,21 @@ def tolerance_with_compensators(system: OpticalSystem, tolerances: dict,
             failed += 1
             continue
         samples.append(v)
-    out = {"trials": len(samples), "failed_trials": failed, "trend": samples,
-           "compensator_stats": {
-               k: {"mean_adjustment": float(np.mean(v)), "std_adjustment": float(np.std(v)),
-                   "max_adjustment": float(np.max(v)), "min_adjustment": float(np.min(v))}
-               for k, v in comp_values.items() if v}}
+    out = {
+        "trials": len(samples),
+        "failed_trials": failed,
+        "trend": samples,
+        "compensator_stats": {
+            k: {
+                "mean_adjustment": float(np.mean(v)),
+                "std_adjustment": float(np.std(v)),
+                "max_adjustment": float(np.max(v)),
+                "min_adjustment": float(np.min(v)),
+            }
+            for k, v in comp_values.items()
+            if v
+        },
+    }
     if samples:
         out.update(_stats(samples))
     else:
@@ -321,8 +407,9 @@ def tolerance_with_compensators(system: OpticalSystem, tolerances: dict,
     return out
 
 
-def compute_yield(samples: list, upper_limit: float,
-                  lower_limit: Optional[float] = None) -> dict:
+def compute_yield(
+    samples: list, upper_limit: float, lower_limit: Optional[float] = None
+) -> dict:
     """
     Fraction of samples within the specification and the process
     capability index Cpk (one-sided when no lower limit is given).
@@ -336,9 +423,19 @@ def compute_yield(samples: list, upper_limit: float,
     mean, std = float(arr.mean()), float(arr.std())
     if std > 0:
         cpu = (upper_limit - mean) / (3 * std)
-        cpk = min(cpu, (mean - lower_limit) / (3 * std)) if lower_limit is not None else cpu
+        cpk = (
+            min(cpu, (mean - lower_limit) / (3 * std))
+            if lower_limit is not None
+            else cpu
+        )
     else:
         inside = mean <= upper_limit and (lower_limit is None or mean >= lower_limit)
         cpk = float("inf") if inside else 0.0
-    return {"yield": float(ok.mean()), "cpk": float(cpk), "n_pass": int(ok.sum()),
-            "n_total": len(arr), "mean": mean, "std": std}
+    return {
+        "yield": float(ok.mean()),
+        "cpk": float(cpk),
+        "n_pass": int(ok.sum()),
+        "n_total": len(arr),
+        "mean": mean,
+        "std": std,
+    }

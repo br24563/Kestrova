@@ -70,8 +70,17 @@ def import_zmx(filepath) -> OpticalSystem:
         elif key == "YFLN":
             yfln = [float(v) for v in tok[1:]]
         elif key == "SURF":
-            cur = {"n": int(tok[1]), "type": "STANDARD", "curv": 0.0, "conic": 0.0,
-                   "parm": {}, "disz": 0.0, "glass": None, "diam": None, "stop": False}
+            cur = {
+                "n": int(tok[1]),
+                "type": "STANDARD",
+                "curv": 0.0,
+                "conic": 0.0,
+                "parm": {},
+                "disz": 0.0,
+                "glass": None,
+                "diam": None,
+                "stop": False,
+            }
             surfaces.append(cur)
         elif cur is not None:
             if key == "TYPE":
@@ -91,7 +100,9 @@ def import_zmx(filepath) -> OpticalSystem:
             elif key == "STOP":
                 cur["stop"] = True
     if len(surfaces) < 3:
-        raise ValueError("A lens file needs an object, at least one surface and an image")
+        raise ValueError(
+            "A lens file needs an object, at least one surface and an image"
+        )
     obj, body = surfaces[0], surfaces[1:-1]
     rows = []
     for s in body:
@@ -101,13 +112,20 @@ def import_zmx(filepath) -> OpticalSystem:
         glass = s["glass"]
         if glass is not None:
             glass = "MIRROR" if glass.upper() == "MIRROR" else resolve_glass(glass)
-        row = Row(radius=(1.0 / s["curv"] * unit) if s["curv"] else 0.0,
-                  conic=s["conic"], glass=glass, thickness=s["disz"] * unit,
-                  semi_aperture=(s["diam"] * unit if s["diam"] else None),
-                  stop=s["stop"], label=f"S{s['n']}")
+        row = Row(
+            radius=(1.0 / s["curv"] * unit) if s["curv"] else 0.0,
+            conic=s["conic"],
+            glass=glass,
+            thickness=s["disz"] * unit,
+            semi_aperture=(s["diam"] * unit if s["diam"] else None),
+            stop=s["stop"],
+            label=f"S{s['n']}",
+        )
         if t == "EVENASPH":
             if s["parm"].get(1, 0.0):
-                raise ValueError(f"Surface {s['n']}: an r^2 aspheric term is not supported")
+                raise ValueError(
+                    f"Surface {s['n']}: an r^2 aspheric term is not supported"
+                )
             coeffs = [s["parm"].get(i, 0.0) for i in range(2, 9)]
             while coeffs and coeffs[-1] == 0.0:
                 coeffs.pop()
@@ -116,7 +134,9 @@ def import_zmx(filepath) -> OpticalSystem:
         if t == "PARAXIAL":
             row.paraxial_focal_length = s["parm"].get(1, 0.0) * unit
             if not row.paraxial_focal_length:
-                raise ValueError(f"Surface {s['n']}: paraxial surface needs a focal length")
+                raise ValueError(
+                    f"Surface {s['n']}: paraxial surface needs a focal length"
+                )
         rows.append(row)
     wavelengths = [waves[k] for k in sorted(waves)] or [D_LINE]
     ref = sorted(waves).index(primary) if primary in waves else 0
@@ -128,7 +148,9 @@ def import_zmx(filepath) -> OpticalSystem:
     elif ftyp == 1:
         height = ymax * unit
     else:
-        raise ValueError(f"Field type {ftyp} is not supported (use angle or object height)")
+        raise ValueError(
+            f"Field type {ftyp} is not supported (use angle or object height)"
+        )
     return rows_to_system(rows, obj_dist, height, wavelengths, ref)
 
 
@@ -137,10 +159,19 @@ def export_zmx(system: OpticalSystem, filepath) -> None:
     rows, obj_dist, fo = system_to_rows(system)
     mm = 1e3
     wl = system.wavelengths or [system.analysis_settings.wavelength]
-    primary = min(range(len(wl)), key=lambda k: abs(wl[k] - system.analysis_settings.wavelength)) + 1
-    L = ["MODE SEQ", "NAME Exported design",
-         "UNIT MM X W X CM MR CPMM",
-         f"ENPD {2 * fo.entrance_pupil_semi_diameter * mm:.6f}"]
+    primary = (
+        min(
+            range(len(wl)),
+            key=lambda k: abs(wl[k] - system.analysis_settings.wavelength),
+        )
+        + 1
+    )
+    L = [
+        "MODE SEQ",
+        "NAME Exported design",
+        "UNIT MM X W X CM MR CPMM",
+        f"ENPD {2 * fo.entrance_pupil_semi_diameter * mm:.6f}",
+    ]
     for k, w in enumerate(wl, start=1):
         L.append(f"WAVM {k} {w * 1e6:.6f} 1")
     L.append(f"PWAV {primary}")
@@ -151,8 +182,12 @@ def export_zmx(system: OpticalSystem, filepath) -> None:
         L.append(f"FTYP 1 0 2 {len(wl)} 0 0 0")
         L.append(f"YFLN 0 {system.object.height * mm:.6f}")
     L.append("XFLN 0 0")
-    L += ["SURF 0", "  TYPE STANDARD", "  CURV 0.0",
-          "  DISZ INFINITY" if fo.object_infinite else f"  DISZ {obj_dist * mm:.6f}"]
+    L += [
+        "SURF 0",
+        "  TYPE STANDARD",
+        "  CURV 0.0",
+        "  DISZ INFINITY" if fo.object_infinite else f"  DISZ {obj_dist * mm:.6f}",
+    ]
     for n, r in enumerate(rows, start=1):
         L.append(f"SURF {n}")
         if r.stop:
@@ -176,9 +211,11 @@ def export_zmx(system: OpticalSystem, filepath) -> None:
         elif r.glass:
             m = MATERIALS[r.glass]
             if m.nd is None or m.vd is None:
-                raise ValueError(f"Glass '{r.glass}' has no d-line data for a Zemax model glass")
+                raise ValueError(
+                    f"Glass '{r.glass}' has no d-line data for a Zemax model glass"
+                )
             L.append(f"  GLAS {r.glass} 0 0 {m.nd:.6f} {m.vd:.4f} 0 0 0 0 0 0")
         if r.semi_aperture:
-            L.append(f"  DIAM {r.semi_aperture * mm:.6f} 0 0 0 1 \"\"")
+            L.append(f'  DIAM {r.semi_aperture * mm:.6f} 0 0 0 1 ""')
     L += [f"SURF {len(rows) + 1}", "  TYPE STANDARD", "  CURV 0.0", "  DISZ 0.0"]
     Path(filepath).write_text("\n".join(L) + "\n")

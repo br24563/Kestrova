@@ -13,24 +13,42 @@ from typing import Optional
 import numpy as np
 
 from .system import Object3D, Vector3, Ray, HitPoint
-from ..raytrace import Conicoid, RadialNumeric, q_aspheric_sag_function, curvature_from_radius
+from ..raytrace import (
+    Conicoid,
+    RadialNumeric,
+    q_aspheric_sag_function,
+    curvature_from_radius,
+)
 
 
 class AsphericSurface(Object3D):
     """Even aspheric surface."""
 
-    def __init__(self, name: str = "Asphere", position: Optional[Vector3] = None, radius: float = 50.0,
-                 conic: float = 0.0, aspheric_coeffs: Optional[list] = None,
-                 aperture_radius: float = 25.0, material: Optional[str] = None):
-        super().__init__(name=name, object_type="aspheric",
-                         position=position or Vector3(), material=material)
+    def __init__(
+        self,
+        name: str = "Asphere",
+        position: Optional[Vector3] = None,
+        radius: float = 50.0,
+        conic: float = 0.0,
+        aspheric_coeffs: Optional[list] = None,
+        aperture_radius: float = 25.0,
+        material: Optional[str] = None,
+    ):
+        super().__init__(
+            name=name,
+            object_type="aspheric",
+            position=position or Vector3(),
+            material=material,
+        )
         self.radius = radius
         self.conic = conic
         self.aspheric_coeffs = aspheric_coeffs or []
         self.aperture_radius = aperture_radius
 
     def _shape(self):
-        return Conicoid(curvature_from_radius(self.radius), self.conic, self.aspheric_coeffs)
+        return Conicoid(
+            curvature_from_radius(self.radius), self.conic, self.aspheric_coeffs
+        )
 
     def sag(self, r: float) -> float:
         """Sag at radial distance r (NaN where the conic is undefined)."""
@@ -77,34 +95,73 @@ class AsphericSurface(Object3D):
             return None
         n = self.normal_at(x, y)
         inside = d.dot(n) > 0
-        return HitPoint(ray=ray, object_id=self.object_id, point=ray.point_at(t),
-                        normal=n, distance=t, inside=inside)
+        return HitPoint(
+            ray=ray,
+            object_id=self.object_id,
+            point=ray.point_at(t),
+            normal=n,
+            distance=t,
+            inside=inside,
+        )
 
 
 class OddAsphericSurface(AsphericSurface):
     """Even asphere plus odd terms B1 r + B3 r^3 + B5 r^5 + ..."""
 
-    def __init__(self, name: str = "OddAsphere", position: Optional[Vector3] = None, radius: float = 50.0,
-                 conic: float = 0.0, aspheric_coeffs: Optional[list] = None, odd_coeffs: Optional[list] = None,
-                 aperture_radius: float = 25.0, material: Optional[str] = None):
-        super().__init__(name=name, position=position, radius=radius, conic=conic,
-                         aspheric_coeffs=aspheric_coeffs, aperture_radius=aperture_radius,
-                         material=material)
+    def __init__(
+        self,
+        name: str = "OddAsphere",
+        position: Optional[Vector3] = None,
+        radius: float = 50.0,
+        conic: float = 0.0,
+        aspheric_coeffs: Optional[list] = None,
+        odd_coeffs: Optional[list] = None,
+        aperture_radius: float = 25.0,
+        material: Optional[str] = None,
+    ):
+        super().__init__(
+            name=name,
+            position=position,
+            radius=radius,
+            conic=conic,
+            aspheric_coeffs=aspheric_coeffs,
+            aperture_radius=aperture_radius,
+            material=material,
+        )
         self.odd_coeffs = odd_coeffs or []
 
     def _shape(self):
-        return Conicoid(curvature_from_radius(self.radius), self.conic,
-                        self.aspheric_coeffs, self.odd_coeffs)
+        return Conicoid(
+            curvature_from_radius(self.radius),
+            self.conic,
+            self.aspheric_coeffs,
+            self.odd_coeffs,
+        )
 
 
 class QTypeSurface(AsphericSurface):
     """Forbes Qbfs (best-fit sphere) or Qcon (conic) asphere."""
 
-    def __init__(self, name: str = "QAsphere", position: Optional[Vector3] = None, radius: float = 50.0,
-                 conic: float = 0.0, q_type: str = "Qbfs", coefficients: Optional[list] = None,
-                 norm_radius: float = 25.0, aperture_radius: float = 25.0, material: Optional[str] = None):
-        super().__init__(name=name, position=position, radius=radius, conic=conic,
-                         aperture_radius=aperture_radius, material=material)
+    def __init__(
+        self,
+        name: str = "QAsphere",
+        position: Optional[Vector3] = None,
+        radius: float = 50.0,
+        conic: float = 0.0,
+        q_type: str = "Qbfs",
+        coefficients: Optional[list] = None,
+        norm_radius: float = 25.0,
+        aperture_radius: float = 25.0,
+        material: Optional[str] = None,
+    ):
+        super().__init__(
+            name=name,
+            position=position,
+            radius=radius,
+            conic=conic,
+            aperture_radius=aperture_radius,
+            material=material,
+        )
         self.q_type = q_type
         self.coefficients = coefficients or []
         self.norm_radius = norm_radius
@@ -112,5 +169,7 @@ class QTypeSurface(AsphericSurface):
     def _shape(self):
         c = curvature_from_radius(self.radius)
         k = self.conic if self.q_type.lower() == "qcon" else 0.0
-        f = q_aspheric_sag_function(c, k, self.coefficients, self.norm_radius, self.q_type)
+        f = q_aspheric_sag_function(
+            c, k, self.coefficients, self.norm_radius, self.q_type
+        )
         return RadialNumeric(f, c, k, scale=self.norm_radius)

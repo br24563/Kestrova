@@ -12,6 +12,7 @@ import numpy as np
 @dataclass
 class GRINProfile:
     """Base class for GRIN profiles."""
+
     n0: float  # Base refractive index
 
     def index(self, *args) -> float:
@@ -32,6 +33,7 @@ class AxialGRIN(GRINProfile):
 
     Used for flat-surface lenses and lightpipe correction.
     """
+
     coefficients: list[float] = None  # type: ignore[assignment]  # set in __post_init__  [n0, n1, n2, ...]
 
     def __post_init__(self):
@@ -49,7 +51,7 @@ class AxialGRIN(GRINProfile):
         """Gradient (0, 0, dn/dz)."""
         dn_dz = 0.0
         for i in range(1, len(self.coefficients)):
-            dn_dz += i * self.coefficients[i] * z**(i-1)
+            dn_dz += i * self.coefficients[i] * z ** (i - 1)
         return np.array([0, 0, dn_dz])
 
 
@@ -63,6 +65,7 @@ class RadialGRIN(GRINProfile):
     Used for GRIN rod lenses and graded-index fibres. ``g`` is in inverse
     length units consistent with the positions used (1/m for meters).
     """
+
     g: float  # gradient constant
 
     def index(self, x: float = 0, y: float = 0, z: float = 0) -> float:
@@ -95,6 +98,7 @@ class GRIN3D(GRINProfile):
 
     n(x,y,z) = n0 + Gx*x + Gy*y + Gz*z + higher order terms
     """
+
     gradient_vector: np.ndarray = None  # type: ignore[assignment]  # set in __post_init__  [Gx, Gy, Gz]
 
     def __post_init__(self):

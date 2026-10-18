@@ -25,10 +25,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .base import OpticalComponentBase
 
-
 # ---------------------------------------------------------------------------
 # Optical Components
 # ---------------------------------------------------------------------------
+
 
 class ThinLens(OpticalComponentBase):
     """
@@ -44,11 +44,13 @@ class ThinLens(OpticalComponentBase):
     """
 
     type: Literal["thin_lens"] = "thin_lens"
-    focal_length: float = Field(..., description="Focal length in meters (positive=converging)")
+    focal_length: float = Field(
+        ..., description="Focal length in meters (positive=converging)"
+    )
     aperture_diameter: float = Field(..., description="Aperture diameter in meters")
     material: str = Field(default="N-BK7", description="Glass material name")
 
-    @field_validator('focal_length')
+    @field_validator("focal_length")
     @classmethod
     def validate_focal_length(cls, v):
         if not isinstance(v, (int, float)):
@@ -58,10 +60,12 @@ class ThinLens(OpticalComponentBase):
         if abs(v) < 1e-12:
             raise ValueError("Focal length cannot be zero (or nearly zero)")
         if abs(v) > 1e6:
-            raise ValueError("Focal length must be within reasonable bounds (|f| < 1000 km)")
+            raise ValueError(
+                "Focal length must be within reasonable bounds (|f| < 1000 km)"
+            )
         return float(v)
 
-    @field_validator('aperture_diameter')
+    @field_validator("aperture_diameter")
     @classmethod
     def validate_aperture(cls, v):
         if not isinstance(v, (int, float)):
@@ -69,7 +73,9 @@ class ThinLens(OpticalComponentBase):
         if v <= 0:
             raise ValueError("Aperture diameter must be positive")
         if v > 1e3:
-            raise ValueError("Aperture diameter must be within reasonable bounds (D < 10 m)")
+            raise ValueError(
+                "Aperture diameter must be within reasonable bounds (D < 10 m)"
+            )
         return float(v)
 
 
@@ -91,7 +97,8 @@ class SphericalSurface(OpticalComponentBase):
     thickness: float = Field(..., description="Thickness of the element in meters")
     material: str = Field(default="N-BK7", description="Medium after the surface")
     aperture_diameter: Optional[float] = Field(
-        default=None, description="Clear aperture in meters (None = unlimited)")
+        default=None, description="Clear aperture in meters (None = unlimited)"
+    )
 
 
 class ThickLens(OpticalComponentBase):
@@ -108,8 +115,12 @@ class ThickLens(OpticalComponentBase):
     """
 
     type: Literal["thick_lens"] = "thick_lens"
-    radius1: float = Field(..., description="Radius of curvature of first surface (meters)")
-    radius2: float = Field(..., description="Radius of curvature of second surface (meters)")
+    radius1: float = Field(
+        ..., description="Radius of curvature of first surface (meters)"
+    )
+    radius2: float = Field(
+        ..., description="Radius of curvature of second surface (meters)"
+    )
     thickness: float = Field(..., description="Center thickness of the lens (meters)")
     aperture_diameter: float = Field(..., description="Aperture diameter in meters")
     material: str = Field(default="N-BK7", description="Glass material name")
@@ -142,25 +153,44 @@ class Mirror(OpticalComponentBase):
 
     type: Literal["mirror"] = "mirror"
     width: float = Field(..., description="Mirror width in meters")
-    radius: float = Field(default=0.0, description="Radius of curvature in meters (0 = flat)")
-    conic: float = Field(default=0.0, description="Conic constant (0 sphere, -1 paraboloid)")
+    radius: float = Field(
+        default=0.0, description="Radius of curvature in meters (0 = flat)"
+    )
+    conic: float = Field(
+        default=0.0, description="Conic constant (0 sphere, -1 paraboloid)"
+    )
     aperture_diameter: Optional[float] = Field(
-        default=None, description="Clear aperture in meters (defaults to width)")
+        default=None, description="Clear aperture in meters (defaults to width)"
+    )
 
 
 # Discriminated union: allows the system to hold any component type
 # and automatically deserialize the correct type based on the "type" field.
 from .advanced_surfaces import (
-    AsphericSurface, OddAsphericSurface, QAsphericSurface,
-    ZernikeSurface, DiffractiveOpticalElement, ToricSurface,
+    AsphericSurface,
+    OddAsphericSurface,
+    QAsphericSurface,
+    ZernikeSurface,
+    DiffractiveOpticalElement,
+    ToricSurface,
     CoordinateBreak,
 )
 
 OpticalComponent = Annotated[
-    Union[ThinLens, SphericalSurface, ThickLens, ApertureStop, Mirror,
-           AsphericSurface, OddAsphericSurface, QAsphericSurface,
-           ZernikeSurface, DiffractiveOpticalElement, ToricSurface,
-           CoordinateBreak],
+    Union[
+        ThinLens,
+        SphericalSurface,
+        ThickLens,
+        ApertureStop,
+        Mirror,
+        AsphericSurface,
+        OddAsphericSurface,
+        QAsphericSurface,
+        ZernikeSurface,
+        DiffractiveOpticalElement,
+        ToricSurface,
+        CoordinateBreak,
+    ],
     Field(discriminator="type"),
 ]
 
@@ -168,6 +198,7 @@ OpticalComponent = Annotated[
 # ---------------------------------------------------------------------------
 # Object and Image Plane
 # ---------------------------------------------------------------------------
+
 
 class Object(BaseModel):
     """
@@ -197,6 +228,7 @@ class ImagePlane(BaseModel):
 # Analysis Settings
 # ---------------------------------------------------------------------------
 
+
 class AnalysisSettings(BaseModel):
     """
     Settings that control ray tracing and analysis.
@@ -208,21 +240,24 @@ class AnalysisSettings(BaseModel):
     num_rays: int = Field(default=11, ge=1, description="Number of rays to trace")
     ray_types: list[str] = Field(
         default=["chief", "marginal", "fill"],
-        description="Types of rays to trace: chief, marginal, fill"
+        description="Types of rays to trace: chief, marginal, fill",
     )
     aperture_fraction: float = Field(
-        default=1.0, ge=0.0, le=1.0,
-        description="Fraction of aperture diameter to use (0.0 to 1.0)"
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of aperture diameter to use (0.0 to 1.0)",
     )
     wavelength: float = Field(
         default=550e-9,
-        description="Wavelength for ray tracing (meters, default 550nm green)"
+        description="Wavelength for ray tracing (meters, default 550nm green)",
     )
 
 
 # ---------------------------------------------------------------------------
 # Optical System
 # ---------------------------------------------------------------------------
+
 
 class OpticalSystem(BaseModel):
     """
@@ -237,20 +272,20 @@ class OpticalSystem(BaseModel):
 
     components: list[OpticalComponent] = Field(
         default_factory=list,
-        description="Ordered list of optical components (left to right)"
+        description="Ordered list of optical components (left to right)",
     )
     wavelengths: list[float] = Field(
         default_factory=lambda: [550e-9],
-        description="Wavelengths of light in meters (default: 550nm green)"
+        description="Wavelengths of light in meters (default: 550nm green)",
     )
     object: Object = Field(..., description="The object being imaged")
     image_plane: ImagePlane = Field(..., description="The image plane")
     analysis_settings: AnalysisSettings = Field(
         default_factory=AnalysisSettings,
-        description="Settings for ray tracing and analysis"
+        description="Settings for ray tracing and analysis",
     )
 
-    @field_validator('wavelengths')
+    @field_validator("wavelengths")
     @classmethod
     def validate_wavelengths(cls, v):
         if not v:
@@ -261,10 +296,12 @@ class OpticalSystem(BaseModel):
             if w <= 0:
                 raise ValueError("Wavelengths must be positive")
             if w < 1e-10 or w > 1e-3:
-                raise ValueError("Wavelengths must be in reasonable range (1 nm to 1 mm)")
+                raise ValueError(
+                    "Wavelengths must be in reasonable range (1 nm to 1 mm)"
+                )
         return v
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_unique_ids(self):
         ids = [c.id for c in self.components]
         if len(ids) != len(set(ids)):
@@ -275,6 +312,7 @@ class OpticalSystem(BaseModel):
 # ---------------------------------------------------------------------------
 # Ray Tracing Models
 # ---------------------------------------------------------------------------
+
 
 class Ray(BaseModel):
     """
@@ -292,8 +330,7 @@ class Ray(BaseModel):
     z: float = Field(..., description="Position along axis (meters)")
     wavelength: float = Field(..., description="Wavelength (meters)")
     ray_type: str = Field(
-        default="fill",
-        description="Ray type: 'chief', 'marginal', or 'fill'"
+        default="fill", description="Ray type: 'chief', 'marginal', or 'fill'"
     )
 
 
@@ -306,8 +343,7 @@ class RayPath(BaseModel):
     """
 
     points: list[list[float]] = Field(
-        ...,
-        description="List of [z, y] points along the ray path (meters)"
+        ..., description="List of [z, y] points along the ray path (meters)"
     )
     ray_type: str = Field(..., description="Ray type: 'chief', 'marginal', or 'fill'")
     wavelength: float = Field(..., description="Wavelength (meters)")
@@ -326,26 +362,21 @@ class RayTraceResult(BaseModel):
     """
 
     ray_paths: list[RayPath] = Field(
-        default_factory=list,
-        description="Paths of all traced rays"
+        default_factory=list, description="Paths of all traced rays"
     )
     image_position: float = Field(
-        ...,
-        description="Calculated image position along axis (meters)"
+        ..., description="Calculated image position along axis (meters)"
     )
-    image_height: float = Field(
-        ...,
-        description="Calculated image height (meters)"
-    )
+    image_height: float = Field(..., description="Calculated image height (meters)")
     paraxial_image_height: float = Field(
-        ...,
-        description="Paraxial image height (meters)"
+        ..., description="Paraxial image height (meters)"
     )
 
 
 # ---------------------------------------------------------------------------
 # Analysis Result Models
 # ---------------------------------------------------------------------------
+
 
 class AnalysisResult(BaseModel):
     """
@@ -355,50 +386,37 @@ class AnalysisResult(BaseModel):
     """
 
     effective_focal_length: float = Field(
-        ...,
-        description="Effective focal length of the system (meters)"
+        ..., description="Effective focal length of the system (meters)"
     )
     magnification: float = Field(
-        ...,
-        description="Transverse magnification (dimensionless, negative=inverted)"
+        ..., description="Transverse magnification (dimensionless, negative=inverted)"
     )
     image_distance: float = Field(
-        ...,
-        description="Distance from last lens to image (meters)"
+        ..., description="Distance from last lens to image (meters)"
     )
     object_distance: float = Field(
-        ...,
-        description="Distance from first lens to object (meters)"
+        ..., description="Distance from first lens to object (meters)"
     )
-    f_number: float = Field(
-        ...,
-        description="F-number (f/D, dimensionless)"
-    )
+    f_number: float = Field(..., description="F-number (f/D, dimensionless)")
     numerical_aperture: float = Field(
-        ...,
-        description="Numerical aperture (dimensionless)"
+        ..., description="Numerical aperture (dimensionless)"
     )
     aperture_diameter: float = Field(
-        ...,
-        description="Effective aperture diameter (meters)"
+        ..., description="Effective aperture diameter (meters)"
     )
     working_distance: float = Field(
-        ...,
-        description="Distance from last lens to image plane (meters)"
+        ..., description="Distance from last lens to image plane (meters)"
     )
     rms_spot_radius: float = Field(
-        ...,
-        description="RMS spot radius at image plane (meters)"
+        ..., description="RMS spot radius at image plane (meters)"
     )
     spot_points: list[list[float]] = Field(
         default_factory=list,
-        description="Real-ray spot [x, y] positions in the image plane relative to the centroid (meters)"
+        description="Real-ray spot [x, y] positions in the image plane relative to the centroid (meters)",
     )
     is_image_real: bool = Field(
-        ...,
-        description="True if the image is real (can be projected on a screen)"
+        ..., description="True if the image is real (can be projected on a screen)"
     )
     is_image_inverted: bool = Field(
-        ...,
-        description="True if the image is inverted relative to the object"
+        ..., description="True if the image is inverted relative to the object"
     )
