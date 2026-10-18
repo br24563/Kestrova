@@ -86,7 +86,7 @@ describe("API client", () => {
   });
 
   it("validateSystem posts the system and returns warnings", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockFetchResponse({ system: mockSystem, warnings: ["warning"] }),
     );
     const result = await validateSystem(mockSystem);

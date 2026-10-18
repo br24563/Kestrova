@@ -66,17 +66,14 @@ def search_materials(
             continue
         if material_type and props.material_type != material_type:
             continue
-        if (min_nd is not None or max_nd is not None) and props.nd is None:
+        nd, vd = props.nd, props.vd
+        if min_nd is not None and (nd is None or nd < min_nd):
             continue
-        if (min_vd is not None or max_vd is not None) and props.vd is None:
+        if max_nd is not None and (nd is None or nd > max_nd):
             continue
-        if min_nd is not None and props.nd < min_nd:
+        if min_vd is not None and (vd is None or vd < min_vd):
             continue
-        if max_nd is not None and props.nd > max_nd:
-            continue
-        if min_vd is not None and props.vd < min_vd:
-            continue
-        if max_vd is not None and props.vd > max_vd:
+        if max_vd is not None and (vd is None or vd > max_vd):
             continue
         results.append(props)
     return results

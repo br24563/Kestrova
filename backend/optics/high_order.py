@@ -189,11 +189,9 @@ def through_focus_mtf(system: OpticalSystem, defocus_range: tuple = (-50e-6, 50e
     """
     nu = spatial_frequency * 1e3
     dz = np.linspace(defocus_range[0], defocus_range[1], num_points)
-    vals = []
-    for z in dz:
-        g = pp.wavefront_grid(system, field_fraction, grid, defocus=float(z))
-        vals.append(pp.mtf_at(pp.mtf(g), nu, "tangential"))
-    vals = np.array(vals)
+    vals = np.array([pp.mtf_at(pp.mtf(pp.wavefront_grid(system, field_fraction, grid,
+                                                         defocus=float(z))), nu, "tangential")
+                     for z in dz])
     i = int(np.argmax(vals))
     above = dz[vals >= 0.5 * vals[i]]
     return {

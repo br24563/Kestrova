@@ -27,7 +27,7 @@ class Prism(Object3D):
         self.object_type = "prism"
         self.reflection_count = 0  # Number of internal reflections
 
-    def path_length(self, beam_height: float = None) -> float:
+    def path_length(self, beam_height: Optional[float] = None) -> float:
         """Unfolded glass path (same units as base_size)."""
         raise NotImplementedError(f"No tunnel-diagram length for a {self.prism_type} prism")
 
@@ -56,7 +56,7 @@ class RightAnglePrism(Prism):
         """90 degree deviation."""
         return 90.0
 
-    def path_length(self, beam_height: float = None) -> float:
+    def path_length(self, beam_height: Optional[float] = None) -> float:
         """Tunnel length A (90-degree use, reflection at the hypotenuse)."""
         return self.base_size
 
@@ -80,7 +80,7 @@ class PorroPrism(Prism):
         """180 degree deviation (image inversion)."""
         return 180.0
 
-    def path_length(self, beam_height: float = None) -> float:
+    def path_length(self, beam_height: Optional[float] = None) -> float:
         """Path length."""
         return 2 * self.base_size
 
@@ -147,7 +147,7 @@ class PentaPrism(Prism):
         """Constant 90 degree deviation (insensitive to orientation)."""
         return 90.0
 
-    def path_length(self, beam_height: float = None) -> float:
+    def path_length(self, beam_height: Optional[float] = None) -> float:
         """Tunnel length 3.414 A."""
         return self.base_size * (2 + np.sqrt(2))
 
@@ -181,7 +181,7 @@ class WedgePrism(Prism):
             raise ValueError("Total internal reflection at the second face")
         return float(np.degrees(np.arcsin(s) - a))
 
-    def path_length(self, beam_height: float = None) -> float:
+    def path_length(self, beam_height: Optional[float] = None) -> float:
         """The glass path depends on where the beam crosses the wedge and on
         its thin-edge thickness, which this model does not hold."""
         raise NotImplementedError("Wedge glass path needs the edge thicknesses")

@@ -77,7 +77,9 @@ def _export_stl_ascii(mesh: Mesh, filepath: Path):
 def _indexed(mesh: Mesh):
     """Shared vertex list and 0-based triangle indices (vertices merged by
     exact coordinates)."""
-    index, verts, faces = {}, [], []
+    index: dict = {}
+    verts: list = []
+    faces: list = []
     for tri in mesh.triangles:
         f = []
         for v in (tri.v0, tri.v1, tri.v2):

@@ -41,9 +41,9 @@ class STEPEdgeCurve:
     """STEP EDGE_CURVE entity."""
     id: int
     name: str
-    start_vertex: int
-    end_vertex: int
-    curve: int
+    start_vertex: Optional[int]
+    end_vertex: Optional[int]
+    curve: Optional[int]
     same_sense: bool
 
 
@@ -88,7 +88,7 @@ class STEPAdvancedFace:
     id: int
     name: str
     bounds: list
-    face_geometry: int
+    face_geometry: Optional[int]
     same_sense: bool
 
 
@@ -114,7 +114,7 @@ class STEPManifoldSolidBrep:
     """STEP MANIFOLD_SOLID_BREP entity."""
     id: int
     name: str
-    outer: int
+    outer: Optional[int]
 
 
 class STEPParser:

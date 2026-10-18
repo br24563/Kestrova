@@ -38,6 +38,7 @@ class Layer:
     @property
     def optical_thickness(self) -> float:
         """Optical thickness n d (nm)."""
+        assert self.n is not None   # set in __post_init__
         return self.n.real * self.thickness
 
 

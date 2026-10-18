@@ -220,12 +220,13 @@ def diffraction_analysis(system: Optional[OpticalSystem] = None, na: Optional[fl
     """
     if system is None:
         wl = _wavelength(None, wavelength)
-        m = mtf(None, frequencies, num_points, wl, na)
+        freqs = np.asarray(frequencies, dtype=float) if frequencies is not None else None
+        m = mtf(None, freqs, num_points, wl, na)
         return {
             "psf": psf(None, na, wl, num_points=num_points),
             "encircled_energy": encircled_energy(None, na, wl, num_points=num_points),
             "mtf": {"frequency": m["f"], "mtf": m["mtf"], "cutoff": m["f_c"]},
-            "otf": otf(None, frequencies, num_points, wl, na),
+            "otf": otf(None, freqs, num_points, wl, na),
             "airy_disk_radius": airy_disk_radius(None, na, wavelength=wl),
         }
     wl = _wavelength(system, wavelength)

@@ -372,7 +372,8 @@ def _load() -> dict[str, Material]:
 MATERIALS: dict[str, Material] = _load()
 
 #: d-line indices, kept for callers that only need a quick lookup.
-REFRACTIVE_INDICES: dict[str, float] = {k: m.nd for k, m in MATERIALS.items()}
+REFRACTIVE_INDICES: dict[str, float] = {k: m.nd for k, m in MATERIALS.items()
+                                         if m.nd is not None}
 
 
 def resolve_material_name(material: str) -> str:
@@ -412,6 +413,8 @@ def refractive_index(material: str, wavelength: float = D_LINE) -> float:
     """
     m = get_material(material)
     if m.dispersion is None:
+        if m.nd is None:
+            raise ValueError(f"{m.name}: no refractive index data")
         return m.nd
     lam_um = wavelength * 1e6
     rng = m.dispersion.range_um

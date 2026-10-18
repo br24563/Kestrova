@@ -128,7 +128,7 @@ def encircled_energy(
 
 
 def encircled_energy_curve(
-    wavelengths: np.ndarray = None,
+    wavelengths: Optional[np.ndarray] = None,
     f_number: float = 2.0,
     num_points: int = 100,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -230,11 +230,11 @@ def psf_encircled_energy(
 
 
 def quality_metrics(
-    rms_wavefront: float = None,
-    rms_spot: float = None,
-    strehl: float = None,
+    rms_wavefront: Optional[float] = None,
+    rms_spot: Optional[float] = None,
+    strehl: Optional[float] = None,
     wavelength: float = 550e-9,
-    f_number: float = None,
+    f_number: Optional[float] = None,
 ) -> dict:
     """
     Calculate comprehensive quality metrics.
@@ -249,7 +249,7 @@ def quality_metrics(
     Returns:
         Dictionary with quality metrics
     """
-    metrics = {}
+    metrics: dict = {}
     
     # Strehl ratio
     if strehl is not None:

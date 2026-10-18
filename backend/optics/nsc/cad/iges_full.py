@@ -273,7 +273,7 @@ class IGESParser:
         full_str = ''.join(param_strings)
         params = full_str.split(self.global_params.parameter_delimiter)
         
-        result = []
+        result: list = []
         for param in params:
             param = param.strip()
             if not param:

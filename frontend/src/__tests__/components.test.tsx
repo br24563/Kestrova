@@ -4,8 +4,8 @@
  * Tests for React components using Vitest and React Testing Library.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render } from '@testing-library/react';
 
 // Mock fetch globally
 globalThis.fetch = vi.fn();

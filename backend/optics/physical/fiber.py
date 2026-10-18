@@ -179,7 +179,9 @@ def alignment_sensitivity(beam: GaussianBeam, fiber: Fiber, scan_range: float = 
 def optimal_coupling_lens(beam: GaussianBeam, fiber: Fiber,
                           available_focal_lengths: list) -> Tuple[float, float]:
     """Focal length (from those given) with the highest coupling efficiency."""
-    best_f, best = None, -1.0
+    if not available_focal_lengths:
+        raise ValueError("No focal lengths given")
+    best_f, best = float(available_focal_lengths[0]), -1.0
     for f in available_focal_lengths:
         eff = coupling_efficiency(beam, fiber, f)
         if eff > best:

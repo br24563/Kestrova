@@ -692,7 +692,7 @@ def pareto_optimize(
 
     # Keep only non-dominated points (weighted sums can return dominated or
     # duplicate solutions).
-    front = []
+    front: list = []
     for p in pareto_points:
         dominated = any(
             all(a <= b for a, b in zip(q["objectives"], p["objectives"]))

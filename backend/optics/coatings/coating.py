@@ -75,7 +75,9 @@ class Coating:
 
 
 def _index(material: str, wavelength: float) -> float:
-    return Layer(material, 1.0, design_wavelength=wavelength).n.real
+    n = Layer(material, 1.0, design_wavelength=wavelength).n
+    assert n is not None
+    return n.real
 
 
 def _qw(material: str, wavelength: float, factor: float = 1.0) -> Layer:
@@ -123,6 +125,7 @@ def design_beam_splitter(wavelength: float = 550.0, n_substrate: float = 1.5,
         R = c.reflectance(wavelength)
         if best is None or abs(R - ratio) < abs(best[1] - ratio):
             best = (c, R)
+    assert best is not None
     coating, R = best
     coating.name = f"Beam_Splitter_R{R:.3f}"
     return coating
@@ -186,6 +189,7 @@ def design_bandpass_filter(center_wavelength: float = 550.0, bandwidth: float = 
         fwhm = wl[hi] - wl[lo]
         if best is None or abs(fwhm - bandwidth) < abs(best[1] - bandwidth):
             best = (c, fwhm)
+    assert best is not None
     coating, fwhm = best
     coating.name = f"Bandpass_Filter_FWHM{fwhm:.1f}nm"
     return coating

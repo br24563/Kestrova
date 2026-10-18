@@ -28,6 +28,7 @@ opening it in OpticStudio.
 
 import math
 import re
+from typing import Any, Optional
 from pathlib import Path
 
 from ..materials import MATERIALS, D_LINE
@@ -51,8 +52,8 @@ def import_zmx(filepath) -> OpticalSystem:
     waves, primary = {}, 1
     ftyp = 0
     yfln = []
-    surfaces = []          # list of dicts
-    cur = None
+    surfaces: list[dict[str, Any]] = []
+    cur: Optional[dict[str, Any]] = None
     for raw in text.splitlines():
         tok = raw.split()
         if not tok:

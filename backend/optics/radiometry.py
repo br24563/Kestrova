@@ -319,6 +319,12 @@ def stefan_boltzmann_exitance(temperature: float) -> float:
     return STEFAN_BOLTZMANN * temperature ** 4
 
 
+def _trapezoid(y, x) -> float:
+    """Trapezoid rule (np.trapezoid in NumPy 2, np.trapz before)."""
+    fn = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+    return float(fn(y, x))
+
+
 def band_integrated_radiance(temperature: float, wl_min: float, wl_max: float,
                              num_samples: int = 200) -> float:
     """Integrate Planck spectral radiance over a wavelength band."""
@@ -326,7 +332,7 @@ def band_integrated_radiance(temperature: float, wl_min: float, wl_max: float,
         return 0.0
     xs = np.linspace(wl_min, wl_max, num_samples)
     ys = [planck_spectral_radiance(temperature, float(x)) for x in xs]
-    return float(np.trapezoid(ys, xs)) if hasattr(np, "trapezoid") else float(np.trapz(ys, xs))
+    return _trapezoid(ys, xs)
 
 
 def band_integrated_flux(temperature: float, wl_min: float, wl_max: float,
@@ -465,9 +471,7 @@ def _abg_hemisphere_integral(A, B, g, beta_max, num_samples):
             continue
         values.append((A / denom) * math.cos(beta)
                       * 2.0 * math.pi * math.sin(beta))
-    if hasattr(np, "trapezoid"):
-        return float(np.trapezoid(values, betas))
-    return float(np.trapz(values, betas))
+    return _trapezoid(values, betas)
 
 
 def abg_tis_per_unit_amplitude(B, g, beta_max=math.radians(85.0),

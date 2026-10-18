@@ -8,7 +8,6 @@
 
 import { useState } from "react";
 import type { OpticalSystem, ToleranceResult, LengthUnit, ThinLens, ThickLens } from "../types";
-import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 import { runToleranceAnalysis } from "../api";
 
 interface TolerancePanelProps {
@@ -16,8 +15,8 @@ interface TolerancePanelProps {
   displayUnit: LengthUnit;
 }
 
-export function TolerancePanel({ system, displayUnit }: TolerancePanelProps) {
-  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
+// Spot sizes are shown in micrometres whatever the display unit.
+export function TolerancePanel({ system }: TolerancePanelProps) {
   const [trials, setTrials] = useState<string>("100");
   const [tolerance, setTolerance] = useState<string>("0.1");
   const [result, setResult] = useState<ToleranceResult | null>(null);

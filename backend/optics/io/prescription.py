@@ -14,7 +14,7 @@ surface for them, Code V does not, so the Code V writer rejects them.
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 from ..models import (
     OpticalSystem, ThinLens, ThickLens, SphericalSurface, ApertureStop, Mirror,
@@ -37,10 +37,10 @@ class Row:
     label: str = ""
 
 
-def system_to_rows(system: OpticalSystem) -> tuple[list, float, float]:
+def system_to_rows(system: OpticalSystem) -> tuple[list, float, Any]:
     """
     Surface rows of a system, the object distance (object to first surface)
-    and the stop semi-diameter.
+    and the system's first-order data (:class:`optics.raytrace.FirstOrder`).
 
     Raises ValueError for components without a Code V/Zemax standard-surface
     equivalent written by these exporters.
@@ -141,7 +141,7 @@ def rows_to_system(rows: list, object_distance: float, object_height: float,
     z = 0. Singlets in air become ThickLens; other refracting surfaces become
     SphericalSurface / AsphericSurface; reflecting surfaces become Mirror.
     """
-    comps = []
+    comps: list = []
     z = 0.0
     zs = []
     for r in rows:
@@ -174,6 +174,7 @@ def rows_to_system(rows: list, object_distance: float, object_height: float,
                   and nxt.glass is None and nxt.conic == 0 and not nxt.asphere and not nxt.stop
                   and nxt.paraxial_focal_length is None and r.thickness > 0)
         if simple:
+            assert nxt is not None
             semi = max(r.semi_aperture or 0.0, nxt.semi_aperture or 0.0) or 0.0125
             comps.append(ThickLens(id=cid, position=zs[i], radius1=r.radius, radius2=nxt.radius,
                                    thickness=r.thickness, aperture_diameter=2 * semi,

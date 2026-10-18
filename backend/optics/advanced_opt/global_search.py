@@ -18,7 +18,7 @@ class OptimizationResult:
     success: bool
     n_iterations: int
     n_evaluations: int
-    history: list[float] = None
+    history: Optional[list[float]] = None
 
 
 def global_search(

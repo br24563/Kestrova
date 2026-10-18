@@ -451,8 +451,8 @@ class Detector:
     pixels_y: int = 100
 
     # Collected data
-    irradiance: np.ndarray = None
-    counts: np.ndarray = None
+    irradiance: np.ndarray = None  # type: ignore[assignment]  # set in __post_init__
+    counts: np.ndarray = None  # type: ignore[assignment]  # set in __post_init__
     total_power: float = 0.0
     num_rays_hit: int = 0
 

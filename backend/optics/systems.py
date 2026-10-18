@@ -9,7 +9,7 @@ The system is represented as an ordered list of optical components
 (lenses, surfaces, apertures, etc.) along with an object and image plane.
 """
 
-from typing import Optional
+from typing import Optional, Union
 from .models import (
     OpticalSystem, OpticalComponent, ThinLens, SphericalSurface, ThickLens,
     ApertureStop, Object, ImagePlane, AnalysisSettings,
@@ -74,7 +74,7 @@ def create_default_system() -> OpticalSystem:
 # Component Management
 # ---------------------------------------------------------------------------
 
-def get_lenses(system: OpticalSystem) -> list[ThinLens]:
+def get_lenses(system: OpticalSystem) -> list[Union[ThinLens, ThickLens]]:
     """
     Get all lens components (thin or thick), sorted by position.
 
@@ -90,7 +90,7 @@ def get_lenses(system: OpticalSystem) -> list[ThinLens]:
     )
 
 
-def get_first_lens(system: OpticalSystem) -> Optional[ThinLens]:
+def get_first_lens(system: OpticalSystem) -> Optional[Union[ThinLens, ThickLens]]:
     """
     Get the first (leftmost) thin lens in the system.
 
@@ -104,7 +104,7 @@ def get_first_lens(system: OpticalSystem) -> Optional[ThinLens]:
     return lenses[0] if lenses else None
 
 
-def get_last_lens(system: OpticalSystem) -> Optional[ThinLens]:
+def get_last_lens(system: OpticalSystem) -> Optional[Union[ThinLens, ThickLens]]:
     """
     Get the last (rightmost) thin lens in the system.
 

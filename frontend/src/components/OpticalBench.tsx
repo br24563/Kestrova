@@ -33,7 +33,7 @@ const MARGIN_LEFT = 60;
 const OPTICAL_AXIS_Y = 200;
 const COMPONENT_HEIGHT = 120;
 
-export function OpticalBench({ system, rayResult, analysis, displayUnit }: OpticalBenchProps) {
+export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchProps) {
   const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
   const svgRef = useRef<SVGSVGElement>(null);
   const [scale, setScale] = useState(1);
@@ -112,7 +112,6 @@ export function OpticalBench({ system, rayResult, analysis, displayUnit }: Optic
   const drawObject = () => {
     const x = toSvgX(system.object.position);
     const height = system.object.height;
-    const halfHeight = COMPONENT_HEIGHT / 2;
 
     return (
       <g key="object" className="object">

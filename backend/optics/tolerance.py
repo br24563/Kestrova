@@ -19,7 +19,7 @@ All values are in SI base units (meters, radians).
 import math
 import random
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import numpy as np
 from scipy.optimize import minimize_scalar
@@ -142,8 +142,8 @@ def _misalign(system: OpticalSystem, comp_id: str, field: str, value: float) -> 
     i = next(k for k, c in enumerate(comps) if c.id == comp_id)
     c = comps[i]
     L = c.thickness if isinstance(c, ThickLens) else 0.0
-    before = CoordinateBreak(id=f"{comp_id}__cb_in_{field}", position=c.position,
-                             **{field: value})
+    offset: dict[str, Any] = {field: value}
+    before = CoordinateBreak(id=f"{comp_id}__cb_in_{field}", position=c.position, **offset)
     R1 = _rotation(before.tilt_x, before.tilt_y, 0.0)
     O1 = np.array([before.decenter_x, before.decenter_y, 0.0])
     p_end = O1 + R1 @ np.array([0.0, 0.0, L])          # relative to the vertex
@@ -286,7 +286,7 @@ def tolerance_with_compensators(system: OpticalSystem, tolerances: dict,
     metric = metric or _default_metric
     rng = random.Random(seed)
     samples, failed = [], 0
-    comp_values = {c.name: [] for c in compensators}
+    comp_values: dict[str, list] = {c.name: [] for c in compensators}
     for _ in range(max(1, trials)):
         s = _perturb_system(system, tolerances, rng)
         try:

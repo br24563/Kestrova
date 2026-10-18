@@ -183,7 +183,7 @@ def analyze_stray_light(system: OpticalSystem, source_angle: float = 30.0,
     na = image_space_na(system, seq=seq)
     th = math.radians(source_angle)
     cov = _coverage(system, seq, th)
-    paths = []
+    paths: list = []
     for i, s in enumerate(seq.surfaces):
         if s.kind not in ("refract", "reflect"):
             continue

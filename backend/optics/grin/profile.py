@@ -32,7 +32,7 @@ class AxialGRIN(GRINProfile):
 
     Used for flat-surface lenses and lightpipe correction.
     """
-    coefficients: list[float] = None  # [n0, n1, n2, ...]
+    coefficients: list[float] = None  # type: ignore[assignment]  # set in __post_init__  [n0, n1, n2, ...]
 
     def __post_init__(self):
         if self.coefficients is None:
@@ -95,7 +95,7 @@ class GRIN3D(GRINProfile):
 
     n(x,y,z) = n0 + Gx*x + Gy*y + Gz*z + higher order terms
     """
-    gradient_vector: np.ndarray = None  # [Gx, Gy, Gz]
+    gradient_vector: np.ndarray = None  # type: ignore[assignment]  # set in __post_init__  [Gx, Gy, Gz]
 
     def __post_init__(self):
         if self.gradient_vector is None:
