@@ -820,3 +820,47 @@ class TestGhostAnalysisSummary:
         out = ghost_analysis(system)
         assert out["num_surfaces"] == 0
         assert out["worst_ghost"] is None
+
+
+class TestContactDoublet:
+    """Thin lenses at the same position (the ``achromat`` preset) used to
+    interleave their modelled surfaces, so the on-axis chief ray met two
+    surfaces at the same point and analysis failed with "The chief ray does
+    not reach the image plane"."""
+
+    @staticmethod
+    def _achromat():
+        from optics.presets import get_presets
+        return {p["id"]: p for p in get_presets()}["achromat"]["system"]
+
+    def test_elements_keep_their_own_surfaces_in_order(self):
+        surfaces = build_surface_chain(self._achromat())
+        assert [s.label for s in surfaces] == [
+            "crown.front", "crown.back", "flint.front", "flint.back"]
+        zs = [s.z for s in surfaces]
+        assert zs == sorted(zs)
+        # The flint sits in contact behind the crown, not on top of it.
+        assert surfaces[2].z > surfaces[1].z
+        assert surfaces[2].z - surfaces[1].z < 1e-4
+
+    def test_on_axis_chief_ray_reaches_the_image(self):
+        assert primary_image_height(self._achromat(), 0.0) == pytest.approx(0.0, abs=1e-12)
+
+    def test_edge_chief_ray_height_is_near_f_tan_field(self):
+        h = primary_image_height(self._achromat(), 1.0)
+        assert h == pytest.approx(0.100 * math.tan(math.radians(1.0)), rel=0.05)
+
+    def test_achromat_has_ghost_paths(self):
+        ghosts = analyze_ghosts(self._achromat(), field_fraction=0.0)
+        assert len(ghosts) == 6
+        assert all(g.relative_irradiance > 0.0 for g in ghosts)
+
+    def test_ghost_endpoint_accepts_the_achromat(self):
+        from fastapi.testclient import TestClient
+        from api.main import app
+        client = TestClient(app)
+        system = client.get("/api/presets/achromat").json()
+        system = system.get("system", system)
+        response = client.post("/api/analyze/ghosts", json={"system": system})
+        assert response.status_code == 200, response.text
+        assert response.json()["n_ghosts"] > 0
