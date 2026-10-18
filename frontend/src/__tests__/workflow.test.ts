@@ -4,7 +4,7 @@
  * Tests for complete user workflows and API integration.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock fetch for API calls
 const mockFetch = vi.fn();

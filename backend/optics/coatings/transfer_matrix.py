@@ -45,6 +45,7 @@ def layer_matrix(layer: Layer, wavelength: float, angle: float = 0.0,
                  polarization: str = "s", n_incident: float = 1.0) -> np.ndarray:
     """Characteristic matrix of one layer."""
     n = layer.n
+    assert n is not None        # Layer resolves its index on construction
     cos_t = _cos_in(n_incident, n, angle)
     delta = 2 * np.pi * n * layer.thickness * cos_t / wavelength
     eta = _admittance(n, cos_t, polarization)

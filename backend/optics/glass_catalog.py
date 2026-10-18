@@ -131,7 +131,7 @@ class GlassData:
 
 #: Schott's own lead-free replacements for its legacy lead flints (same
 #: designation with the "N-" prefix, and both present in the current catalog).
-LEAD_FREE_EQUIVALENTS = {
+LEAD_FREE_EQUIVALENTS: dict[str, str] = {
     old: "N-" + old
     for old in ("F2", "SF1", "SF2", "SF4", "SF5", "SF6", "SF10", "SF11", "SF57")
     if old in ALL_MATERIALS and "N-" + old in ALL_MATERIALS
@@ -163,7 +163,7 @@ def _availability(props: MaterialProperties) -> Availability:
 
 def catalog_glass_data(props: MaterialProperties) -> GlassData:
     """Build the :class:`GlassData` for a catalog material from vendor data."""
-    substances = ()
+    substances: tuple[str, ...] = ()
     restriction = RestrictionClass.UNRESTRICTED
     if props.manufacturer == "Schott" and _LEAD_FAMILY.match(props.name):
         substances = ("Pb",)

@@ -98,7 +98,7 @@ def find_nearest_glasses(
 ) -> list[GlassCandidate]:
     """Find the n nearest glasses on the glass map to the given glass."""
     props = get_material_properties(glass_name)
-    if props is None:
+    if props is None or props.nd is None or props.vd is None:
         return []
     candidates = get_glasses_in_region(region)
     for c in candidates:

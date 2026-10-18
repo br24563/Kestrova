@@ -49,7 +49,7 @@ def create_grin_material(
         GRINMaterial instance
     """
     if profile_type == 'radial':
-        profile = RadialGRIN(n0=n0, g=g)
+        profile: GRINProfile = RadialGRIN(n0=n0, g=g)
     elif profile_type == 'axial':
         from .profile import AxialGRIN
         coefficients = kwargs.get('coefficients', [n0, 0.0, 0.0])

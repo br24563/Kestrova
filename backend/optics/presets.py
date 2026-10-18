@@ -38,6 +38,8 @@ def _focused(system: OpticalSystem) -> OpticalSystem:
 def _achromat(f: float, crown: str, flint: str):
     """Thin-lens achromat powers phi1 = phi V1/(V1-V2), phi2 = -phi V2/(V1-V2)."""
     v1, v2 = get_material(crown).vd, get_material(flint).vd
+    if v1 is None or v2 is None:
+        raise ValueError("Both glasses need an Abbe number")
     phi = 1.0 / f
     return 1.0 / (phi * v1 / (v1 - v2)), 1.0 / (-phi * v2 / (v1 - v2))
 

@@ -217,7 +217,7 @@ def _qbfs_basis(m_max: int) -> list:
         return float(np.sum(slope(a) * slope(b) * w))
 
     norm0 = ip([1.0], [1.0])
-    basis = []
+    basis: list = []
     for m in range(m_max + 1):
         v = np.zeros(m + 1)
         v[m] = 1.0
@@ -539,9 +539,9 @@ def build_sequence(system: OpticalSystem, wavelength: Optional[float] = None,
                 new_medium=outer, keep_medium=False, semi_aperture=semi,
                 component_id=cid, label=f"{cid}.back")
         elif isinstance(comp, SphericalSurface):
-            semi = comp.aperture_diameter / 2.0 if comp.aperture_diameter else None
+            surf_semi = comp.aperture_diameter / 2.0 if comp.aperture_diameter else None
             add("refract", comp.position, _shape_for(comp), new_medium=comp.material,
-                keep_medium=False, semi_aperture=semi, component_id=cid, label=cid)
+                keep_medium=False, semi_aperture=surf_semi, component_id=cid, label=cid)
         elif isinstance(comp, DiffractiveOpticalElement):
             add("refract", comp.position, Shape(), new_medium=comp.material,
                 keep_medium=False, semi_aperture=comp.aperture_diameter / 2.0,
@@ -601,6 +601,7 @@ def _surface_power(s: Surface, nb: float, na: float) -> float:
     """Power phi with signed indices nb, na (n'u' = nu - y phi)."""
     if s.kind == "ideal":
         f = s.focal_length
+        assert f is not None        # every ideal surface carries one
         return 0.0 if not math.isfinite(f) else 1.0 / f * abs(nb)
     if s.phase is not None:
         coeffs, order = s.phase
@@ -1313,8 +1314,8 @@ def pupil_grid(n: int, shape: str = "square"):
         return np.array(xs), np.array(ys)
     g = np.linspace(-1.0, 1.0, n)
     X, Y = np.meshgrid(g, g)
-    m = X ** 2 + Y ** 2 <= 1.0 + 1e-12
-    return X[m], Y[m]
+    inside = X ** 2 + Y ** 2 <= 1.0 + 1e-12
+    return X[inside], Y[inside]
 
 
 # =============================================================================

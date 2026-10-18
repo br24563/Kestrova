@@ -30,7 +30,7 @@ class Triangle:
     v0: Vertex
     v1: Vertex
     v2: Vertex
-    normal: Vector3 = None
+    normal: Vector3 = None  # type: ignore[assignment]  # set in __post_init__
     
     def __post_init__(self):
         if self.normal is None:
@@ -120,8 +120,8 @@ class Mesh:
     vertices: list[Vertex] = field(default_factory=list)
     
     # Bounding box
-    bbox_min: Vector3 = None
-    bbox_max: Vector3 = None
+    bbox_min: Optional[Vector3] = None
+    bbox_max: Optional[Vector3] = None
     
     def add_triangle(self, tri: Triangle):
         """Add triangle to mesh."""
@@ -139,6 +139,7 @@ class Mesh:
                 self.bbox_min = Vector3(v.x, v.y, v.z)
                 self.bbox_max = Vector3(v.x, v.y, v.z)
             else:
+                assert self.bbox_max is not None
                 self.bbox_min = Vector3(
                     min(self.bbox_min.x, v.x),
                     min(self.bbox_min.y, v.y),
@@ -158,7 +159,7 @@ class Mesh:
                 return None
         
         nearest_t = float('inf')
-        nearest_normal = None
+        nearest_normal: Optional[Vector3] = None
         
         for tri in self.triangles:
             result = tri.intersect(ray)
@@ -166,7 +167,7 @@ class Mesh:
                 nearest_t = result[0]
                 nearest_normal = result[1]
         
-        if nearest_t == float('inf'):
+        if nearest_t == float('inf') or nearest_normal is None:
             return None
         
         # Calculate hit point

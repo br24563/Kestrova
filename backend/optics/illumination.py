@@ -100,7 +100,7 @@ def vignetting_at_field(system: OpticalSystem, field_fraction: float = 0.0,
     fo = rt.first_order(system, seq=seq)
     px, py = rt.pupil_grid(num_rays)
     b, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, px, py, seq=seq, fo=fo)
-    clipped = {}
+    clipped: dict[str, int] = {}
     if not b.valid.all():
         bb, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, px[~b.valid], py[~b.valid],
                                        seq=seq, fo=fo, clip=False)

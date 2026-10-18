@@ -48,7 +48,7 @@ class MuellerMatrix:
         # Coherency matrix must be positive semi-definite
         H = np.block([[A, B], [C, D]])
         eigenvalues = np.linalg.eigvalsh(H)
-        return np.all(eigenvalues >= -1e-10)
+        return bool(np.all(eigenvalues >= -1e-10))
     
     @classmethod
     def from_jones(cls, J: np.ndarray) -> 'MuellerMatrix':

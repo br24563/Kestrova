@@ -195,7 +195,7 @@ from .ghost import (
 )
 from .imaging import (
     SensorConfig, SimulationResult, TEST_TARGETS,
-    effective_f_number, working_f_number, magnification,
+    effective_f_number, working_f_number, magnification as imaging_magnification,
     object_pixel_pitch, field_of_view,
     airy_psf, psf_for_system, rms_spot_radius,
     test_target, sensor_response, simulate_image,

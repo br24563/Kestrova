@@ -67,16 +67,12 @@ function App() {
   // Theme
   const { theme, toggleTheme } = useTheme();
 
-  // History for undo/redo
-  const { canUndo, canRedo } = useHistory<OpticalSystem | null>(null);
-
   // Application state
   const [system, setSystemState] = useState<OpticalSystem | null>(null);
   const [rayResult, setRayResult] = useState<RayTraceResult | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [displayUnit, setDisplayUnit] = useState<LengthUnit>(DEFAULT_LENGTH_UNIT);
@@ -209,7 +205,6 @@ function App() {
     if (!system) return;
 
     try {
-      setSimulating(true);
       setError(null);
       // Trace rays
       const traceResult = await traceRays(
@@ -228,8 +223,6 @@ function App() {
       setAnalysis(analysisResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Simulation failed");
-    } finally {
-      setSimulating(false);
     }
   }, [system]);
 

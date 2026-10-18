@@ -81,7 +81,7 @@ export function AIChatPanel({ system, onSystemUpdate }: AIChatPanelProps) {
       <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
         {messages.length === 0 && (
           <p className="text-xs text-gray-500">
-            Try: "move lens_1 to 150mm", "set object height to 5mm", or "analyze the system"
+            Try: &ldquo;move lens_1 to 150mm&rdquo;, &ldquo;set object height to 5mm&rdquo;, or &ldquo;analyze the system&rdquo;
           </p>
         )}
         {messages.map((msg, i) => (

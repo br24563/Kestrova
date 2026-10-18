@@ -19,9 +19,9 @@ from ..raytrace import Conicoid, RadialNumeric, q_aspheric_sag_function, curvatu
 class AsphericSurface(Object3D):
     """Even aspheric surface."""
 
-    def __init__(self, name: str = "Asphere", position: Vector3 = None, radius: float = 50.0,
-                 conic: float = 0.0, aspheric_coeffs: list = None,
-                 aperture_radius: float = 25.0, material: str = None):
+    def __init__(self, name: str = "Asphere", position: Optional[Vector3] = None, radius: float = 50.0,
+                 conic: float = 0.0, aspheric_coeffs: Optional[list] = None,
+                 aperture_radius: float = 25.0, material: Optional[str] = None):
         super().__init__(name=name, object_type="aspheric",
                          position=position or Vector3(), material=material)
         self.radius = radius
@@ -84,9 +84,9 @@ class AsphericSurface(Object3D):
 class OddAsphericSurface(AsphericSurface):
     """Even asphere plus odd terms B1 r + B3 r^3 + B5 r^5 + ..."""
 
-    def __init__(self, name: str = "OddAsphere", position: Vector3 = None, radius: float = 50.0,
-                 conic: float = 0.0, aspheric_coeffs: list = None, odd_coeffs: list = None,
-                 aperture_radius: float = 25.0, material: str = None):
+    def __init__(self, name: str = "OddAsphere", position: Optional[Vector3] = None, radius: float = 50.0,
+                 conic: float = 0.0, aspheric_coeffs: Optional[list] = None, odd_coeffs: Optional[list] = None,
+                 aperture_radius: float = 25.0, material: Optional[str] = None):
         super().__init__(name=name, position=position, radius=radius, conic=conic,
                          aspheric_coeffs=aspheric_coeffs, aperture_radius=aperture_radius,
                          material=material)
@@ -100,9 +100,9 @@ class OddAsphericSurface(AsphericSurface):
 class QTypeSurface(AsphericSurface):
     """Forbes Qbfs (best-fit sphere) or Qcon (conic) asphere."""
 
-    def __init__(self, name: str = "QAsphere", position: Vector3 = None, radius: float = 50.0,
-                 conic: float = 0.0, q_type: str = "Qbfs", coefficients: list = None,
-                 norm_radius: float = 25.0, aperture_radius: float = 25.0, material: str = None):
+    def __init__(self, name: str = "QAsphere", position: Optional[Vector3] = None, radius: float = 50.0,
+                 conic: float = 0.0, q_type: str = "Qbfs", coefficients: Optional[list] = None,
+                 norm_radius: float = 25.0, aperture_radius: float = 25.0, material: Optional[str] = None):
         super().__init__(name=name, position=position, radius=radius, conic=conic,
                          aperture_radius=aperture_radius, material=material)
         self.q_type = q_type

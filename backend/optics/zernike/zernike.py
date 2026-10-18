@@ -93,7 +93,7 @@ def _annular_radial_coeffs(n: int, m: int, eps: float) -> tuple:
     x, w = np.polynomial.legendre.leggauss(200)
     r = eps + (1 - eps) * (x + 1) / 2
     w = w * (1 - eps) / 2 * r              # include the rho weight
-    basis = []
+    basis: list = []
     for nn in range(m, n + 1, 2):
         v = np.zeros(nn + 1)
         v[nn] = 1.0

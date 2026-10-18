@@ -69,7 +69,7 @@ export type OpticalComponent =
 // Object and Image Plane
 // ---------------------------------------------------------------------------
 
-export interface Object {
+export interface OpticalObject {
   position: number; // meters
   height: number; // meters
   orientation: number; // radians
@@ -97,7 +97,7 @@ export interface AnalysisSettings {
 export interface OpticalSystem {
   components: OpticalComponent[];
   wavelengths: number[];
-  object: Object;
+  object: OpticalObject;
   image_plane: ImagePlane;
   analysis_settings: AnalysisSettings;
 }

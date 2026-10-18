@@ -8,7 +8,6 @@
 
 import { useState } from "react";
 import type { OpticalSystem, ComparisonResult, LengthUnit } from "../types";
-import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 import { compareSystems } from "../api";
 
 interface ComparisonPanelProps {
@@ -16,8 +15,8 @@ interface ComparisonPanelProps {
   displayUnit: LengthUnit;
 }
 
-export function ComparisonPanel({ system, displayUnit }: ComparisonPanelProps) {
-  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
+// Spot sizes are shown in micrometres whatever the display unit.
+export function ComparisonPanel({ system }: ComparisonPanelProps) {
   const [snapshot, setSnapshot] = useState<OpticalSystem | null>(null);
   const [labelA, setLabelA] = useState("Saved");
   const [labelB, setLabelB] = useState("Current");

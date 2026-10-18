@@ -57,8 +57,8 @@ class NSCTracer:
                 nearest_obj = obj
 
         # A detector closer than the nearest object absorbs the ray.
-        det_hits = [(d.hit_distance(ray), d) for d in self.system.detectors]
-        det_hits = [(t, d) for t, d in det_hits if t is not None]
+        det_hits = [(t, d) for d in self.system.detectors
+                    if (t := d.hit_distance(ray)) is not None]
         if det_hits:
             t_det, det = min(det_hits, key=lambda x: x[0])
             if nearest_hit is None or t_det < nearest_hit.distance:
@@ -68,6 +68,7 @@ class NSCTracer:
             return
 
         # Process hit
+        assert nearest_obj is not None
         self._process_hit(ray, nearest_hit, nearest_obj, depth)
 
     def _process_hit(self, ray: Ray, hit: HitPoint, obj: Object3D, depth: int):
@@ -112,7 +113,7 @@ class NSCTracer:
 
     def _process_scatter(self, ray: Ray, hit: HitPoint, obj: Object3D, depth: int):
         """Process scattering from a surface."""
-        model = self.scatter_models.get(obj.scatter_model)
+        model = self.scatter_models.get(obj.scatter_model) if obj.scatter_model else None
         if model is None:
             return
 
@@ -192,14 +193,11 @@ class NSCTracer:
 
     def _collect_results(self) -> dict:
         """Collect tracing results."""
-        results = {
-            'detectors': [],
-            'total_rays_traced': 0,
-            'total_power_collected': 0.0
-        }
+        detectors: list[dict] = []
+        total_power = 0.0
 
         for i, detector in enumerate(self.system.detectors):
-            results['detectors'].append({
+            detectors.append({
                 'id': i,
                 'name': detector.name,
                 'num_rays_hit': detector.num_rays_hit,
@@ -207,6 +205,10 @@ class NSCTracer:
                 'peak_irradiance': float(np.max(detector.irradiance)) if detector.irradiance.size > 0 else 0,
                 'irradiance_map': detector.irradiance.tolist()
             })
-            results['total_power_collected'] += detector.total_power
+            total_power += detector.total_power
 
-        return results
+        return {
+            'detectors': detectors,
+            'total_rays_traced': 0,
+            'total_power_collected': total_power,
+        }
