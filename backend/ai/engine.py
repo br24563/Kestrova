@@ -200,7 +200,9 @@ def execute_command(
         message = " ".join(parts) or diagnosis["summary"]
         return {
             "system": system,
-            "warnings": diagnosis["findings"],
+            # warnings are plain strings; the structured findings stay in result
+            "warnings": [f"[{f['level']}] {f['message']}" for f in diagnosis["findings"]
+                         if f["level"] in ("warning", "error")],
             "result": diagnosis,
             "message": message,
         }

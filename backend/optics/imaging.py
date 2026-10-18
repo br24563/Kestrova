@@ -263,6 +263,9 @@ def psf_for_system(system: OpticalSystem, field_fraction: float = 0.0,
         n *= 2
     # Zero-pad the pupil so the PSF is sampled at <= 1/16 pixel (sinc
     # interpolation), capped at a 4096-point FFT.
+    if not g.na_image > 0:
+        raise ValueError("Image space is afocal (image at infinity): there is no "
+                         "image-plane PSF to simulate a sensor image with")
     m = g.W.shape[0]
     dx4 = wavelength * (m - 1) / (4 * m * 2.0 * g.na_image)
     pad = int(min(max(4, math.ceil(4 * 16 * dx4 / sensor.pixel_pitch)), max(4, 4096 // m)))

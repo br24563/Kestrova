@@ -50,7 +50,24 @@ def explain_mtf_drop(system: OpticalSystem, field_point: float = 0.0) -> Copilot
     """
     citations = []
     parts = []
-    
+
+    from optics.raytrace import first_order
+    import math
+    fo = first_order(system)
+    if not math.isfinite(fo.image_z):
+        mag = ("" if not math.isfinite(fo.efl) else f" (EFL {fo.efl*1000:.2f}mm)")
+        return CopilotResponse(
+            answer=("The image is at infinity" + mag + ", so the system is afocal in image "
+                    "space: an MTF in image-plane cycles/mm, the Airy disk and Seidel image "
+                    "aberrations are not defined for it. Its quality is described by the "
+                    "angular (wavefront) aberrations of the output beam; add the eye or a "
+                    "focusing lens behind it to analyze an image."),
+            citations=["First-order trace: paraxial image at infinity"],
+            confidence=1.0,
+            suggested_actions=["Add an ideal lens after the system to form an image"],
+            verified=True,
+        )
+
     # Analyze the system
     analysis = analyze_system(system)
     citations.append(f"Analyzed system: EFL={analysis.effective_focal_length*1000:.2f}mm, f/{analysis.f_number:.1f}")

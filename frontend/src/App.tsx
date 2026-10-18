@@ -256,88 +256,54 @@ function App() {
     });
   };
 
-  // Add a new lens
-  const addLens = () => {
+  // New components go 20 mm past the end of the last element (not on top
+  // of an existing one); the image plane moves back if it would then sit
+  // inside the system. Ids are made unique.
+  const placeNew = <T extends OpticalComponent>(make: (id: string, position: number) => T,
+                                               prefix: string) => {
     if (!system) return;
-    const newLens: ThinLens = {
-      type: "thin_lens",
-      id: `lens_${system.components.length + 1}`,
-      position: 0.200,
-      focal_length: 0.050,
-      aperture_diameter: 0.025,
-      material: "N-BK7",
-    };
-    setSystem({
-      ...system,
-      components: [...system.components, newLens],
-    });
+    const ends = system.components.map((c) =>
+      c.position + ("thickness" in c && typeof c.thickness === "number" ? c.thickness : 0));
+    const position = ends.length ? Math.max(...ends) + 0.02 : 0.1;
+    const used = new Set(system.components.map((c) => c.id));
+    let n = system.components.length + 1;
+    while (used.has(`${prefix}_${n}`)) n += 1;
+    const comp = make(`${prefix}_${n}`, position);
+    const end = position + ("thickness" in comp && typeof comp.thickness === "number" ? comp.thickness : 0);
+    const imagePlane = system.image_plane.position <= end
+      ? { ...system.image_plane, position: end + 0.05 }
+      : system.image_plane;
+    setSystem({ ...system, components: [...system.components, comp], image_plane: imagePlane });
   };
 
-  // Add a new spherical surface
-  const addSurface = () => {
-    if (!system) return;
-    const newSurface: SphericalSurface = {
-      type: "spherical_surface",
-      id: `surface_${system.components.length + 1}`,
-      position: 0.200,
-      radius: 0.100,
-      thickness: 0.005,
-      material: "N-BK7",
-    };
-    setSystem({
-      ...system,
-      components: [...system.components, newSurface],
-    });
-  };
+  const addLens = () =>
+    placeNew<ThinLens>((id, position) => ({
+      type: "thin_lens", id, position,
+      focal_length: 0.050, aperture_diameter: 0.025, material: "N-BK7",
+    }), "lens");
 
-  // Add a new thick lens
-  const addThickLens = () => {
-    if (!system) return;
-    const newThickLens: ThickLens = {
-      type: "thick_lens",
-      id: `thick_lens_${system.components.length + 1}`,
-      position: 0.200,
-      radius1: 0.100,
-      radius2: -0.100,
-      thickness: 0.010,
-      aperture_diameter: 0.025,
-      material: "N-BK7",
-    };
-    setSystem({
-      ...system,
-      components: [...system.components, newThickLens],
-    });
-  };
+  const addSurface = () =>
+    placeNew<SphericalSurface>((id, position) => ({
+      type: "spherical_surface", id, position,
+      radius: 0.100, thickness: 0.005, material: "N-BK7",
+    }), "surface");
 
-  // Add a new aperture stop
-  const addAperture = () => {
-    if (!system) return;
-    const newAperture: ApertureStop = {
-      type: "aperture",
-      id: `aperture_${system.components.length + 1}`,
-      position: 0.200,
-      diameter: 0.025,
-    };
-    setSystem({
-      ...system,
-      components: [...system.components, newAperture],
-    });
-  };
+  const addThickLens = () =>
+    placeNew<ThickLens>((id, position) => ({
+      type: "thick_lens", id, position,
+      radius1: 0.100, radius2: -0.100, thickness: 0.010,
+      aperture_diameter: 0.025, material: "N-BK7",
+    }), "thick_lens");
 
-  // Add a new mirror
-  const addMirror = () => {
-    if (!system) return;
-    const newMirror: Mirror = {
-      type: "mirror",
-      id: `mirror_${system.components.length + 1}`,
-      position: 0.200,
-      width: 0.050,
-    };
-    setSystem({
-      ...system,
-      components: [...system.components, newMirror],
-    });
-  };
+  const addAperture = () =>
+    placeNew<ApertureStop>((id, position) => ({
+      type: "aperture", id, position, diameter: 0.025,
+    }), "aperture");
+
+  const addMirror = () =>
+    placeNew<Mirror>((id, position) => ({
+      type: "mirror", id, position, width: 0.050,
+    }), "mirror");
 
   // Remove a component
   const removeComponent = (id: string) => {

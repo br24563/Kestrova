@@ -5,9 +5,12 @@ Mueller calculus uses 4x4 real matrices to represent polarization
 state and optical elements. Valid for partially polarized light.
 """
 
-from typing import Union
+from typing import Union, TYPE_CHECKING
 from dataclasses import dataclass
 import numpy as np
+
+if TYPE_CHECKING:
+    from .stokes import StokesVector
 
 
 @dataclass
