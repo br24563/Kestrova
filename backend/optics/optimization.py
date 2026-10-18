@@ -416,14 +416,18 @@ def multi_objective_optimize(
         if not lenses:
             raise ValueError("System has no lens to optimize.")
         first = min(lenses, key=lambda l: l.position)
-        params = [{"component_id": first.id, "field": "focal_length"}]
+        field = "focal_length" if isinstance(first, ThinLens) else "radius1"
+        params = [{"component_id": first.id, "field": field}]
 
-    # Default bounds: 0.5x to 2x the current value
+    # Default bounds: 0.5x to 2x the current value (ordered for either sign)
     if bounds is None:
         bounds = []
         for spec in params:
             current = _current_parameter(system, spec)
-            bounds.append((current * 0.5, current * 2.0))
+            if current == 0:
+                raise ValueError(f"Cannot derive default bounds for a zero parameter: {spec}")
+            lo, hi = current * 0.5, current * 2.0
+            bounds.append((min(lo, hi), max(lo, hi)))
 
     if len(params) != len(bounds):
         raise ValueError("params and bounds must have the same length.")

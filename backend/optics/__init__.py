@@ -8,6 +8,11 @@ user interface. It can be used directly from Python or through the
 FastAPI backend.
 
 Modules:
+    raytrace  - Sequential engine all analyses are built on: surface
+                sequence, paraxial first-order properties, exact 3D real-ray
+                tracing with ray aiming, OPD and Seidel sums
+    pupil     - Pupil wavefront grids, FFT PSF/MTF and Strehl ratio
+    zernike   - Zernike polynomials (Noll, Fringe, annular) and fitting
     units     - Centralized unit handling and conversions
     models    - Data models for optical systems and components
     lenses    - Thin lens calculations
@@ -21,6 +26,26 @@ Modules:
     real_rays  - Exact (Snell's law) ray tracing for aberration analysis
     seidel     - Seidel (third-order) monochromatic aberration analysis
     diffraction - PSF, MTF, OTF, Airy disk, encircled energy
+    base      - Dependency-free base model for optical components
+    high_order - Ray fans, OPD maps, field curves, through-focus MTF
+    advanced_surfaces - Aspheres (even/odd/Q-type), Zernike, DOE,
+                toric, and coordinate-break surfaces
+    glass_optimization - Glass substitution, glass expert, merit builder
+    wavefront - Wavefront maps, Zernike decomposition, interferograms
+    mechanical - Lens barrels/housings and ISO 10110 drawings
+    performance - Parallel tracing, ray caching, BSP acceleration
+    standards - Zemax-style tolerance operands, PartBuilder, Lens Data
+                Editor, Merit Function Editor, inverse tolerancing,
+                and multiple unit systems
+    illumination - Vignetting, relative illumination (cos^4), MTF field
+                and focus maps
+    radiometry - Radiometric and photometric quantities (flux, radiance,
+                illuminance, luminous efficacy), Planck blackbody, and
+                BRDF models with a reference surface database
+    ghost     - Double-reflection ghost analysis with real bidirectional
+                ray paths, ghost focus and ghost spot size
+    imaging   - Image simulation: test targets, PSF, illumination,
+                distortion, and a full sensor model (noise, full well, ADC)
 """
 
 __version__ = "0.1.0"
@@ -95,4 +120,87 @@ from .batch import batch_analyze_systems, batch_sweep_and_analyze
 from .tolerance import tolerance_analysis
 from .report import (
     compare_systems, system_spot_svg, engineering_report_markdown,
+)
+from .high_order import (
+    ray_fan, opd_map, field_curves, through_focus_mtf,
+    zernike_from_rays, high_order_analysis,
+)
+from .advanced_surfaces import (
+    AsphericSurface, OddAsphericSurface, QAsphericSurface,
+    ZernikeSurface, DiffractiveOpticalElement, ToricSurface,
+    CoordinateBreak,
+)
+from .glass_optimization import (
+    GlassRegion, GlassCandidate, GlassSubstitutionResult,
+    GlassExpertResult, MeritFunction, Operand,
+    get_glasses_in_region, find_nearest_glasses,
+    substitute_glass, evaluate_glass_substitution,
+    find_best_glass_substitution, glass_expert_optimize,
+    compute_partial_derivatives, build_standard_merit_function,
+)
+from .wavefront import (
+    WavefrontMap, ZernikeDecomposition, InterferogramData,
+    SeidelCoefficients, WavefrontAnalysisResult,
+    compute_wavefront_map, zernike_decompose,
+    simulate_interferogram, compute_seidel_from_wavefront,
+    full_wavefront_analysis,
+)
+from .mechanical import (
+    LensMount, BarrelSection, ISO10110Symbol, ISO10110Drawing,
+    generate_lens_mount, generate_barrel_from_system, generate_barrel_mesh,
+    create_iso10110_drawing, iso10110_to_svg,
+)
+from .performance import (
+    trace_rays_parallel, trace_rays_batched, RayTraceCache,
+    AABB, BSPNode, SpatialAccelerator,
+    BenchmarkResult, benchmark_ray_tracing, benchmark_all,
+)
+from .standards import (
+    OperandType, ToleranceOperand,
+    PartDefinition, build_part_from_spec,
+    SurfaceRow, LensDataEditor,
+    MeritOperandRow, MeritFunctionEditor, MERIT_OPERAND_MAP,
+    operand_to_parameter, select_compensators,
+    inverse_sensitivity_tolerance, build_tolerance_operands,
+    operands_to_tolerance_specs,
+    UnitSystem, UNIT_SYSTEMS, convert_unit_system, EXTRA_LENGTH_UNITS,
+)
+
+from .illumination import (
+    VignettingResult, cos4_falloff, chief_ray_image_angle,
+    vignetting_at_field, vignetting_analysis,
+    relative_illumination, mtf_field_map, mtf_focus_map,
+    illumination_summary,
+)
+from .radiometry import (
+    photopic_luminosity, luminous_efficacy, radiant_to_luminous,
+    luminous_to_radiant, photon_energy, photon_flux,
+    solid_angle_cone, solid_angle_from_f_number,
+    f_number_from_numerical_aperture, numerical_aperture_from_f_number,
+    etendue, etendue_from_f_number, irradiance_from_flux,
+    illuminance_from_flux, radiance_from_irradiance,
+    image_irradiance_from_object, relative_illumination_cos4,
+    wien_peak_wavelength, planck_spectral_radiance,
+    planck_spectral_exitance, stefan_boltzmann_exitance,
+    band_integrated_radiance, band_integrated_flux,
+    blackbody_luminous_efficacy,
+    BRDFParameters, brdf_lambertian, brdf_abg, brdf_value,
+    total_integrated_scatter, BRDF_DATABASE, get_brdf, list_brdf_names,
+)
+from .ghost import (
+    GhostSurface, GhostResult,
+    fresnel_reflectance, normal_incidence_reflectance,
+    build_surface_chain, trace_ghost_path, chief_ray, pupil_fan,
+    primary_image_height, analyze_ghosts, ghost_analysis,
+)
+from .imaging import (
+    SensorConfig, SimulationResult, TEST_TARGETS,
+    effective_f_number, working_f_number, magnification,
+    object_pixel_pitch, field_of_view,
+    airy_psf, psf_for_system, rms_spot_radius,
+    test_target, sensor_response, simulate_image,
+    distortion_curve, relative_illumination_profile,
+    relative_illumination_map,
+    mtf_from_bar_target, image_quality_metrics, image_statistics,
+    bars_band_rows, encode_png_gray, save_png, ascii_preview,
 )

@@ -259,7 +259,11 @@ class TestAnalyzeSystem:
         """Analysis should return spot diagram points."""
         system = create_default_system()
         result = analyze_system(system, num_rays=11)
-        assert len(result.spot_points) == 11
+        # one 2D point per ray of an 11 x 11 pupil grid inside the unit circle
+        g = [-1 + 0.2 * k for k in range(11)]
+        expected = sum(1 for x in g for y in g if x * x + y * y <= 1 + 1e-12)
+        assert len(result.spot_points) == expected
+        assert all(len(p) == 2 for p in result.spot_points)
 
     def test_analyze_rms_spot_near_zero(self):
         """For a paraxial system, RMS spot radius should be ~0."""

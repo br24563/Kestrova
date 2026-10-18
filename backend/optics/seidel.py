@@ -1,303 +1,160 @@
 """
-Seidel (third-order) monochromatic aberration analysis.
+Seidel (third-order) aberration analysis.
 
-The paraxial tracer produces zero third-order aberrations by definition,
-so this module uses the exact real-ray tracer (``real_rays.py``) to
-measure the five monochromatic Seidel aberrations directly from ray
-intercepts:
+The five monochromatic Seidel sums S_I..S_V and the two chromatic sums
+C_L, C_T are computed surface by surface from the paraxial marginal and
+chief rays (Welford, *Aberrations of Optical Systems*, ch. 8; see
+:func:`optics.raytrace.seidel_sums`). They are converted to image-space
+aberrations at full aperture and full field:
 
-    - Spherical aberration (SA): longitudinal and transverse
-    - Coma
-    - Astigmatism
-    - Field curvature (Petzval + sagittal/tangential)
-    - Distortion
+    - spherical aberration: transverse (marginal ray height in the paraxial
+      image plane) and longitudinal (shift of the marginal focus)
+    - tangential coma
+    - astigmatism (tangential minus sagittal focus) and field curvature
+      (medial focus (t + s)/2 relative to the paraxial image; the Petzval
+      surface is reported separately)
+    - distortion (fraction of the paraxial image height)
 
-Method
-------
-For each aberration we trace a small set of real rays and compare their
-behavior to the paraxial prediction:
+The same quantities are also measured exactly with real rays (``"real"``
+key), so the third-order prediction and the actual system can be
+compared. Third-order values are accurate when apertures and fields are
+small; the real values hold everywhere.
 
-    - **Spherical aberration**: an on-axis marginal ray (aperture edge)
-      crosses the axis at a different z than the paraxial image. The
-      longitudinal SA is that z difference; the transverse SA is the
-      ray height at the paraxial image plane.
-    - **Coma**: for an off-axis object, the image height varies with
-      aperture height. Coma is measured as the difference between the
-      real image height of an upper marginal ray and the paraxial image
-      height, normalized by the aperture.
-    - **Astigmatism**: for an off-axis object, the tangential (meridional)
-      and sagittal rays focus at different z positions. Astigmatism is
-      the difference between those two focal positions.
-    - **Field curvature**: the average of the sagittal and tangential
-      focal positions minus the paraxial image position.
-    - **Distortion**: the difference between the real image height of the
-      chief ray and the paraxial image height, relative to the paraxial
-      image height.
-
-All values are in SI base units (meters, radians).
+Longitudinal values are along the axis in the direction of travel,
+relative to the paraxial image. All values are in SI units (meters).
 """
 
 import math
-from typing import Optional
 
-from .models import OpticalSystem, Ray
-from .rays import calculate_paraxial_image_position, calculate_paraxial_image_height
-from .real_rays import (
-    trace_real_ray, real_intercept_at_plane, real_axis_crossing,
-    real_ray_crossing,
-)
+import numpy as np
+
+from .models import OpticalSystem, ImagePlane
+from . import raytrace as rt
 
 
-# ---------------------------------------------------------------------------
-# Ray helpers
-# ---------------------------------------------------------------------------
-
-def _make_ray(system: OpticalSystem, y: float, theta: float) -> Ray:
-    """Create a ray starting at the object with the given height/angle."""
-    return Ray(
-        y=y,
-        theta=theta,
-        z=system.object.position,
-        wavelength=system.analysis_settings.wavelength,
-        ray_type="fill",
-    )
+def _at_paraxial_image(system: OpticalSystem, fo: rt.FirstOrder) -> OpticalSystem:
+    return system.model_copy(update={"image_plane": ImagePlane(position=fo.image_z)})
 
 
-def _first_lens_aperture(system: OpticalSystem) -> float:
-    """Return the aperture diameter of the first lens (or 0 if none)."""
-    from .models import ThinLens, ThickLens
-    lenses = [
-        c for c in system.components
-        if isinstance(c, (ThinLens, ThickLens))
-    ]
-    if not lenses:
-        return 0.0
-    first = min(lenses, key=lambda l: l.position)
-    return getattr(first, "aperture_diameter", 0.0)
+def _third_order(system: OpticalSystem):
+    sums = rt.seidel_sums(system)
+    fo = rt.first_order(system)
+    return sums, fo, rt.third_order_aberrations(sums, fo)
 
 
-def _object_to_lens_angle(system: OpticalSystem, y_at_lens: float, obj_y: float) -> float:
-    """Angle (radians) from an object point to a point on the first lens."""
-    from .models import ThinLens, ThickLens
-    lenses = [
-        c for c in system.components
-        if isinstance(c, (ThinLens, ThickLens))
-    ]
-    if not lenses:
-        return 0.0
-    first = min(lenses, key=lambda l: l.position)
-    d = first.position - system.object.position
-    if abs(d) < 1e-15:
-        return 0.0
-    return math.atan((y_at_lens - obj_y) / d)
+def _real_measures(system: OpticalSystem, fo: rt.FirstOrder) -> dict:
+    """Exact real-ray measures at the paraxial image plane."""
+    s = _at_paraxial_image(system, fo)
+    seq = rt.build_sequence(s)
+    fo2 = rt.first_order(s, seq=seq)
+    o, R = seq.image_origin, seq.image_rotation
+    d = seq.image_direction
 
+    def local(b):
+        return rt._to_local(o, R, b.image, b.directions)
 
-# ---------------------------------------------------------------------------
-# Spherical Aberration
-# ---------------------------------------------------------------------------
+    out = {}
+    b, _, _ = rt.trace_field_rays(s, 0, 0, np.array([0.0, 0.0]), np.array([0.0, 1.0]),
+                                  seq=seq, fo=fo2, clip=False)
+    P, D = local(b)
+    if b.valid.all():
+        out["transverse_spherical"] = float(P[1, 1] - P[0, 1])
+        slope = D[1, 1] / D[1, 2]
+        out["longitudinal_spherical"] = float(-P[1, 1] / slope * d) if slope else 0.0
+    if system.object.height:
+        b, _, _ = rt.trace_field_rays(s, 0, 1, np.array([0.0, 0.0, 0.0]),
+                                      np.array([0.0, 1.0, -1.0]), seq=seq, fo=fo2, clip=False)
+        P, _ = local(b)
+        if b.valid.all():
+            out["tangential_coma"] = float((P[1, 1] + P[2, 1]) / 2.0 - P[0, 1])
+            hp = fo2.image_height
+            out["distortion"] = float((P[0, 1] - hp) / hp) if hp else 0.0
+        try:
+            zt, zs = rt.real_field_foci(s, 1.0, delta=1e-3, seq=seq, fo=fo2)
+            out["tangential_focus"] = float(zt * d)
+            out["sagittal_focus"] = float(zs * d)
+            out["astigmatism"] = float((zt - zs) * d)
+        except ValueError:
+            pass
+    return out
+
 
 def spherical_aberration(system: OpticalSystem) -> dict:
-    """
-    Measure longitudinal and transverse spherical aberration.
+    """Third-order spherical aberration at full aperture:
+    {"longitudinal": m, "transverse": m}."""
+    _, _, t3 = _third_order(system)
+    return {"longitudinal": t3["longitudinal_spherical"],
+            "transverse": t3["transverse_spherical"]}
 
-    Traces an on-axis marginal ray (through the aperture edge) and
-    compares its axis crossing to the paraxial image position.
-
-    Returns:
-        Dict with:
-            - "longitudinal": z difference (m) between marginal ray axis
-              crossing and paraxial image (positive = marginal focuses
-              closer to the lens, i.e. under-corrected)
-            - "transverse": ray height (m) of the marginal ray at the
-              paraxial image plane
-    """
-    D = _first_lens_aperture(system)
-    if D <= 0:
-        return {"longitudinal": 0.0, "transverse": 0.0}
-
-    paraxial_z = calculate_paraxial_image_position(system)
-
-    # On-axis marginal ray through the top of the aperture
-    theta = _object_to_lens_angle(system, D / 2.0, 0.0)
-    ray = _make_ray(system, 0.0, theta)
-    path = trace_real_ray(system, ray)
-
-    axis_z = real_axis_crossing(path)
-    if axis_z is None:
-        axis_z = paraxial_z
-
-    transverse = real_intercept_at_plane(path, paraxial_z)
-
-    return {
-        "longitudinal": paraxial_z - axis_z,
-        "transverse": transverse,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Coma
-# ---------------------------------------------------------------------------
 
 def coma(system: OpticalSystem) -> float:
-    """
-    Measure coma for an off-axis object.
+    """Third-order tangential coma (meters) at full aperture and field."""
+    _, _, t3 = _third_order(system)
+    return t3["tangential_coma"]
 
-    Coma is the variation of image height with aperture. We trace the
-    upper and lower marginal rays (through the top and bottom of the
-    aperture) and compare their image heights. Spherical aberration is
-    symmetric (identical for both marginal rays), so it cancels in the
-    difference, isolating the coma contribution.
-
-    Returns:
-        Coma magnitude (meters) at the paraxial image plane.
-    """
-    D = _first_lens_aperture(system)
-    if D <= 0:
-        return 0.0
-
-    obj_h = system.object.height
-    paraxial_z = calculate_paraxial_image_position(system)
-
-    # Upper marginal ray: object top through aperture top
-    theta_up = _object_to_lens_angle(system, D / 2.0, obj_h)
-    ray_up = _make_ray(system, obj_h, theta_up)
-    path_up = trace_real_ray(system, ray_up)
-    real_h_up = real_intercept_at_plane(path_up, paraxial_z)
-
-    # Lower marginal ray: object top through aperture bottom
-    theta_lo = _object_to_lens_angle(system, -D / 2.0, obj_h)
-    ray_lo = _make_ray(system, obj_h, theta_lo)
-    path_lo = trace_real_ray(system, ray_lo)
-    real_h_lo = real_intercept_at_plane(path_lo, paraxial_z)
-
-    # Coma is the deviation of the mean marginal-ray height from the
-    # paraxial image height. Spherical aberration is symmetric (equal and
-    # opposite for the two marginal rays) and cancels in the mean; the
-    # residual is the coma contribution.
-    paraxial_h = calculate_paraxial_image_height(system)
-    return (real_h_up + real_h_lo) / 2.0 - paraxial_h
-
-
-# ---------------------------------------------------------------------------
-# Astigmatism & Field Curvature
-# ---------------------------------------------------------------------------
 
 def astigmatism_and_field_curvature(system: OpticalSystem) -> dict:
     """
-    Measure astigmatism and field curvature for an off-axis object.
-
-    For an off-axis object, the tangential (meridional) rays focus at a
-    different z than the sagittal rays. We approximate:
-
-        - tangential focus: axis crossing of the upper marginal ray
-        - sagittal focus: axis crossing of a ray through the aperture
-          center but at the object height (chief-like)
+    Third-order astigmatism and field curvature at full field.
 
     Returns:
-        Dict with:
-            - "astigmatism": tangential focus - sagittal focus (m)
-            - "field_curvature": (tangential + sagittal)/2 - paraxial (m)
-            - "tangential_focus": z of tangential focus (m)
-            - "sagittal_focus": z of sagittal focus (m)
+        "astigmatism": tangential minus sagittal focus (m)
+        "field_curvature": medial focus (t+s)/2 minus paraxial image (m)
+        "tangential_focus", "sagittal_focus": positions relative to the
+            paraxial image (m)
+        "petzval": Petzval surface position relative to the paraxial image (m)
     """
-    D = _first_lens_aperture(system)
-    if D <= 0:
-        return {
-            "astigmatism": 0.0,
-            "field_curvature": 0.0,
-            "tangential_focus": 0.0,
-            "sagittal_focus": 0.0,
-        }
-
-    obj_h = system.object.height
-    paraxial_z = calculate_paraxial_image_position(system)
-
-    # Tangential: upper marginal ray from object top through aperture top
-    theta_t = _object_to_lens_angle(system, D / 2.0, obj_h)
-    ray_t = _make_ray(system, obj_h, theta_t)
-    path_t = trace_real_ray(system, ray_t)
-    tang_focus = real_axis_crossing(path_t)
-
-    # Sagittal: chief-like ray from object top through aperture center
-    theta_s = _object_to_lens_angle(system, 0.0, obj_h)
-    ray_s = _make_ray(system, obj_h, theta_s)
-    path_s = trace_real_ray(system, ray_s)
-    sag_focus = real_axis_crossing(path_s)
-
-    if tang_focus is None:
-        tang_focus = paraxial_z
-    if sag_focus is None:
-        sag_focus = paraxial_z
-
+    _, _, t3 = _third_order(system)
+    zt = t3["tangential_field_curvature"]
+    zs = t3["sagittal_field_curvature"]
     return {
-        "astigmatism": tang_focus - sag_focus,
-        "field_curvature": (tang_focus + sag_focus) / 2.0 - paraxial_z,
-        "tangential_focus": tang_focus,
-        "sagittal_focus": sag_focus,
+        "astigmatism": zt - zs,
+        "field_curvature": (zt + zs) / 2.0,
+        "tangential_focus": zt,
+        "sagittal_focus": zs,
+        "petzval": t3["petzval_field_curvature"],
     }
 
 
-# ---------------------------------------------------------------------------
-# Distortion
-# ---------------------------------------------------------------------------
-
 def distortion(system: OpticalSystem) -> float:
-    """
-    Measure distortion for an off-axis object.
+    """Third-order distortion as a fraction of the paraxial image height
+    (positive = pincushion, negative = barrel)."""
+    _, _, t3 = _third_order(system)
+    return t3["fractional_distortion"]
 
-    Distortion is the relative difference between the real image height
-    of the chief ray and the paraxial image height.
-
-    Returns:
-        Distortion as a fraction (dimensionless). Positive = pincushion,
-        negative = barrel.
-    """
-    D = _first_lens_aperture(system)
-    if D <= 0:
-        return 0.0
-
-    obj_h = system.object.height
-    paraxial_h = calculate_paraxial_image_height(system)
-    paraxial_z = calculate_paraxial_image_position(system)
-
-    # Chief ray: from object top through aperture center
-    theta = _object_to_lens_angle(system, 0.0, obj_h)
-    ray = _make_ray(system, obj_h, theta)
-    path = trace_real_ray(system, ray)
-    real_h = real_intercept_at_plane(path, paraxial_z)
-
-    if abs(paraxial_h) < 1e-15:
-        return 0.0
-    return (real_h - paraxial_h) / paraxial_h
-
-
-# ---------------------------------------------------------------------------
-# Full Seidel analysis
-# ---------------------------------------------------------------------------
 
 def seidel_analysis(system: OpticalSystem) -> dict:
     """
-    Perform a full Seidel (third-order) monochromatic aberration analysis.
-
-    Returns:
-        Dict with keys:
-            - "spherical_aberration": dict (longitudinal, transverse)
-            - "coma": float (meters)
-            - "astigmatism": float (meters)
-            - "field_curvature": float (meters)
-            - "distortion": float (dimensionless fraction)
-            - "paraxial_image_position": float (meters)
-            - "paraxial_image_height": float (meters)
+    Full third-order analysis with the Seidel sums, the per-surface
+    contributions, the wavefront coefficients and exact real-ray measures.
     """
-    sa = spherical_aberration(system)
-    afc = astigmatism_and_field_curvature(system)
-
+    sums, fo, t3 = _third_order(system)
+    zt = t3["tangential_field_curvature"]
+    zs = t3["sagittal_field_curvature"]
     return {
-        "spherical_aberration": sa,
-        "coma": coma(system),
-        "astigmatism": afc["astigmatism"],
-        "field_curvature": afc["field_curvature"],
-        "distortion": distortion(system),
-        "paraxial_image_position": calculate_paraxial_image_position(system),
-        "paraxial_image_height": calculate_paraxial_image_height(system),
+        "spherical_aberration": {
+            "longitudinal": t3["longitudinal_spherical"],
+            "transverse": t3["transverse_spherical"],
+        },
+        "coma": t3["tangential_coma"],
+        "astigmatism": zt - zs,
+        "field_curvature": (zt + zs) / 2.0,
+        "tangential_focus": zt,     # relative to the paraxial image
+        "sagittal_focus": zs,
+        "petzval_field_curvature": t3["petzval_field_curvature"],
+        "distortion": t3["fractional_distortion"],
+        "longitudinal_color": t3["longitudinal_color"],
+        "lateral_color": t3["lateral_color"],
+        "paraxial_image_position": fo.image_z,
+        "paraxial_image_height": fo.image_height,
+        "seidel_sums": {"S1": sums.S1, "S2": sums.S2, "S3": sums.S3, "S4": sums.S4,
+                        "S5": sums.S5, "CL": sums.CL, "CT": sums.CT},
+        "wavefront_coefficients": {
+            "W040": sums.S1 / 8.0, "W131": sums.S2 / 2.0, "W222": sums.S3 / 2.0,
+            "W220": (sums.S3 + sums.S4) / 4.0, "W311": sums.S5 / 2.0,
+        },
+        "per_surface": sums.per_surface,
+        "unsupported_surfaces": sums.unsupported,
+        "real": _real_measures(system, fo),
+        "wavelength": fo.wavelength,
     }

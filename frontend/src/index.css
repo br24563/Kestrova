@@ -12,16 +12,32 @@
   background: #f1f5f9;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 /* Optical bench background */
 .optical-bench-bg {
   background: linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.dark .optical-bench-bg {
+  background: linear-gradient(to bottom, #1e293b 0%, #0f172a 100%);
 }

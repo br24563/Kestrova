@@ -143,14 +143,13 @@ class TestValidateSystem:
         warnings = validate_system(system)
         assert any("after" in w.lower() for w in warnings)
 
-    def test_zero_focal_length(self):
-        system = create_default_system()
-        system = update_component(system, "lens_1", focal_length=0.0)
-        warnings = validate_system(system)
-        assert any("zero" in w.lower() for w in warnings)
+    def test_zero_focal_length_is_rejected(self):
+        # The model refuses the value outright, so no system can carry it.
+        from pydantic import ValidationError
+        with pytest.raises((ValidationError, ValueError)):
+            update_component(create_default_system(), "lens_1", focal_length=0.0)
 
-    def test_negative_aperture(self):
-        system = create_default_system()
-        system = update_component(system, "lens_1", aperture_diameter=-0.01)
-        warnings = validate_system(system)
-        assert any("aperture" in w.lower() for w in warnings)
+    def test_negative_aperture_is_rejected(self):
+        from pydantic import ValidationError
+        with pytest.raises((ValidationError, ValueError)):
+            update_component(create_default_system(), "lens_1", aperture_diameter=-0.01)

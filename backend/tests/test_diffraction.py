@@ -159,6 +159,6 @@ class TestFullAnalysis:
         assert "psf" in full
         assert "encircled_energy" in full
         assert "mtf" in full
-        assert "otf" in full
+        assert "strehl_ratio" in full
         assert "airy_disk_radius" in full
         assert "diffraction_limited" in full

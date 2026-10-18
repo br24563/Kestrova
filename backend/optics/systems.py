@@ -203,7 +203,8 @@ def update_component(
     for comp in system.components:
         if comp.id == component_id:
             found = True
-            updated = comp.model_copy(update=kwargs)
+            # re-validate so invalid values (e.g. zero focal length) are rejected
+            updated = type(comp).model_validate({**comp.model_dump(), **kwargs})
             new_components.append(updated)
         else:
             new_components.append(comp)

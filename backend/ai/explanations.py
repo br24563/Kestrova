@@ -69,10 +69,12 @@ def explain_system(system: OpticalSystem) -> dict:
     # Diffraction-limited check
     is_dl: Optional[bool] = None
     airy_um: Optional[float] = None
+    strehl: Optional[float] = None
     try:
         dl = diffraction_limited_check(system)
         airy_um = dl["airy_disk_radius"] * 1e6
         is_dl = dl["is_diffraction_limited"]
+        strehl = dl["strehl_ratio"]
     except Exception:
         pass
 
@@ -89,14 +91,14 @@ def explain_system(system: OpticalSystem) -> dict:
     if image_real:
         parts.append(
             f"This system forms a real image (it can be projected onto a "
-            f"screen), located {_fmt_mm(analysis.image_distance)} to the "
-            f"right of the last lens."
+            f"screen), located {_fmt_mm(analysis.image_distance)} beyond "
+            f"the last surface."
         )
     else:
         parts.append(
             f"This system forms a virtual image (it cannot be projected "
             f"directly), located {_fmt_mm(abs(analysis.image_distance))} "
-            f"to the left of the last lens."
+            f"before the last surface."
         )
 
     if image_inverted:
@@ -128,17 +130,17 @@ def explain_system(system: OpticalSystem) -> dict:
     if is_dl is not None:
         if is_dl:
             parts.append(
-                f"The system is diffraction-limited: the RMS spot "
-                f"({_fmt_um(analysis.rms_spot_radius)}) is smaller than the "
-                f"Airy disk radius ({_fmt_um(airy_um or 0.0)}). "
-                f"Diffraction, not aberration, limits the image."
+                f"The system is diffraction-limited on axis: its Strehl ratio "
+                f"is {strehl:.3f}, at least 0.8 (the Marechal criterion), so "
+                f"diffraction rather than aberration limits the image. The "
+                f"Airy disk radius is {_fmt_um(airy_um or 0.0)}."
             )
         else:
             parts.append(
-                f"The system is NOT diffraction-limited: the RMS spot "
-                f"({_fmt_um(analysis.rms_spot_radius)}) exceeds the Airy disk "
-                f"radius ({_fmt_um(airy_um or 0.0)}). Aberrations limit the "
-                f"image more than diffraction does."
+                f"The system is not diffraction-limited on axis: its Strehl "
+                f"ratio is {strehl:.3f}, below the Marechal value 0.8, so "
+                f"aberrations degrade the image beyond the diffraction limit "
+                f"(Airy disk radius {_fmt_um(airy_um or 0.0)})."
             )
 
     if lca_mm is not None and abs(lca_mm) > 0.05:
@@ -163,6 +165,7 @@ def explain_system(system: OpticalSystem) -> dict:
             "is_image_real": image_real,
             "is_image_inverted": image_inverted,
             "airy_disk_um": airy_um,
+            "strehl_ratio": strehl,
             "lca_mm": lca_mm,
         },
     }
@@ -228,9 +231,8 @@ def diagnose_system(system: OpticalSystem) -> dict:
             findings.append({
                 "level": "recommendation",
                 "message": (
-                    f"RMS spot ({_fmt_um(analysis.rms_spot_radius)}) exceeds "
-                    f"the Airy disk ({_fmt_um(dl['airy_disk_radius'])}); "
-                    f"aberrations limit image quality."
+                    f"Strehl ratio {dl['strehl_ratio']:.3f} is below 0.8 "
+                    f"(Marechal criterion); aberrations limit image quality."
                 ),
                 "suggestion": (
                     "Try a smaller aperture, optimize the lens positions, or "

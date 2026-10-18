@@ -53,6 +53,9 @@ export interface ApertureStop extends OpticalComponentBase {
 export interface Mirror extends OpticalComponentBase {
   type: "mirror";
   width: number; // meters
+  radius?: number; // meters, 0 = flat (backend default 0)
+  conic?: number; // conic constant, 0 sphere, -1 paraboloid (default 0)
+  aperture_diameter?: number | null; // meters (defaults to width)
 }
 
 export type OpticalComponent =
@@ -132,16 +135,19 @@ export interface RayTraceResult {
 // Analysis Result
 // ---------------------------------------------------------------------------
 
+// The backend sends null for infinite values (JSON has no infinity), e.g.
+// the focal length of an afocal system or an image at infinity.
 export interface AnalysisResult {
-  effective_focal_length: number;
-  magnification: number;
-  image_distance: number;
-  object_distance: number;
-  f_number: number;
+  effective_focal_length: number | null;
+  magnification: number | null;
+  image_distance: number | null;
+  object_distance: number | null;
+  f_number: number | null;
   numerical_aperture: number;
   aperture_diameter: number;
-  working_distance: number;
+  working_distance: number | null;
   rms_spot_radius: number;
+  /** Real-ray [x, y] image-plane intercepts relative to the centroid (m). */
   spot_points: [number, number][];
   is_image_real: boolean;
   is_image_inverted: boolean;
@@ -207,6 +213,135 @@ export interface SweepPoint {
 }
 
 // ---------------------------------------------------------------------------
+// Diffraction Analysis Types
+// ---------------------------------------------------------------------------
+
+export interface PSFData {
+  r: number[]; // radial distances (meters)
+  intensity: number[]; // normalized intensity
+}
+
+export interface EncircledEnergyData {
+  r: number[]; // radial distances (meters)
+  energy: number[]; // fraction of total energy
+}
+
+export interface MTFData {
+  frequency: number[]; // spatial frequency (cycles/meter)
+  mtf: number[]; // system MTF (tangential) from the FFT of the pupil function
+  tangential?: number[];
+  sagittal?: number[];
+  diffraction_limit?: number[]; // aberration-free MTF for the same NA
+  cutoff: number; // cutoff frequency 2 NA / lambda (cycles/meter)
+}
+
+export interface DiffractionLimitedCheck {
+  airy_disk_radius: number; // meters
+  rms_spot_radius: number; // meters (geometric, for reference)
+  strehl_ratio: number;
+  rms_wavefront: number; // meters
+  rms_wavefront_waves: number;
+  criterion: string; // "Strehl >= 0.8 (Marechal)"
+  is_diffraction_limited: boolean;
+  margin: number | null; // Airy radius / RMS spot (null = infinite)
+}
+
+export interface DiffractionResult {
+  psf: PSFData;
+  encircled_energy: EncircledEnergyData;
+  mtf: MTFData;
+  airy_disk_radius: number;
+  strehl_ratio: number;
+  rms_wavefront: number;
+  na_image: number;
+  working_f_number: number;
+  diffraction_limited: DiffractionLimitedCheck;
+}
+
+// ---------------------------------------------------------------------------
+// Seidel Aberration Types
+// ---------------------------------------------------------------------------
+
+export interface SphericalAberrationData {
+  longitudinal: number; // meters
+  transverse: number; // meters
+}
+
+export interface SeidelResult {
+  spherical_aberration: SphericalAberrationData;
+  coma: number; // meters
+  astigmatism: number; // meters
+  field_curvature: number; // meters
+  distortion: number; // dimensionless fraction
+  paraxial_image_position: number; // meters
+  paraxial_image_height: number; // meters
+  tangential_focus: number; // meters, relative to the paraxial image
+  sagittal_focus: number; // meters, relative to the paraxial image
+  petzval_field_curvature: number; // meters
+  longitudinal_color: number; // meters
+  lateral_color: number; // meters
+}
+
+// ---------------------------------------------------------------------------
+// Tolerance Analysis Types
+// ---------------------------------------------------------------------------
+
+export interface ToleranceResult {
+  mean: number;
+  std: number;
+  min: number;
+  max: number;
+  p95: number;
+  trials: number;
+  trend: number[];
+}
+
+export interface ToleranceRequest {
+  system: OpticalSystem;
+  tolerances?: Record<string, number>;
+  trials?: number;
+  seed?: number;
+}
+
+// ---------------------------------------------------------------------------
+// System Comparison Types
+// ---------------------------------------------------------------------------
+
+export interface ComparisonRow {
+  metric: string;
+  a: number;
+  b: number;
+  advantage: "a" | "b" | "tie";
+}
+
+export interface SystemSummary {
+  label: string;
+  magnification: number;
+  efl_mm: number;
+  f_number: number;
+  numerical_aperture: number;
+  rms_spot_um: number;
+  image_distance_mm: number;
+  working_distance_mm: number;
+  is_image_real: boolean;
+  is_image_inverted: boolean;
+  num_components: number;
+}
+
+export interface ComparisonResult {
+  rows: ComparisonRow[];
+  summary_a: SystemSummary;
+  summary_b: SystemSummary;
+}
+
+export interface CompareRequest {
+  system_a: OpticalSystem;
+  system_b: OpticalSystem;
+  label_a?: string;
+  label_b?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Unit Conversion Helpers
 // ---------------------------------------------------------------------------
 
@@ -241,6 +376,18 @@ export const DEFAULT_LENGTH_UNIT: LengthUnit = "mm";
  */
 export function fromMeters(meters: number, unit: LengthUnit): number {
   return meters / LENGTH_UNIT_FACTORS[unit];
+}
+
+/** Format a number that may be null (infinite in the backend) as "∞". */
+export function fmtNum(value: number | null | undefined, digits: number): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "∞";
+  return value.toFixed(digits);
+}
+
+/** Format a length in meters (null = infinite) in the given display unit. */
+export function fmtLen(meters: number | null | undefined, unit: LengthUnit, digits: number): string {
+  if (meters === null || meters === undefined || !Number.isFinite(meters)) return "∞";
+  return fromMeters(meters, unit).toFixed(digits);
 }
 
 /**

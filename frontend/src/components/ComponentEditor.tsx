@@ -306,6 +306,20 @@ export function ComponentEditor({
           {selectedComponent.type === "mirror" && (
             <>
               {formatLensField("Width", "width", (selectedComponent as Mirror).width)}
+              {formatLensField("Radius of Curvature (0 = flat)", "radius", (selectedComponent as Mirror).radius ?? 0)}
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Conic Constant</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={(selectedComponent as Mirror).conic ?? 0}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val)) onUpdateComponent(selectedComponent.id, "conic", val);
+                  }}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                />
+              </div>
             </>
           )}
         </div>

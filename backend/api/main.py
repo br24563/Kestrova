@@ -17,7 +17,9 @@ import sys
 import os
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+import numpy as np
+
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -48,6 +50,8 @@ from optics.report import (
     system_spot_svg as run_spot_svg,
     engineering_report_markdown as run_report_markdown,
 )
+from optics.diffraction import diffraction_analysis as run_diffraction
+from optics.seidel import seidel_analysis as run_seidel
 from persistence import (
     save_system as db_save_system,
     list_systems as db_list_systems,
@@ -190,10 +194,62 @@ class AIInterpretResponse(BaseModel):
 # FastAPI App
 # ---------------------------------------------------------------------------
 
+from fastapi.responses import JSONResponse as _BaseJSONResponse
+
+
+def _json_safe(obj):
+    """Convert NumPy values, dataclasses and models to JSON types; inf and
+    NaN (e.g. the EFL of an afocal system) become null, since JSON has no
+    representation for them."""
+    import dataclasses
+    import math
+    import numpy as np
+    from pydantic import BaseModel as _BM
+    if isinstance(obj, _BM):
+        return _json_safe(obj.model_dump())
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return _json_safe({f.name: getattr(obj, f.name) for f in dataclasses.fields(obj)})
+    if isinstance(obj, np.ndarray):
+        return _json_safe(obj.tolist())
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        v = float(obj)
+        return v if math.isfinite(v) else None
+    if isinstance(obj, (complex, np.complexfloating)):
+        return {"real": _json_safe(obj.real), "imag": _json_safe(obj.imag)}
+    return obj
+
+
+def _register_numpy_encoders():
+    """Let FastAPI's jsonable_encoder (used on endpoint return values before
+    the response class renders them) accept NumPy scalars and arrays."""
+    import numpy as np
+    import fastapi.encoders as fe
+    fe.ENCODERS_BY_TYPE[np.ndarray] = lambda a: a.tolist()
+    fe.ENCODERS_BY_TYPE[np.generic] = lambda v: v.item()
+    fe.encoders_by_class_tuples = fe.generate_encoders_by_class_tuples(fe.ENCODERS_BY_TYPE)
+
+
+_register_numpy_encoders()
+
+
+class SafeJSONResponse(_BaseJSONResponse):
+    def render(self, content) -> bytes:
+        return super().render(_json_safe(content))
+
+
 app = FastAPI(
     title="AI Optical Design Engineer API",
     description="A local-first optical design and ray-tracing engine.",
     version="0.1.0",
+    default_response_class=SafeJSONResponse,
 )
 
 # Enable CORS for the frontend
@@ -204,6 +260,65 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global exception handlers
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    """Handle validation errors with clear error messages."""
+    errors = []
+    for error in exc.errors():
+        field = " -> ".join(str(loc) for loc in error["loc"])
+        errors.append(f"{field}: {error['msg']}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Validation error",
+            "errors": errors,
+        },
+    )
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request, exc):
+    """Handle ValueError exceptions."""
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)},
+    )
+
+
+@app.exception_handler(ZeroDivisionError)
+async def zero_division_handler(request, exc):
+    """Handle division by zero (e.g., object at focal point)."""
+    return JSONResponse(
+        status_code=400,
+        content={
+            "detail": "Optical calculation error: object may be at focal point or system configuration is invalid"
+        },
+    )
+
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "version": "0.2.0",
+        "features": {
+            "ray_tracing": True,
+            "analysis": True,
+            "diffraction": True,
+            "seidel": True,
+            "optimization": True,
+            "tolerance": True,
+            "comparison": True,
+        },
+    }
 
 
 @app.get("/")
@@ -246,6 +361,50 @@ async def get_default_system():
     system = create_default_system()
     warnings = validate_system(system)
     return SystemResponse(system=system, warnings=warnings)
+
+
+@app.get("/api/presets")
+async def get_presets_list():
+    """
+    Get a list of preset optical systems.
+
+    Returns metadata for all available preset systems without the full
+    system data. Use GET /api/presets/{id} to get a specific preset.
+    """
+    from optics.presets import get_presets
+    presets = get_presets()
+    # Return metadata only (without full system JSON)
+    return [
+        {
+            "id": p["id"],
+            "name": p["name"],
+            "description": p["description"],
+            "category": p["category"],
+        }
+        for p in presets
+    ]
+
+
+@app.get("/api/presets/{preset_id}")
+async def get_preset(preset_id: str):
+    """
+    Get a specific preset optical system by ID.
+
+    Returns the full optical system for the requested preset.
+    """
+    from optics.presets import get_preset_by_id
+    preset = get_preset_by_id(preset_id)
+    if preset is None:
+        raise HTTPException(status_code=404, detail=f"Preset '{preset_id}' not found")
+    warnings = validate_system(preset["system"])
+    return {
+        "id": preset["id"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "category": preset["category"],
+        "system": preset["system"],
+        "warnings": warnings,
+    }
 
 
 @app.post("/api/trace", response_model=RayTraceResult)
@@ -452,6 +611,66 @@ async def analyze_aberration(request: AberrationRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _make_serializable(obj):
+    """JSON-safe copy of an analysis result (see _json_safe)."""
+    return _json_safe(obj)
+
+
+@app.post("/api/analyze/diffraction")
+async def analyze_diffraction(request: AnalyzeRequest):
+    """
+    Run diffraction analysis (PSF, MTF, OTF, Airy disk) on a system.
+
+    Computes diffraction-based performance metrics including the Airy disk
+    radius, point spread function, encircled energy, modulation transfer
+    function, optical transfer function, and diffraction-limited assessment.
+
+    Args:
+        request: Contains the optical system.
+
+    Returns:
+        Dict with psf, encircled_energy, mtf, otf, airy_disk_radius,
+        and diffraction_limited assessment.
+    """
+    try:
+        result = run_diffraction(
+            request.system,
+            wavelength=request.system.analysis_settings.wavelength,
+        )
+        # Convert complex OTF to magnitude/phase for JSON serialization
+        if "otf" in result and "otf" in result["otf"]:
+            otf_complex = result["otf"]["otf"]
+            result["otf"]["otf_mag"] = [abs(v) for v in otf_complex] if not isinstance(otf_complex[0], complex) else [abs(v) for v in otf_complex]
+            result["otf"]["otf_phase"] = [0.0] * len(otf_complex)  # aberration-free => zero phase
+            del result["otf"]["otf"]  # remove complex array
+        return _make_serializable(result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/seidel")
+async def analyze_seidel(request: AnalyzeRequest):
+    """
+    Run Seidel (third-order) monochromatic aberration analysis.
+
+    Measures the five Seidel aberrations using real (exact Snell's law)
+    ray tracing: spherical aberration, coma, astigmatism, field curvature,
+    and distortion.
+
+    Args:
+        request: Contains the optical system.
+
+    Returns:
+        Dict with spherical_aberration, coma, astigmatism, field_curvature,
+        distortion, paraxial_image_position, and paraxial_image_height.
+    """
+    try:
+        result = run_seidel(request.system)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/validate", response_model=SystemResponse)
 async def validate(system: OpticalSystem):
     """
@@ -594,7 +813,7 @@ async def ai_command(request: AICommandRequest):
         return AICommandResponse(
             system=result["system"],
             warnings=result["warnings"],
-            result=result["result"],
+            result=_json_safe(result["result"]) if result["result"] is not None else None,
             message=result["message"],
         )
     except ValueError as e:
@@ -619,3 +838,1281 @@ async def delete_system(system_id: int):
     if not deleted:
         raise HTTPException(status_code=404, detail=f"System {system_id} not found.")
     return {"message": f"System {system_id} deleted."}
+
+
+# ---------------------------------------------------------------------------
+# Advanced Optimization Endpoints
+# ---------------------------------------------------------------------------
+
+
+class HybridOptimizeRequest(BaseModel):
+    """Request body for hybrid optimization."""
+    system: OpticalSystem
+    objective: str = "rms_spot"  # rms_spot, efl, magnification
+    params: list[dict]  # [{"component_id": "L1", "field": "focal_length"}, ...]
+    bounds: list[list[float]]  # [[min, max], ...]
+    constraints: list[dict] = []  # [{"type": "efl", "lower": 0.09, "upper": 0.11}, ...]
+    global_maxiter: int = 200
+    local_maxiter: int = 100
+    seed: Optional[int] = 42
+
+
+@app.post("/api/optimize/hybrid")
+async def hybrid_optimize(request: HybridOptimizeRequest):
+    """
+    Run hybrid optimization (global search + local refinement).
+
+    This is the professional standard optimization workflow:
+    1. Global search (Differential Evolution) to find promising region
+    2. Local refinement (Damped Least Squares) for precise optimum
+
+    Args:
+        request: Contains system, objective, parameters, bounds, constraints.
+
+    Returns:
+        Optimized system and optimization statistics.
+    """
+    from optics.advanced_optimization import (
+        hybrid_optimize as run_hybrid,
+        OptimizationConfig,
+        OptimizationConstraint,
+    )
+
+    try:
+        # Build constraints
+        constraints = []
+        for c in request.constraints:
+            constraints.append(OptimizationConstraint(
+                type=c.get("type", ""),
+                lower=c.get("lower", -np.inf),
+                upper=c.get("upper", np.inf),
+                weight=c.get("weight", 1.0),
+            ))
+
+        # Build config
+        config = OptimizationConfig(
+            global_maxiter=request.global_maxiter,
+            local_maxiter=request.local_maxiter,
+            constraints=constraints,
+            seed=request.seed,
+        )
+
+        # Build objective function
+        def objective(sys: OpticalSystem) -> float:
+            analysis = analyze_system(sys)
+            if request.objective == "rms_spot":
+                return analysis.rms_spot_radius
+            elif request.objective == "efl":
+                return abs(analysis.effective_focal_length - 0.1)  # Target 100mm
+            elif request.objective == "magnification":
+                return abs(analysis.magnification - (-1.0))  # Target -1x
+            return analysis.rms_spot_radius
+
+        result = run_hybrid(
+            request.system,
+            objective,
+            request.params,
+            [tuple(b) for b in request.bounds],
+            config=config,
+        )
+
+        return _make_serializable(result)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class HighYieldOptimizeRequest(BaseModel):
+    """Request body for high-yield optimization."""
+    system: OpticalSystem
+    objective: str = "rms_spot"
+    params: list[dict]
+    bounds: list[list[float]]
+    tolerances: dict[str, float]  # {"L1.position": 1e-4, ...}
+    yield_threshold: float = 0.95
+    n_monte_carlo: int = 30
+    seed: Optional[int] = 42
+
+
+@app.post("/api/optimize/high-yield")
+async def high_yield_optimize(request: HighYieldOptimizeRequest):
+    """
+    Run high-yield optimization (nominal + tolerance sensitivity).
+
+    Optimizes both nominal performance and tolerance sensitivity
+    to maximize as-built yield.
+
+    Args:
+        request: Contains system, objective, parameters, tolerances.
+
+    Returns:
+        Optimized system and yield statistics.
+    """
+    from optics.advanced_optimization import (
+        high_yield_optimize as run_high_yield,
+        OptimizationConfig,
+    )
+
+    try:
+        config = OptimizationConfig(
+            optimize_yield=True,
+            yield_threshold=request.yield_threshold,
+            tolerance_specs=request.tolerances,
+            n_monte_carlo=request.n_monte_carlo,
+            seed=request.seed,
+        )
+
+        def objective(sys: OpticalSystem) -> float:
+            analysis = analyze_system(sys)
+            if request.objective == "rms_spot":
+                return analysis.rms_spot_radius
+            return analysis.rms_spot_radius
+
+        result = run_high_yield(
+            request.system,
+            objective,
+            request.params,
+            [tuple(b) for b in request.bounds],
+            tolerance_specs=request.tolerances,
+            yield_threshold=request.yield_threshold,
+            n_monte_carlo=request.n_monte_carlo,
+            config=config,
+        )
+
+        return _make_serializable(result)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Non-Sequential Analysis Endpoints
+# ---------------------------------------------------------------------------
+
+
+class GhostAnalysisRequest(BaseModel):
+    """Request body for ghost reflection analysis."""
+    system: OpticalSystem
+    n_reflections: int = 2
+    threshold: float = 1e-4
+
+
+@app.post("/api/analyze/ghosts")
+async def analyze_ghosts(request: GhostAnalysisRequest):
+    """
+    Analyze ghost reflections in the optical system.
+
+    Ghost reflections occur when light reflects off two surfaces and
+    returns to the image plane, creating unwanted artifacts.
+
+    Args:
+        request: Contains the system and analysis parameters.
+
+    Returns:
+        List of ghost paths sorted by intensity.
+    """
+    from optics.nonsequential import analyze_ghost_reflections
+
+    try:
+        ghosts = analyze_ghost_reflections(
+            request.system,
+            n_reflections=request.n_reflections,
+            threshold=request.threshold,
+        )
+
+        return {
+            "ghosts": [
+                {
+                    "surfaces": list(g.surfaces),
+                    "reflection_count": g.reflection_count,
+                    "relative_intensity": g.relative_intensity,
+                    "image_position_offset": g.image_position,
+                    "is_in_field": g.is_in_field,
+                    "description": g.description,
+                }
+                for g in ghosts
+            ],
+            "n_ghosts": len(ghosts),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class StrayLightRequest(BaseModel):
+    """Request body for stray light analysis."""
+    system: OpticalSystem
+    source_angle: float = 30.0
+    brdf_model: str = "lambertian"
+    diffuse_fraction: float = 0.01
+
+
+@app.post("/api/analyze/straylight")
+async def analyze_stray_light(request: StrayLightRequest):
+    """
+    Analyze stray light paths in the optical system.
+
+    Args:
+        request: Contains the system and analysis parameters.
+
+    Returns:
+        List of stray light paths sorted by intensity.
+    """
+    from optics.nonsequential import analyze_stray_light, BRDFParameters
+
+    try:
+        brdf_params = BRDFParameters(
+            model=request.brdf_model,
+            diffuse_fraction=request.diffuse_fraction,
+        )
+
+        stray_paths = analyze_stray_light(
+            request.system,
+            source_angle=request.source_angle,
+            brdf_params=brdf_params,
+        )
+
+        return {
+            "paths": [
+                {
+                    "path_id": p.path_id,
+                    "source_surface": p.source_surface,
+                    "scatter_surface": p.scatter_surface,
+                    "relative_intensity": p.relative_intensity,
+                    "path_type": p.path_type,
+                    "description": p.description,
+                }
+                for p in stray_paths
+            ],
+            "n_paths": len(stray_paths),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class PSTRequest(BaseModel):
+    """Request body for Point Source Transmittance analysis."""
+    system: OpticalSystem
+    angles: list[float] = [5, 10, 15, 20, 25, 30, 35, 40, 45]
+    brdf_model: str = "lambertian"
+    diffuse_fraction: float = 0.01
+
+
+@app.post("/api/analyze/pst")
+async def compute_pst_endpoint(request: PSTRequest):
+    """
+    Compute Point Source Transmittance (PST) vs angle.
+
+    PST measures the stray light rejection capability of a system.
+
+    Args:
+        request: Contains the system and angle range.
+
+    Returns:
+        PST values in dB for each angle.
+    """
+    from optics.nonsequential import compute_pst, BRDFParameters
+
+    try:
+        brdf_params = BRDFParameters(
+            model=request.brdf_model,
+            diffuse_fraction=request.diffuse_fraction,
+        )
+
+        angles = np.array(request.angles)
+        pst_values = compute_pst(request.system, angles, brdf_params)
+
+        return {
+            "angles": request.angles,
+            "pst_db": pst_values.tolist(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Throughput & Realism Endpoints (roadmap item 11)
+# ---------------------------------------------------------------------------
+# Unlike the endpoints above, which mostly work from paraxial quantities or
+# reflectances, these drive the real-ray throughput and imaging analyses:
+# measured vignetting and relative illumination, bidirectional ghost paths,
+# and a full image simulation with a detector model.
+
+
+class IlluminationRequest(BaseModel):
+    """Request body for illumination and vignetting analysis."""
+    system: OpticalSystem
+    num_fields: int = 11
+    num_rays: int = 21
+    focus_points: int = 21
+
+
+@app.post("/api/analyze/illumination")
+async def analyze_illumination(request: IlluminationRequest):
+    """
+    Vignetting, relative illumination and MTF across field and focus.
+
+    The vignetting factor is measured by tracing real ray bundles through
+    the actual apertures, then combined with the cos^4 obliquity law and
+    normalised to 1.0 on axis. The MTF maps use the same equivalent-Gaussian
+    blur model as the image simulator, so the two agree by construction.
+
+    Args:
+        request: Contains the system and the sampling parameters.
+
+    Returns:
+        Dict with vignetting, relative illumination and the MTF field and
+        focus maps, plus a text summary.
+    """
+    from optics.illumination import illumination_summary
+
+    try:
+        result = illumination_summary(
+            request.system,
+            num_fields=request.num_fields,
+            num_rays=request.num_rays,
+            focus_points=request.focus_points,
+        )
+        return _make_serializable(result)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class GhostPathRequest(BaseModel):
+    """Request body for real-ray ghost reflection analysis."""
+    system: OpticalSystem
+    field_fraction: Optional[float] = None
+    num_rays: int = 5
+    min_relative_irradiance: float = 1e-6
+    coating_reflectance: Optional[float] = None
+    mirror_reflectance: float = 0.95
+    include_blocked: bool = False
+
+
+@app.post("/api/analyze/ghost-paths")
+async def analyze_ghost_paths(request: GhostPathRequest):
+    """
+    Trace genuine double-reflection ghost paths through the real system.
+
+    Where ``/api/analyze/ghosts`` ranks ghost orders from reflectances alone,
+    this propagates actual ray paths: forward to the first reflecting
+    surface, back toward the object to the second, then forward again to the
+    image plane. That answers where each ghost focuses, how large its spot
+    is, and whether its path reaches the image at all.
+
+    Args:
+        request: Contains the system and the analysis parameters.
+            ``field_fraction`` may be omitted to analyse both the axis and
+            the field edge.
+
+    Returns:
+        The field-wide summary, or, when ``field_fraction`` is given, the
+        ranked ghost list for that single field point.
+    """
+    from optics.ghost import analyze_ghosts as run_analyze_ghosts
+    from optics.ghost import ghost_analysis as run_ghost_analysis
+
+    kwargs = dict(
+        num_rays=request.num_rays,
+        min_relative_irradiance=request.min_relative_irradiance,
+        coating_reflectance=request.coating_reflectance,
+        mirror_reflectance=request.mirror_reflectance,
+        include_blocked=request.include_blocked,
+    )
+    try:
+        if request.field_fraction is None:
+            return _make_serializable(run_ghost_analysis(request.system, **kwargs))
+        ghosts = run_analyze_ghosts(
+            request.system, field_fraction=request.field_fraction, **kwargs)
+        return _make_serializable({
+            "field_fraction": request.field_fraction,
+            "ghosts": [g.as_dict() for g in ghosts],
+            "num_ghosts": len(ghosts),
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class ImagingRequest(BaseModel):
+    """Request body for image simulation."""
+    system: OpticalSystem
+    target_kind: str = "bars"
+    resolution: int = 128
+    pixel_pitch: float = 5.0e-6
+    field_fraction: float = 0.0
+    full_field: bool = False
+    with_noise: bool = True
+    seed: Optional[int] = None
+    include_image: bool = False
+
+
+@app.post("/api/analyze/imaging")
+async def analyze_imaging(request: ImagingRequest):
+    """
+    Simulate the image a test target forms through the real system.
+
+    Applies the aberration and diffraction PSF, the illumination map, radial
+    distortion, and the detector model (photon shot noise, dark current, read
+    noise, full well and ADC quantisation). The exposure is set by
+    normalising the brightest pixel to 80 percent of the full well.
+
+    Args:
+        request: Contains the system, the target and the sensor geometry.
+            Set ``include_image`` to also return the rendered image.
+
+    Returns:
+        Dict with the simulation metadata, the MTF measured from the bar
+        chart, image-quality metrics, and optionally ``png_base64``.
+    """
+    import base64
+    from optics.imaging import SensorConfig, encode_png_gray
+    from optics.imaging import image_quality_metrics, mtf_from_bar_target
+    from optics.imaging import simulate_image as run_simulate
+
+    sensor = SensorConfig(resolution=request.resolution,
+                          pixel_pitch=request.pixel_pitch)
+    try:
+        simulation = run_simulate(
+            request.system,
+            sensor=sensor,
+            target_kind=request.target_kind,
+            field_fraction=request.field_fraction,
+            full_field=request.full_field,
+            with_noise=request.with_noise,
+            seed=request.seed,
+        )
+        result = {
+            "metadata": simulation.metadata,
+            "mtf": mtf_from_bar_target(simulation.ideal, simulation.image),
+            "quality": image_quality_metrics(simulation.ideal, simulation.image),
+        }
+        if request.include_image:
+            result["png_base64"] = base64.b64encode(
+                encode_png_gray(simulation.image)).decode("ascii")
+        return _make_serializable(result)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/radiometry/brdf")
+async def list_brdf_surfaces():
+    """
+    List the reference BRDF surfaces available for stray-light work.
+
+    Every entry is anchored to a target total integrated scatter, the
+    fraction of incident power the surface removes from the specular beam,
+    which is the physically meaningful specification for a surface finish.
+
+    Returns:
+        Dict with the surface list and their model parameters.
+    """
+    from optics.radiometry import BRDF_DATABASE, total_integrated_scatter
+
+    surfaces = []
+    for name in sorted(BRDF_DATABASE):
+        params = BRDF_DATABASE[name]
+        surfaces.append({
+            "name": name,
+            "model": params.model,
+            "source": params.source,
+            "target_tis": params.target_tis,
+            "total_integrated_scatter": total_integrated_scatter(params),
+            "A": params.A,
+            "B": params.B,
+            "g": params.g,
+            "diffuse_fraction": params.diffuse_fraction,
+        })
+    return _make_serializable({"surfaces": surfaces, "count": len(surfaces)})
+
+
+
+# ---------------------------------------------------------------------------
+# Import/Export Endpoints
+# ---------------------------------------------------------------------------
+
+
+class ExportRequest(BaseModel):
+    """Request body for export operations."""
+    system: OpticalSystem
+    format: str = "zmx"  # "zmx", "seq", "svg", "bom", "sag", "iso10110"
+
+
+@app.post("/api/export")
+async def export_design(request: ExportRequest):
+    """
+    Export optical design to various formats.
+
+    Supported formats:
+    - zmx: Zemax lens data file
+    - seq: Code V sequence file
+    - svg: 2D lens drawing (SVG)
+    - bom: Bill of Materials
+    - sag: Sag table
+    - iso10110: ISO 10110 optical drawing
+
+    Args:
+        request: Contains the system and desired format.
+
+    Returns:
+        Exported file content as string.
+    """
+    from optics.io import export_zmx, export_seq
+    from optics.io.drawings import generate_lens_drawing, generate_iso10110_drawing, generate_sag_table
+    from optics.io.bom import generate_bom
+
+    import tempfile
+    import os
+
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix=f'.{request.format}', delete=False) as f:
+            filepath = f.name
+
+        if request.format == 'zmx':
+            export_zmx(request.system, filepath)
+        elif request.format == 'seq':
+            export_seq(request.system, filepath)
+        elif request.format == 'svg':
+            generate_lens_drawing(request.system, filepath, format='svg')
+        elif request.format == 'bom':
+            generate_bom(request.system, filepath, format='text')
+        elif request.format == 'sag':
+            generate_sag_table(request.system, filepath)
+        elif request.format == 'iso10110':
+            generate_iso10110_drawing(request.system, filepath)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {request.format}")
+
+        with open(filepath, 'r') as f:
+            content = f.read()
+
+        os.unlink(filepath)
+
+        return {
+            "format": request.format,
+            "content": content,
+            "filename": f"design.{request.format}",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# AI Copilot Endpoints
+# ---------------------------------------------------------------------------
+
+
+class ExplainRequest(BaseModel):
+    """Request body for explanation."""
+    system: OpticalSystem
+    question: str  # "Why does MTF drop?", "What are the main aberrations?", etc.
+
+
+@app.post("/api/ai/explain")
+async def ai_explain(request: ExplainRequest):
+    """
+    Get AI explanation of optical system behavior.
+
+    The AI uses the validated optics engine to answer questions about
+    the system. All calculations are cited.
+
+    Args:
+        request: Contains the system and question.
+
+    Returns:
+        Explanation with citations and confidence level.
+    """
+    from ai.copilot import explain_mtf_drop, CopilotResponse
+
+    try:
+        # Route question to appropriate handler
+        question_lower = request.question.lower()
+
+        if 'mtf' in question_lower or 'drop' in question_lower or 'performance' in question_lower:
+            response = explain_mtf_drop(request.system)
+        elif 'aberration' in question_lower:
+            from ai.explanations import diagnose_system
+            diagnosis = diagnose_system(request.system)
+            response = CopilotResponse(
+                answer=" ".join(diagnosis["findings"][0].get('message', '') for _ in diagnosis["findings"]),
+                citations=[f"Finding: {f['message']}" for f in diagnosis["findings"]],
+                confidence=0.8,
+                suggested_actions=[f"Suggestion: {f['suggestion']}" for f in diagnosis["findings"]],
+                verified=True,
+            )
+        else:
+            from ai.explanations import explain_system
+            explanation = explain_system(request.system)
+            response = CopilotResponse(
+                answer=" ".join(explanation["parts"]),
+                citations=[f"Metric: {k}={v}" for k, v in explanation.get("metrics", {}).items()],
+                confidence=0.75,
+                suggested_actions=["Ask about specific aberrations", "Ask about optimization suggestions"],
+                verified=True,
+            )
+
+        return {
+            "answer": response.answer,
+            "citations": response.citations,
+            "confidence": response.confidence,
+            "suggested_actions": response.suggested_actions,
+            "verified": response.verified,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class DesignSuggestionRequest(BaseModel):
+    """Request body for design suggestions."""
+    requirements: dict  # {"magnification": 5, "f_number": 2.8, "field_of_view": 10}
+
+
+@app.post("/api/ai/suggest")
+async def ai_suggest_design(request: DesignSuggestionRequest):
+    """
+    Get design family suggestions based on requirements.
+
+    Args:
+        request: Contains design requirements.
+
+    Returns:
+        Design family suggestion with rationale.
+    """
+    from ai.copilot import suggest_design_family
+
+    try:
+        response = suggest_design_family(request.requirements)
+        return {
+            "answer": response.answer,
+            "citations": response.citations,
+            "confidence": response.confidence,
+            "suggested_actions": response.suggested_actions,
+            "verified": response.verified,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class NLToPrescriptionRequest(BaseModel):
+    """Request body for natural language to prescription."""
+    description: str  # "Design a 5x magnification system at f/2.8"
+
+
+@app.post("/api/ai/nl-to-prescription")
+async def ai_nl_to_prescription(request: NLToPrescriptionRequest):
+    """
+    Convert natural language description to optical prescription.
+
+    Args:
+        request: Natural language description.
+
+    Returns:
+        Generated optical system and explanation.
+    """
+    from ai.copilot import natural_language_to_prescription
+
+    try:
+        system, response = natural_language_to_prescription(request.description)
+        return {
+            "system": system.model_dump() if system else None,
+            "answer": response.answer,
+            "citations": response.citations,
+            "confidence": response.confidence,
+            "suggested_actions": response.suggested_actions,
+            "verified": response.verified,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class VerifyRequest(BaseModel):
+    """Request body for verification."""
+    system: OpticalSystem
+    claim: str  # "EFL is 100mm"
+
+
+@app.post("/api/ai/verify")
+async def ai_verify(request: VerifyRequest):
+    """
+    Verify a claim about the optical system.
+
+    Runs actual calculations to verify claims.
+
+    Args:
+        request: Contains the system and claim to verify.
+
+    Returns:
+        Verification result with citations.
+    """
+    from ai.copilot import verify_calculation
+
+    try:
+        response = verify_calculation(request.system, request.claim)
+        return {
+            "answer": response.answer,
+            "citations": response.citations,
+            "confidence": response.confidence,
+            "suggested_actions": response.suggested_actions,
+            "verified": response.verified,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Non-Sequential Ray Tracing Endpoints
+# ---------------------------------------------------------------------------
+
+
+class NSCSourceRequest(BaseModel):
+    """NSC source configuration."""
+    name: str = "Source"
+    position: list[float] = [0, 0, 0]
+    direction: list[float] = [0, 0, 1]
+    intensity: float = 1.0
+    wavelength: float = 550.0  # nm
+    num_rays: int = 1000
+    source_type: str = "point"  # point, lambertian, collimated
+    half_angle: float = 30.0  # degrees
+
+
+class NSCObjectRequest(BaseModel):
+    """NSC object configuration."""
+    name: str = "Object"
+    object_type: str = "sphere"  # sphere, cylinder, box, lens, aspheric
+    position: list[float] = [0, 0, 0]
+    material: Optional[str] = None
+    radius: float = 25.0
+    length: float = 10.0
+    half_width: float = 25.0
+    half_height: float = 25.0
+    radius1: float = 50.0
+    radius2: float = -50.0
+    thickness: float = 10.0
+    reflectivity: float = 0.0
+    transmission: float = 1.0
+    absorption: float = 0.0
+    aspheric_coeffs: list[float] = []
+    conic: float = 0.0
+
+
+class NSCDetectorRequest(BaseModel):
+    """NSC detector configuration."""
+    name: str = "Detector"
+    position: list[float] = [0, 0, 100]
+    normal: list[float] = [0, 0, -1]
+    width: float = 25.0
+    height: float = 25.0
+    pixels_x: int = 100
+    pixels_y: int = 100
+
+
+class NSCTraceRequest(BaseModel):
+    """NSC trace request."""
+    sources: list[NSCSourceRequest]
+    objects: list[NSCObjectRequest]
+    detectors: list[NSCDetectorRequest]
+    max_order: int = 10
+    min_intensity: float = 1e-6
+
+
+@app.post("/api/nsc/trace")
+async def nsc_trace(request: NSCTraceRequest):
+    """
+    Run non-sequential ray tracing.
+
+    Traces rays through a system of 3D objects with splitting and scattering.
+
+    Args:
+        request: NSC system configuration.
+
+    Returns:
+        Tracing results including detector data.
+    """
+    from optics.nsc import (
+        NSCSystem, Source, Detector, Object3D, Vector3,
+        NSCTracer, AsphericSurface
+    )
+
+    try:
+        system = NSCSystem(
+            max_order=request.max_order,
+            min_intensity=request.min_intensity
+        )
+
+        # Add sources
+        for src_req in request.sources:
+            source = Source(
+                name=src_req.name,
+                position=Vector3(*src_req.position),
+                direction=Vector3(*src_req.direction),
+                intensity=src_req.intensity,
+                wavelength=src_req.wavelength * 1e-9,  # nm to m
+                num_rays=src_req.num_rays,
+                source_type=src_req.source_type,
+                half_angle=src_req.half_angle
+            )
+            system.add_source(source)
+
+        # Add objects
+        for obj_req in request.objects:
+            if obj_req.object_type == "aspheric":
+                obj = AsphericSurface(
+                    name=obj_req.name,
+                    position=Vector3(*obj_req.position),
+                    radius=obj_req.radius1,
+                    conic=obj_req.conic,
+                    aspheric_coeffs=obj_req.aspheric_coeffs,
+                    aperture_radius=obj_req.radius,
+                    material=obj_req.material
+                )
+            else:
+                obj = Object3D(
+                    name=obj_req.name,
+                    object_type=obj_req.object_type,
+                    position=Vector3(*obj_req.position),
+                    material=obj_req.material,
+                    radius=obj_req.radius,
+                    length=obj_req.length,
+                    half_width=obj_req.half_width,
+                    half_height=obj_req.half_height,
+                    radius1=obj_req.radius1,
+                    radius2=obj_req.radius2,
+                    thickness=obj_req.thickness,
+                    reflectivity=obj_req.reflectivity,
+                    transmission=obj_req.transmission,
+                    absorption=obj_req.absorption
+                )
+            system.add_object(obj)
+
+        # Add detectors
+        for det_req in request.detectors:
+            detector = Detector(
+                name=det_req.name,
+                position=Vector3(*det_req.position),
+                normal=Vector3(*det_req.normal),
+                width=det_req.width,
+                height=det_req.height,
+                pixels_x=det_req.pixels_x,
+                pixels_y=det_req.pixels_y
+            )
+            system.add_detector(detector)
+
+        # Run trace
+        tracer = NSCTracer(system)
+        results = tracer.trace()
+
+        return _make_serializable(results)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/nsc/examples")
+async def nsc_examples():
+    """
+    Get example NSC systems.
+
+    Returns predefined example configurations for common NSC scenarios.
+    """
+    return {
+        "examples": [
+            {
+                "name": "Single Lens Focus",
+                "description": "Collimated beam focused by a single lens",
+                "sources": [{
+                    "name": "Collimated",
+                    "position": [0, 0, 0],
+                    "direction": [0, 0, 1],
+                    "source_type": "collimated",
+                    "num_rays": 1000
+                }],
+                "objects": [{
+                    "name": "Lens",
+                    "object_type": "lens",
+                    "position": [0, 0, 50],
+                    "radius1": 25,
+                    "radius2": -25,
+                    "thickness": 10,
+                    "material": "N-BK7"
+                }],
+                "detectors": [{
+                    "name": "Focus",
+                    "position": [0, 0, 100],
+                    "width": 10,
+                    "height": 10,
+                    "pixels_x": 50,
+                    "pixels_y": 50
+                }]
+            },
+            {
+                "name": "Mirror Reflection",
+                "description": "Beam reflected by a spherical mirror",
+                "sources": [{
+                    "name": "Source",
+                    "position": [0, 0, 0],
+                    "direction": [0, 0, 1],
+                    "source_type": "collimated",
+                    "num_rays": 500
+                }],
+                "objects": [{
+                    "name": "Mirror",
+                    "object_type": "sphere",
+                    "position": [0, 0, 50],
+                    "radius": 100,
+                    "reflectivity": 0.95
+                }],
+                "detectors": [{
+                    "name": "Detector",
+                    "position": [0, 0, 100],
+                    "width": 50,
+                    "height": 50
+                }]
+            },
+            {
+                "name": "Lambertian Source",
+                "description": "LED-like source with Lambertian distribution",
+                "sources": [{
+                    "name": "LED",
+                    "position": [0, 0, 0],
+                    "direction": [0, 0, 1],
+                    "source_type": "lambertian",
+                    "half_angle": 30,
+                    "num_rays": 10000
+                }],
+                "objects": [],
+                "detectors": [{
+                    "name": "Detector",
+                    "position": [0, 0, 50],
+                    "width": 50,
+                    "height": 50,
+                    "pixels_x": 100,
+                    "pixels_y": 100
+                }]
+            }
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# CAD Import Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/cad/import")
+async def cad_import(file: UploadFile = File(...)):
+    """
+    Import a CAD file.
+
+    Supports STL, OBJ, STEP, and IGES formats.
+
+    Args:
+        file: CAD file to upload
+
+    Returns:
+        Mesh data and statistics.
+    """
+    from optics.nsc.cad import import_cad_file
+    import tempfile
+
+    try:
+        # Save uploaded file to temp location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # Import the file
+        mesh = import_cad_file(tmp_path)
+
+        # Clean up
+        os.unlink(tmp_path)
+
+        return {
+            "success": True,
+            "filename": file.filename,
+            "mesh": {
+                "name": mesh.name,
+                "num_triangles": mesh.num_triangles,
+                "num_vertices": mesh.num_vertices,
+                "bbox_min": [mesh.bbox_min.x, mesh.bbox_min.y, mesh.bbox_min.z] if mesh.bbox_min else None,
+                "bbox_max": [mesh.bbox_max.x, mesh.bbox_max.y, mesh.bbox_max.z] if mesh.bbox_max else None,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/cad/formats")
+async def cad_formats():
+    """
+    Get supported CAD formats.
+
+    Returns:
+        Dictionary of supported formats and their capabilities.
+    """
+    from optics.nsc.cad import get_supported_formats
+    return get_supported_formats()
+
+
+# ---------------------------------------------------------------------------
+# CAD Export Endpoint
+# ---------------------------------------------------------------------------
+
+
+class CADExportRequest(BaseModel):
+    """CAD export of a system's element geometry (millimetres)."""
+    system: OpticalSystem
+    format: str = "stl"  # stl, obj, ply (STEP/IGES are not implemented)
+    binary: bool = True  # For STL format
+
+
+@app.post("/api/cad/export")
+async def cad_export(request: CADExportRequest):
+    """
+    Export optical system to CAD format.
+
+    Args:
+        request: Export parameters
+
+    Returns:
+        Exported file content.
+    """
+    from optics.nsc.cad import export_mesh
+    from optics.nsc.cad.lens_mesh import system_meshes, merge_meshes
+    import tempfile
+
+    try:
+        meshes, skipped = system_meshes(request.system)
+        if not meshes:
+            raise ValueError("No element has physical geometry to export "
+                             "(ideal thin lenses are skipped)")
+        mesh = merge_meshes(meshes)
+        fd, path = tempfile.mkstemp(suffix=f'.{request.format}')
+        os.close(fd)
+        try:
+            export_mesh(mesh, path, format=request.format)
+            with open(path, 'rb') as f:
+                content = f.read()
+        finally:
+            os.unlink(path)
+
+        return {
+            "success": True,
+            "format": request.format,
+            "units": "mm",
+            "skipped": [{"id": c, "reason": r} for c, r in skipped],
+            "content": content.hex()  # Hex encode for JSON
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Conversational Design Refinement (multi-turn)
+# ---------------------------------------------------------------------------
+
+
+class ChatTurnModel(BaseModel):
+    """One prior exchange, supplied by the client to rebuild session state."""
+    user: str
+    assistant: str = ""
+
+
+class ChatRequest(BaseModel):
+    """Request body for a conversational refinement turn."""
+    system: OpticalSystem
+    message: str
+    history: Optional[list[ChatTurnModel]] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+@app.post("/api/ai/chat")
+async def ai_chat(request: ChatRequest):
+    """
+    Process one turn of a multi-turn optical design conversation.
+
+    The API is stateless, so the client sends the current system plus the
+    prior user turns. Those turns are replayed to rebuild session state so
+    that anaphora ("make IT faster") and undo behave correctly.
+
+    Recognised refinement intents include: add/remove element, make
+    faster/smaller, widen/stop-down aperture, scale by N, refocus,
+    optimize, analyze, diagnose, design, and undo.
+    """
+    from ai.conversation import ConversationSession
+
+    try:
+        session = ConversationSession(request.system)
+        for turn in (request.history or []):
+            try:
+                session.ask(turn.user)
+            except Exception:
+                # A stale turn must not break the new one.
+                continue
+
+        result = session.ask(request.message)
+        return {
+            "message": result.assistant_text,
+            "intent": result.intent.value,
+            "ok": result.ok,
+            "referenced": result.referenced,
+            "brief_changes": result.brief_changes,
+            "brief": session.brief.as_dict(),
+            "can_undo": session.can_undo,
+            "system": session.system.model_dump(),
+            "turn": result.as_dict(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class BriefRequest(BaseModel):
+    """Request body for parsing statements into a design brief."""
+    statements: list[str]
+
+
+@app.post("/api/ai/brief")
+async def ai_brief(request: BriefRequest):
+    """
+    Parse requirement statements into a structured design brief.
+
+    Use this to accumulate constraints from terse fragments such as
+    "5x magnification", "at f/2.8", "for visible wavelengths".
+    """
+    from ai.conversation import DesignBrief
+
+    brief = DesignBrief()
+    changes = []
+    for statement in request.statements:
+        changes.extend(brief.update_from_text(statement))
+    return {
+        "brief": brief.as_dict(),
+        "changes": changes,
+        "context_note": brief.to_context_note(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Verification
+# ---------------------------------------------------------------------------
+
+
+class VerifyClaimsRequest(BaseModel):
+    """Request body for verifying stated claims about a system."""
+    system: OpticalSystem
+    claims: list[str]
+    tolerance: Optional[float] = None
+
+
+@app.post("/api/ai/verify/claims")
+async def ai_verify_claims(request: VerifyClaimsRequest):
+    """
+    Verify numeric claims against the validated optics engine.
+
+    Recognises claims about EFL, magnification, f-number, RMS spot radius
+    and the diffraction-limited condition. Every value is re-derived, so
+    the AI can never assert an unverified number.
+    """
+    from ai.verification import verify_claims, CLAIM_TOLERANCE
+
+    try:
+        tol = request.tolerance if request.tolerance is not None else CLAIM_TOLERANCE
+        results = verify_claims(request.system, request.claims, tol)
+        return {
+            "results": [r.as_dict() for r in results],
+            "all_verified": all(r.verified for r in results),
+            "tolerance": tol,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class PrescriptionVerifyRequest(BaseModel):
+    """Request body for reference-prescription comparison."""
+    system: OpticalSystem
+    tolerance: Optional[float] = None
+
+
+@app.post("/api/ai/verify/prescription")
+async def ai_verify_prescription(request: PrescriptionVerifyRequest):
+    """
+    Compare a design against the classic reference prescriptions.
+
+    Reports the closest reference (Cooke triplet, Double Gauss, Tessar,
+    Petzval, telephoto, retrofocus, ...) together with the EFL, f-number
+    and element-count deltas.
+    """
+    from ai.verification import verify_prescription
+
+    try:
+        tol = request.tolerance if request.tolerance is not None else 0.25
+        comparison = verify_prescription(request.system, tol)
+        return comparison.as_dict()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class DesignRulesRequest(BaseModel):
+    """Request body for manufacturability rule checks."""
+    system: OpticalSystem
+
+
+@app.post("/api/ai/design-rules")
+async def ai_design_rules(request: DesignRulesRequest):
+    """
+    Run manufacturability rule checks on a design.
+
+    Checks catalog glass availability, minimum edge thickness, minimum
+    centre thickness, and element diameter/thickness aspect ratio.
+    """
+    from ai.verification import rule_check_summary
+
+    try:
+        return rule_check_summary(request.system)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class FullVerifyRequest(BaseModel):
+    """Request body for the combined verification report."""
+    system: OpticalSystem
+    claims: Optional[list[str]] = None
+    tolerance: Optional[float] = None
+
+
+@app.post("/api/ai/verify/full")
+async def ai_verify_full(request: FullVerifyRequest):
+    """
+    Run rule checks, prescription comparison and claim verification
+    in a single call and return the combined report.
+    """
+    from ai.verification import full_verification
+
+    try:
+        return full_verification(request.system, request.claims)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/ai/providers")
+async def ai_providers():
+    """
+    Report which LLM providers are configured and available.
+
+    The application works fully offline; the rule-based interpreter is
+    always available, and an LLM provider is optional.
+    """
+    from ai.providers import ProviderConfig, ProviderChain
+
+    try:
+        config = ProviderConfig.from_env()
+        chain = ProviderChain.from_config(config)
+        available = [p for p in chain.providers if p.is_available()]
+        return {
+            "configured_provider": config.provider,
+            "model": config.model,
+            "base_url": config.base_url,
+            "enabled": config.enabled,
+            "available": [p.name for p in available],
+            "active": chain.available_provider(),
+            "rule_based_fallback": True,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
