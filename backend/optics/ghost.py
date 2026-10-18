@@ -81,6 +81,10 @@ N_AIR = 1.0
 # Nominal edge thickness assumed when deriving a thin lens centre thickness.
 DEFAULT_EDGE_THICKNESS = 1.0e-3   # 1 mm
 
+# Air gap left between elements placed in contact (a thin-lens doublet), so
+# the ray never meets two surfaces at the same point.
+CONTACT_GAP = 1.0e-6   # 1 um
+
 
 # =============================================================================
 # Fresnel reflectance
@@ -216,29 +220,69 @@ def build_surface_chain(system: OpticalSystem,
         wavelength = system.analysis_settings.wavelength
 
     surfaces: list[GhostSurface] = []
+    prev_semi = 0.0
     for comp in sorted(system.components, key=lambda c: c.position):
         if isinstance(comp, ThinLens):
-            surfaces.extend(_thin_lens_surfaces(comp, wavelength, edge_thickness))
+            group = _thin_lens_surfaces(comp, wavelength, edge_thickness)
         elif isinstance(comp, ThickLens):
-            surfaces.extend(_thick_lens_surfaces(comp, wavelength))
+            group = _thick_lens_surfaces(comp, wavelength)
         elif isinstance(comp, Mirror):
-            surfaces.append(GhostSurface(
+            group = [GhostSurface(
                 index=0, z=comp.position, radius=getattr(comp, "radius", 0.0) or 0.0,
                 n_left=N_AIR, n_right=N_AIR, label=f"{comp.id}.mirror",
                 reflective=True,
-            ))
+            )]
         elif isinstance(comp, SphericalSurface):
             n = refractive_index(comp.material, wavelength) if comp.material else N_AIR
-            surfaces.append(GhostSurface(
+            group = [GhostSurface(
                 index=0, z=comp.position, radius=comp.radius,
                 n_left=N_AIR, n_right=n, label=comp.id,
-            ))
-        # ApertureStop and non-refracting components are not surfaces.
+            )]
+        else:
+            # ApertureStop and non-refracting components are not surfaces.
+            continue
+        if not group:
+            continue
 
-    surfaces.sort(key=lambda s: s.z)
+        # Elements that share a position (a thin-lens doublet in contact) or
+        # sit closer than the modelled glass would otherwise interleave their
+        # surfaces. Push the element back until its front surface clears the
+        # previous back surface over the common aperture, leaving the two
+        # (almost) in contact.
+        semi = max(0.0, (getattr(comp, "aperture_diameter", 0.0) or 0.0) / 2.0)
+        if surfaces:
+            shift = _contact_shift(surfaces[-1], group[0], min(prev_semi, semi))
+            if shift > 0.0:
+                for s in group:
+                    s.z += shift
+        surfaces.extend(group)
+        prev_semi = semi
+
     for i, s in enumerate(surfaces):
         s.index = i
     return surfaces
+
+
+def _signed_sag(radius: float, h: float) -> float:
+    """Axial offset of a sphere of signed radius from its vertex at height h."""
+    if abs(radius) < 1e-12:
+        return 0.0
+    h = min(abs(h), abs(radius))
+    return radius - math.copysign(math.sqrt(radius * radius - h * h), radius)
+
+
+def _contact_shift(prev: GhostSurface, nxt: GhostSurface, semi: float,
+                   samples: int = 9) -> float:
+    """
+    Axial shift that keeps surface ``nxt`` at least ``CONTACT_GAP`` behind
+    ``prev`` everywhere within the semi-aperture ``semi`` (0 when they
+    already clear).
+    """
+    shift = 0.0
+    for h in np.linspace(0.0, semi, samples) if semi > 0 else [0.0]:
+        gap = (nxt.z + _signed_sag(nxt.radius, h)) - (prev.z + _signed_sag(prev.radius, h))
+        shift = max(shift, CONTACT_GAP - gap)
+    return shift
 
 
 # =============================================================================
