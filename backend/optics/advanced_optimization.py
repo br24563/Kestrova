@@ -479,7 +479,9 @@ def hybrid_optimize(
 
     if wrapped_objective(x_optimal) > wrapped_objective(x_global):
         x_optimal = np.asarray(x_global)   # the local step must not make things worse
-        final_objective = wrapped_objective(x_global)
+    # Report the true merit: a local solver's own figure can be on another
+    # scale (DLS square-roots a single residual, which is already sqrt(merit)).
+    final_objective = wrapped_objective(x_optimal)
     final_system = build(x_optimal)
     _, violations = _evaluate_constraints(final_system, config.constraints)
     return {

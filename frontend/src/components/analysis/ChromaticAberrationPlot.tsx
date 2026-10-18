@@ -1,140 +1,83 @@
 /**
  * Chromatic Aberration Plot Component.
  *
- * Displays Longitudinal Chromatic Aberration (LCA) and
- * Transverse Chromatic Aberration (TCA) vs. wavelength.
+ * Chromatic focal shift: paraxial image position vs. wavelength relative to
+ * the 550 nm image, from each material's dispersion formula. The summary
+ * shows axial (longitudinal) and lateral colour between the F (486.1 nm)
+ * and C (656.3 nm) lines, as computed by the backend.
  */
 
-import { useMemo } from 'react';
 import type { OpticalSystem, LengthUnit } from '../../types';
-import { fromMeters } from '../../types';
+import { fromMeters, LENGTH_UNIT_LABELS } from '../../types';
+import { analyzeChromatic } from '../../api';
+import { LinePlot } from './LinePlot';
+import { ExportButton } from '../ExportButton';
+import { useAnalysis } from './useAnalysis';
 
 interface ChromaticAberrationPlotProps {
   system: OpticalSystem;
   displayUnit: LengthUnit;
 }
 
-interface ChromaticData {
-  wavelengths: number[];  // nm
-  imagePositions: number[];  // mm from reference
-  imageHeights: number[];  // mm
-}
-
-function computeChromaticData(system: OpticalSystem): ChromaticData {
-  const wavelengths: number[] = [];
-  const imagePositions: number[] = [];
-  const imageHeights: number[] = [];
-  
-  // Compute for wavelengths from 400nm to 700nm
-  const numPoints = 31;
-  const lambdaMin = 400e-9;
-  const lambdaMax = 700e-9;
-  
-  // Reference at 550nm
-  const lambdaRef = 550e-9;
-  let refPosition = 0;
-  let refHeight = 0;
-  
-  // First pass: compute reference
-  for (let i = 0; i < numPoints; i++) {
-    const lambda = lambdaMin + (lambdaMax - lambdaMin) * i / (numPoints - 1);
-    wavelengths.push(lambda * 1e9);
-    
-    // Simplified chromatic model
-    // Image position shifts with dispersion
-    const n = 1.5 + 0.01 * (550 - lambda * 1e9) / 100;  // simplified dispersion
-    const f = 0.1;  // 100mm base focal length
-    const fLambda = f * (n - 1) / (1.5 - 1);  // scale by index
-    
-    const s = -0.2;  // object at 200mm
-    const sPrime = fLambda * s / (s + fLambda);
-    
-    if (Math.abs(lambda - lambdaRef) < 1e-10) {
-      refPosition = sPrime;
-      refHeight = sPrime / s * 0.01;  // magnification * object height
-    }
-  }
-  
-  // Second pass: compute relative to reference
-  for (let i = 0; i < numPoints; i++) {
-    const lambda = lambdaMin + (lambdaMax - lambdaMin) * i / (numPoints - 1);
-    const n = 1.5 + 0.01 * (550 - lambda * 1e9) / 100;
-    const f = 0.1;
-    const fLambda = f * (n - 1) / (1.5 - 1);
-    const s = -0.2;
-    const sPrime = fLambda * s / (s + fLambda);
-    
-    imagePositions.push((sPrime - refPosition) * 1000);  // mm
-    imageHeights.push((sPrime / s * 0.01 - refHeight) * 1000);  // mm
-  }
-  
-  return { wavelengths, imagePositions, imageHeights };
-}
+// 400-700 nm in 10 nm steps; the middle sample (550 nm) is the reference.
+const SWEEP = Array.from({ length: 31 }, (_, i) => (400 + 10 * i) * 1e-9);
+const F_D_C = [486.1327e-9, 587.5618e-9, 656.2725e-9];
 
 export function ChromaticAberrationPlot({ system, displayUnit }: ChromaticAberrationPlotProps) {
-  const data = useMemo(() => computeChromaticData(system), [system]);
-  
-  const width = 350;
-  const height = 250;
-  const padding = 40;
-  const plotWidth = width - 2 * padding;
-  const plotHeight = height - 2 * padding;
-  
-  const maxPos = Math.max(...data.imagePositions.map(Math.abs), 0.01);
-  const maxH = Math.max(...data.imageHeights.map(Math.abs), 0.01);
-  
-  const toSvgX = (wl: number) => padding + ((wl - 400) / 300) * plotWidth;
-  const toSvgYPos = (value: number) => padding + plotHeight * 0.35 - (value / maxPos) * (plotHeight * 0.3);
-  const toSvgYHeight = (value: number) => padding + plotHeight * 0.85 - (value / maxH) * (plotHeight * 0.25);
-  
-  const createPathX = (values: number[], toY: (v: number) => number) => {
-    return data.wavelengths.map((wl, i) => `${i === 0 ? 'M' : 'L'} ${toSvgX(wl).toFixed(1)} ${toY(values[i]).toFixed(1)}`).join(' ');
-  };
-  
-  // Compute LCA and TCA values
-  const lca = Math.max(...data.imagePositions) - Math.min(...data.imagePositions);
-  const tca = Math.max(...data.imageHeights) - Math.min(...data.imageHeights);
+  const { data, error, loading } = useAnalysis(
+    () => Promise.all([analyzeChromatic(system, SWEEP), analyzeChromatic(system, F_D_C)]),
+    [system],
+  );
+  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
+  const sweep = data?.[0];
+  const fdc = data?.[1];
+  const ref = sweep ? sweep.image_positions[Math.floor(sweep.image_positions.length / 2)] : 0;
+  const shift = sweep ? sweep.image_positions.map((z) => fromMeters(z - ref, displayUnit)) : [];
 
   return (
-    <div className="p-4 border-t border-gray-200">
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-sm font-semibold text-gray-700">Chromatic Aberration</h3>
-        <div className="flex gap-3 text-xs text-gray-500">
-          <span>LCA: {(lca * 1000).toFixed(2)} \u00B5m</span>
-          <span>TCA: {(tca * 1000).toFixed(2)} \u00B5m</span>
-        </div>
+    <div className="p-4">
+      <div className="flex justify-between items-center mb-2 gap-2">
+        <h3 className="text-sm font-semibold text-gray-700">Chromatic Focal Shift</h3>
+        {sweep && (
+          <div className="flex gap-2">
+            <ExportButton svgId="chromatic-plot" filename="chromatic-focal-shift" />
+            <ExportButton
+              type="csv"
+              filename="chromatic-focal-shift"
+              data={sweep.wavelengths.map((w, i) => ({
+                wavelength_nm: w * 1e9,
+                image_position_m: sweep.image_positions[i],
+                focal_shift_m: sweep.image_positions[i] - ref,
+                image_height_m: sweep.image_heights[i],
+              }))}
+            />
+          </div>
+        )}
       </div>
-      
-      <div className="border border-gray-200 rounded bg-white">
-        <svg width={width} height={height} className="mx-auto">
-          {/* LCA Plot (top) */}
-          <rect x={padding} y={padding} width={plotWidth} height={plotHeight * 0.45} fill="#fafafa" stroke="#e5e7eb" />
-          <line x1={padding} y1={padding + plotHeight * 0.225} x2={padding + plotWidth} y2={padding + plotHeight * 0.225} stroke="#9ca3af" strokeWidth={1} />
-          
-          <path d={createPathX(data.imagePositions, toSvgYPos)} fill="none" stroke="#ef4444" strokeWidth={1.5} />
-          
-          <text x={5} y={padding + plotHeight * 0.225} fontSize={9} fill="#6b7280" transform={`rotate(-90, 5, ${padding + plotHeight * 0.225})`}>LCA (mm)</text>
-          
-          {/* TCA Plot (bottom) */}
-          <rect x={padding} y={padding + plotHeight * 0.5} width={plotWidth} height={plotHeight * 0.4} fill="#fafafa" stroke="#e5e7eb" />
-          <line x1={padding} y1={padding + plotHeight * 0.7} x2={padding + plotWidth} y2={padding + plotHeight * 0.7} stroke="#9ca3af" strokeWidth={1} />
-          
-          <path d={createPathX(data.imageHeights, toSvgYHeight)} fill="none" stroke="#3b82f6" strokeWidth={1.5} />
-          
-          <text x={5} y={padding + plotHeight * 0.7} fontSize={9} fill="#6b7280" transform={`rotate(-90, 5, ${padding + plotHeight * 0.7})`}>TCA (mm)</text>
-          
-          {/* X-axis */}
-          <text x={padding + plotWidth / 2} y={height - 5} fontSize={9} fill="#6b7280" textAnchor="middle">Wavelength (nm)</text>
-          <text x={padding} y={height - 5} fontSize={9} fill="#6b7280">400</text>
-          <text x={padding + plotWidth / 2} y={height - 5} fontSize={9} fill="#6b7280" textAnchor="middle">550</text>
-          <text x={padding + plotWidth} y={height - 5} fontSize={9} fill="#6b7280" textAnchor="end">700</text>
-        </svg>
-      </div>
-      
-      <div className="flex gap-4 mt-2 text-xs">
-        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-red-500 inline-block"></span> LCA (Longitudinal)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 inline-block"></span> TCA (Transverse)</span>
-      </div>
+
+      {loading && !data && <p className="text-xs text-gray-500">Computing chromatic aberration...</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      {sweep && fdc && !error && (
+        <>
+          <div className="flex gap-4 text-xs text-gray-600 mb-2">
+            <span>Axial colour (F&minus;C): {fromMeters(fdc.lca, displayUnit).toPrecision(4)} {unitLabel}</span>
+            <span>Lateral colour (F&minus;C): {fromMeters(fdc.tca, displayUnit).toPrecision(4)} {unitLabel}</span>
+          </div>
+          <LinePlot
+            id="chromatic-plot"
+            series={[
+              { label: 'Image position − image at 550 nm', color: '#7c3aed', x: sweep.wavelengths.map((w) => w * 1e9), y: shift },
+            ]}
+            xLabel="Wavelength (nm)"
+            yLabel={`Focal shift (${unitLabel})`}
+            xDomain={[400, 700]}
+          />
+          <div className="mt-2 text-xs text-gray-500">
+            Paraxial. Negative axial colour means blue focuses before red (under-corrected).
+            Lateral colour is measured in the d-line image plane.
+          </div>
+        </>
+      )}
     </div>
   );
 }

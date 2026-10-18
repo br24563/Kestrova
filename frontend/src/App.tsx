@@ -35,6 +35,13 @@ import { DiffractionPanel } from "./components/DiffractionPanel";
 import { SeidelPanel } from "./components/SeidelPanel";
 import { TolerancePanel } from "./components/TolerancePanel";
 import { ComparisonPanel } from "./components/ComparisonPanel";
+import { RayFanPlot } from "./components/analysis/RayFanPlot";
+import { OPDPlot } from "./components/analysis/OPDPlot";
+import { FieldCurvaturePlot } from "./components/analysis/FieldCurvaturePlot";
+import { ChromaticAberrationPlot } from "./components/analysis/ChromaticAberrationPlot";
+import { GhostAnalysisPanel } from "./components/analysis/GhostAnalysisPanel";
+import { AdvancedOptimizationPanel } from "./components/optimization/AdvancedOptimizationPanel";
+import { ReportGenerator } from "./components/report/ReportGenerator";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ErrorMessage } from "./components/ErrorMessage";
 import { useTheme } from "./context/ThemeContext";
@@ -42,6 +49,19 @@ import { useHistory } from "./hooks/useHistory";
 import { DEFAULT_LENGTH_UNIT, LENGTH_UNIT_LABELS } from "./types";
 
 const STORAGE_KEY = "ai-optical-design-engineer-system";
+
+// Analysis tabs under the optical bench; only the active one is mounted,
+// so only it queries the backend.
+const ANALYSIS_TABS = [
+  { id: "ray-fan", label: "Ray Fan" },
+  { id: "opd", label: "OPD" },
+  { id: "field", label: "Field Curvature" },
+  { id: "chromatic", label: "Chromatic" },
+  { id: "ghosts", label: "Ghosts" },
+  { id: "optimize", label: "Advanced Optimization" },
+  { id: "report", label: "Report" },
+] as const;
+type AnalysisTab = (typeof ANALYSIS_TABS)[number]["id"];
 
 function App() {
   // Theme
@@ -63,6 +83,7 @@ function App() {
   const [projects, setProjects] = useState<SystemMetadata[]>([]);
   const [projectName, setProjectName] = useState<string>("");
   const [presets, setPresets] = useState<PresetInfo[]>([]);
+  const [analysisTab, setAnalysisTab] = useState<AnalysisTab>("ray-fan");
 
   // History for system state (undo/redo)
   const systemHistory = useHistory<OpticalSystem | null>(null);
@@ -626,7 +647,7 @@ function App() {
           </div>
         </div>
 
-        {/* Center: Optical Bench */}
+        {/* Center: Optical Bench + analysis tabs */}
         <div className="flex-1 overflow-auto">
           <OpticalBench
             system={system}
@@ -634,6 +655,40 @@ function App() {
             analysis={analysis}
             displayUnit={displayUnit}
           />
+          <div className="mx-4 mb-4 bg-white border border-gray-200 rounded-lg">
+            <div className="flex flex-wrap border-b border-gray-200" role="tablist">
+              {ANALYSIS_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={analysisTab === tab.id}
+                  onClick={() => setAnalysisTab(tab.id)}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                    analysisTab === tab.id
+                      ? "border-optical-600 text-optical-700"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div role="tabpanel">
+              {analysisTab === "ray-fan" && <RayFanPlot system={system} displayUnit={displayUnit} />}
+              {analysisTab === "opd" && <OPDPlot system={system} displayUnit={displayUnit} />}
+              {analysisTab === "field" && <FieldCurvaturePlot system={system} displayUnit={displayUnit} />}
+              {analysisTab === "chromatic" && <ChromaticAberrationPlot system={system} displayUnit={displayUnit} />}
+              {analysisTab === "ghosts" && <GhostAnalysisPanel system={system} displayUnit={displayUnit} />}
+              {analysisTab === "optimize" && (
+                <AdvancedOptimizationPanel
+                  system={system}
+                  displayUnit={displayUnit}
+                  onApplyOptimized={setSystem}
+                />
+              )}
+              {analysisTab === "report" && <ReportGenerator system={system} displayUnit={displayUnit} />}
+            </div>
+          </div>
         </div>
 
         {/* Right Panel: Analysis & Spot Diagram */}

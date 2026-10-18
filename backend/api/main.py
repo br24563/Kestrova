@@ -52,6 +52,13 @@ from optics.report import (
 )
 from optics.diffraction import diffraction_analysis as run_diffraction
 from optics.seidel import seidel_analysis as run_seidel
+from optics.high_order import (
+    ray_fan as run_ray_fan,
+    opd_fan as run_opd_fan,
+    field_curves as run_field_curves,
+    field_extent,
+    require_finite_image,
+)
 from persistence import (
     save_system as db_save_system,
     list_systems as db_list_systems,
@@ -133,6 +140,19 @@ class ReportRequest(BaseModel):
     label_a: str = "Design A"
     label_b: str = "Design B"
     include_svg: bool = False
+
+
+class FieldAnalysisRequest(BaseModel):
+    """Request body for ray-fan and OPD-fan analysis at one field point."""
+    system: OpticalSystem
+    field_fraction: float = Field(default=1.0, ge=0.0, le=1.0)
+    num_rays: int = Field(default=21, ge=3, le=201)
+
+
+class FieldCurvesRequest(BaseModel):
+    """Request body for field curvature / distortion curves."""
+    system: OpticalSystem
+    num_fields: int = Field(default=11, ge=2, le=51)
 
 
 class SystemResponse(BaseModel):
@@ -671,6 +691,58 @@ async def analyze_seidel(request: AnalyzeRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/analyze/ray-fan")
+async def analyze_ray_fan(request: FieldAnalysisRequest):
+    """
+    Real-ray tangential and sagittal ray fans at the system image plane.
+
+    Returns transverse ray errors relative to the chief ray (meters, null
+    for vignetted rays) against normalised pupil coordinate, plus the full
+    field extent the ``field_fraction`` refers to.
+    """
+    try:
+        require_finite_image(request.system)
+        result = run_ray_fan(request.system, request.num_rays, request.field_fraction)
+        result.update(field_extent(request.system))
+        return _make_serializable(result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/opd-fan")
+async def analyze_opd_fan(request: FieldAnalysisRequest):
+    """
+    Optical path difference along the tangential and sagittal pupil axes at
+    the system image plane (meters), with the 2D-pupil RMS, peak-to-valley
+    and Strehl ratio.
+    """
+    try:
+        require_finite_image(request.system)
+        result = run_opd_fan(request.system, request.num_rays, request.field_fraction)
+        result.update(field_extent(request.system))
+        return _make_serializable(result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/field-curves")
+async def analyze_field_curves(request: FieldCurvesRequest):
+    """
+    Real-ray field curvature and distortion versus field.
+
+    Tangential, sagittal and medial foci are relative to the paraxial image
+    (meters, positive in the direction of travel); distortion is a fraction
+    of the paraxial image height.
+    """
+    try:
+        require_finite_image(request.system)
+        result = run_field_curves(request.system, request.num_fields)
+        result.update(field_extent(request.system))
+        return _make_serializable(result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/validate", response_model=SystemResponse)
 async def validate(system: OpticalSystem):
     """
@@ -851,9 +923,12 @@ class HybridOptimizeRequest(BaseModel):
     """Request body for hybrid optimization."""
     system: OpticalSystem
     objective: str = "rms_spot"  # rms_spot, efl, magnification
+    target: Optional[float] = None  # required for the efl / magnification objectives
     params: list[dict]  # [{"component_id": "L1", "field": "focal_length"}, ...]
     bounds: list[list[float]]  # [[min, max], ...]
     constraints: list[dict] = []  # [{"type": "efl", "lower": 0.09, "upper": 0.11}, ...]
+    global_algorithm: str = "differential_evolution"  # or "particle_swarm"
+    local_algorithm: str = "damped_least_squares"  # "l_bfgs_b", "nelder_mead"
     global_maxiter: int = 200
     local_maxiter: int = 100
     seed: Optional[int] = 42
@@ -878,21 +953,32 @@ async def hybrid_optimize(request: HybridOptimizeRequest):
         hybrid_optimize as run_hybrid,
         OptimizationConfig,
         OptimizationConstraint,
+        GlobalAlgorithm,
+        LocalAlgorithm,
     )
 
     try:
+        if request.objective not in ("rms_spot", "efl", "magnification"):
+            raise ValueError(f"Unknown objective: {request.objective}")
+        if request.objective != "rms_spot" and request.target is None:
+            raise ValueError(f"{request.objective} objective requires a target.")
+
         # Build constraints
         constraints = []
         for c in request.constraints:
+            # a missing or null bound means unbounded on that side
             constraints.append(OptimizationConstraint(
                 type=c.get("type", ""),
-                lower=c.get("lower", -np.inf),
-                upper=c.get("upper", np.inf),
+                surface_index=c.get("surface_index"),
+                lower=c.get("lower") if c.get("lower") is not None else -np.inf,
+                upper=c.get("upper") if c.get("upper") is not None else np.inf,
                 weight=c.get("weight", 1.0),
             ))
 
         # Build config
         config = OptimizationConfig(
+            global_algorithm=GlobalAlgorithm(request.global_algorithm),
+            local_algorithm=LocalAlgorithm(request.local_algorithm),
             global_maxiter=request.global_maxiter,
             local_maxiter=request.local_maxiter,
             constraints=constraints,
@@ -904,11 +990,9 @@ async def hybrid_optimize(request: HybridOptimizeRequest):
             analysis = analyze_system(sys)
             if request.objective == "rms_spot":
                 return analysis.rms_spot_radius
-            elif request.objective == "efl":
-                return abs(analysis.effective_focal_length - 0.1)  # Target 100mm
-            elif request.objective == "magnification":
-                return abs(analysis.magnification - (-1.0))  # Target -1x
-            return analysis.rms_spot_radius
+            if request.objective == "efl":
+                return abs(analysis.effective_focal_length - request.target)
+            return abs(analysis.magnification - request.target)
 
         result = run_hybrid(
             request.system,
@@ -923,6 +1007,47 @@ async def hybrid_optimize(request: HybridOptimizeRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class ConstraintValuesRequest(BaseModel):
+    """Request body for evaluating optimization constraint operands."""
+    system: OpticalSystem
+    constraints: list[dict]  # [{"type": "efl", "surface_index": None, "lower": .., "upper": .., "weight": ..}]
+
+
+@app.post("/api/optimize/constraints")
+async def evaluate_constraints(request: ConstraintValuesRequest):
+    """
+    Current value of each constraint operand and its penalty, exactly as
+    the hybrid optimizer evaluates them (penalty = weight * violation * 1e6).
+    Operands that cannot be evaluated for this system come back with a null
+    value and an error message.
+    """
+    from optics.advanced_optimization import OptimizationConstraint, _get_constraint_value
+
+    try:
+        analysis = analyze_system(request.system)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    rows = []
+    for c in request.constraints:
+        con = OptimizationConstraint(
+            type=c.get("type", ""),
+            surface_index=c.get("surface_index"),
+            lower=c.get("lower") if c.get("lower") is not None else -np.inf,
+            upper=c.get("upper") if c.get("upper") is not None else np.inf,
+            weight=c.get("weight", 1.0),
+        )
+        try:
+            value = float(_get_constraint_value(request.system, analysis, con))
+        except ValueError as e:
+            rows.append({"type": con.type, "value": None, "violation": None,
+                         "penalty": None, "error": str(e)})
+            continue
+        violation = max(con.lower - value, value - con.upper, 0.0)
+        rows.append({"type": con.type, "value": value, "violation": violation,
+                     "penalty": con.weight * violation * 1e6, "error": None})
+    return _make_serializable({"constraints": rows})
+
+
 class HighYieldOptimizeRequest(BaseModel):
     """Request body for high-yield optimization."""
     system: OpticalSystem
@@ -932,6 +1057,8 @@ class HighYieldOptimizeRequest(BaseModel):
     tolerances: dict[str, float]  # {"L1.position": 1e-4, ...}
     yield_threshold: float = 0.95
     n_monte_carlo: int = 30
+    global_maxiter: int = 50
+    local_maxiter: int = 25
     seed: Optional[int] = 42
 
 
@@ -955,7 +1082,11 @@ async def high_yield_optimize(request: HighYieldOptimizeRequest):
     )
 
     try:
+        if request.objective != "rms_spot":
+            raise ValueError("High-yield optimization supports only the rms_spot objective.")
         config = OptimizationConfig(
+            global_maxiter=request.global_maxiter,
+            local_maxiter=request.local_maxiter,
             optimize_yield=True,
             yield_threshold=request.yield_threshold,
             tolerance_specs=request.tolerances,
@@ -964,10 +1095,7 @@ async def high_yield_optimize(request: HighYieldOptimizeRequest):
         )
 
         def objective(sys: OpticalSystem) -> float:
-            analysis = analyze_system(sys)
-            if request.objective == "rms_spot":
-                return analysis.rms_spot_radius
-            return analysis.rms_spot_radius
+            return analyze_system(sys).rms_spot_radius
 
         result = run_high_yield(
             request.system,
