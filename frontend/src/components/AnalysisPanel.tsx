@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import type { AnalysisResult, OpticalSystem, LengthUnit, ChromaticAberrationResult } from "../types";
 import { fmtLen, fmtNum, fromMeters, LENGTH_UNIT_LABELS } from "../types";
 import { analyzeAberration } from "../api";
+import { HelpTooltip, opticalParameterHelp as help } from "./HelpTooltip";
 
 interface AnalysisPanelProps {
   analysis: AnalysisResult | null;
@@ -54,11 +55,11 @@ export function AnalysisPanel({ analysis, system, displayUnit }: AnalysisPanelPr
       <h2 className="text-lg font-semibold text-gray-800 mb-4">Analysis Panel</h2>
       <div className="space-y-3">
         <div className="p-3 bg-gray-50 rounded border">
-          <div className="text-xs text-gray-500 uppercase">Effective Focal Length</div>
+          <div className="text-xs text-gray-500 uppercase">Effective Focal Length<HelpTooltip content={help.effective_focal_length} /></div>
           <div className="text-xl font-bold text-optical-700">{fmtLen(analysis.effective_focal_length, displayUnit, 2)} {unitLabel}</div>
         </div>
         <div className="p-3 bg-gray-50 rounded border">
-          <div className="text-xs text-gray-500 uppercase">Magnification</div>
+          <div className="text-xs text-gray-500 uppercase">Magnification<HelpTooltip content={help.magnification} /></div>
           <div className="text-xl font-bold text-optical-700">
             {fmtNum(analysis.magnification, 3)}
             {analysis.is_image_inverted && " (inverted)"}
@@ -66,32 +67,32 @@ export function AnalysisPanel({ analysis, system, displayUnit }: AnalysisPanelPr
         </div>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="p-2 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500">Object Distance</div>
+            <div className="text-xs text-gray-500">Object Distance<HelpTooltip content={help.object_distance} /></div>
             <div className="font-medium">{fmtLen(analysis.object_distance, displayUnit, 2)} {unitLabel}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500">Image Distance</div>
+            <div className="text-xs text-gray-500">Image Distance<HelpTooltip content={help.image_distance} position="bottom-end" /></div>
             <div className="font-medium">{fmtLen(analysis.image_distance, displayUnit, 2)} {unitLabel}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500">F-number</div>
+            <div className="text-xs text-gray-500">F-number<HelpTooltip content={help.f_number} /></div>
             <div className="font-medium">f/{fmtNum(analysis.f_number, 2)}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500">Numerical Aperture</div>
+            <div className="text-xs text-gray-500">Numerical Aperture<HelpTooltip content={help.numerical_aperture} position="bottom-end" /></div>
             <div className="font-medium">{analysis.numerical_aperture.toFixed(4)}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500">Aperture Diameter</div>
+            <div className="text-xs text-gray-500">Aperture Diameter<HelpTooltip content={help.aperture_diameter} /></div>
             <div className="font-medium">{fromMeters(analysis.aperture_diameter, displayUnit).toFixed(2)} {unitLabel}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500">Working Distance</div>
+            <div className="text-xs text-gray-500">Working Distance<HelpTooltip content={help.working_distance} position="bottom-end" /></div>
             <div className="font-medium">{fmtLen(analysis.working_distance, displayUnit, 2)} {unitLabel}</div>
           </div>
         </div>
         <div className="p-3 bg-gray-50 rounded border">
-          <div className="text-xs text-gray-500 uppercase">RMS Spot Radius</div>
+          <div className="text-xs text-gray-500 uppercase">RMS Spot Radius<HelpTooltip content={help.rms_spot} /></div>
           <div className="text-lg font-bold text-optical-700">{fromMeters(analysis.rms_spot_radius, displayUnit).toFixed(4)} {unitLabel}</div>
         </div>
         <div className="flex gap-4 text-sm">
@@ -105,7 +106,7 @@ export function AnalysisPanel({ analysis, system, displayUnit }: AnalysisPanelPr
 
         {/* Chromatic Aberration */}
         <div className="p-3 bg-gray-50 rounded border">
-          <div className="text-xs text-gray-500 uppercase mb-2">Chromatic Aberration</div>
+          <div className="text-xs text-gray-500 uppercase mb-2">Chromatic Aberration<HelpTooltip content={help.chromatic} /></div>
           {aberrationError ? (
             <p className="text-xs text-red-500">{aberrationError}</p>
           ) : aberration ? (

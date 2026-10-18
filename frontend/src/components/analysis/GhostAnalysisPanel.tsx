@@ -1,108 +1,90 @@
 /**
  * Ghost Analysis Panel Component.
  *
- * Displays ghost reflection analysis results.
+ * Real-ray double-reflection ghosts on axis: each path reflects off one
+ * surface back toward the object and off an earlier surface forward to
+ * the image. Intensity is relative to the primary image (Fresnel
+ * reflectance of uncoated surfaces unless a coating reflectance is given).
  */
 
-import { useEffect, useState } from 'react';
-import type { OpticalSystem } from '../../types';
+import { useState } from 'react';
+import type { OpticalSystem, LengthUnit } from '../../types';
+import { fmtLen, LENGTH_UNIT_LABELS } from '../../types';
 import { analyzeGhosts } from '../../api';
+import { useAnalysis } from './useAnalysis';
 
 interface GhostAnalysisPanelProps {
   system: OpticalSystem;
+  displayUnit: LengthUnit;
 }
 
-interface GhostResult {
-  surfaces: number[];
-  reflection_count: number;
-  relative_intensity: number;
-  image_position_offset: number;
-  is_in_field: boolean;
-  description: string;
+const THRESHOLDS = [1e-4, 1e-5, 1e-6];
+
+function formatIntensity(intensity: number): string {
+  return intensity >= 1e-3 ? `${(intensity * 100).toFixed(3)}%` : intensity.toExponential(2);
 }
 
-export function GhostAnalysisPanel({ system }: GhostAnalysisPanelProps) {
-  const [ghosts, setGhosts] = useState<GhostResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [nReflections, setNReflections] = useState(2);
-  
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    
-    analyzeGhosts(system, nReflections)
-      .then(result => {
-        if (!cancelled) setGhosts(result.ghosts || []);
-      })
-      .catch(err => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    
-    return () => { cancelled = true; };
-  }, [system, nReflections]);
-  
-  const formatIntensity = (intensity: number) => {
-    if (intensity < 0.0001) return (intensity * 10000).toFixed(2) + '% x1e-4';
-    return (intensity * 100).toFixed(2) + '%';
-  };
+export function GhostAnalysisPanel({ system, displayUnit }: GhostAnalysisPanelProps) {
+  const [threshold, setThreshold] = useState(1e-6);
+  const { data, error, loading } = useAnalysis(
+    () => analyzeGhosts(system, 2, threshold),
+    [system, threshold],
+  );
+  const ghosts = data?.ghosts ?? [];
+  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
 
   return (
-    <div className="p-4 border-t border-gray-200">
+    <div className="p-4">
       <div className="flex justify-between items-center mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Ghost Reflection Analysis</h3>
-        <select
-          value={nReflections}
-          onChange={(e) => setNReflections(parseInt(e.target.value))}
-          className="text-xs border border-gray-200 rounded px-2 py-1"
-        >
-          <option value={1}>Single reflections</option>
-          <option value={2}>Double reflections</option>
-        </select>
-      </div>
-      
-      {loading && <p className="text-xs text-gray-500">Analyzing...</p>}
-      {error && <p className="text-xs text-red-500">{error}</p>}
-      
-      {!loading && !error && ghosts.length === 0 && (
-        <p className="text-xs text-gray-500">No significant ghost reflections found.</p>
-      )}
-      
-      {!loading && ghosts.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-xs text-gray-600">{ghosts.length} ghost path(s) found</div>
-          <div className="max-h-48 overflow-y-auto space-y-1">
-            {ghosts.map((ghost, i) => (
-              <div
-                key={i}
-                className={`p-2 rounded text-xs border ${
-                  ghost.is_in_field
-                    ? 'bg-red-50 border-red-200'
-                    : 'bg-gray-50 border-gray-200'
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-medium text-gray-700">
-                      {ghost.description}
-                    </div>
-                    <div className="text-gray-500">
-                      {ghost.reflection_count}x reflection | Intensity: {formatIntensity(ghost.relative_intensity)}
-                    </div>
-                  </div>
-                  {ghost.is_in_field && (
-                    <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs">
-                      In Field
-                    </span>
-                  )}
-                </div>
-              </div>
+        <h3 className="text-sm font-semibold text-gray-700">Ghost Reflections (double, on axis)</h3>
+        <label className="text-xs text-gray-600 flex items-center gap-1">
+          Min. intensity
+          <select
+            value={threshold}
+            onChange={(e) => setThreshold(parseFloat(e.target.value))}
+            className="text-xs border border-gray-200 rounded px-2 py-1"
+          >
+            {THRESHOLDS.map((t) => (
+              <option key={t} value={t}>{t.toExponential(0)}</option>
             ))}
+          </select>
+        </label>
+      </div>
+
+      {loading && !data && <p className="text-xs text-gray-500">Tracing ghost paths...</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+
+      {data && !error && ghosts.length === 0 && (
+        <p className="text-xs text-gray-500">No ghost paths above {threshold.toExponential(0)} reach the image.</p>
+      )}
+
+      {data && !error && ghosts.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-gray-600">
+            {ghosts.length} ghost path(s), brightest first. Focus offset is from the image plane.
           </div>
+          <table className="w-full text-xs border border-gray-200">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-2 py-1 text-left">Path</th>
+                <th className="px-2 py-1 text-right">Rel. intensity</th>
+                <th className="px-2 py-1 text-right">Focus offset ({unitLabel})</th>
+                <th className="px-2 py-1 text-center">In field</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ghosts.map((ghost, i) => (
+                <tr key={i} className={`border-t border-gray-100 ${ghost.is_in_field ? 'bg-red-50' : ''}`}>
+                  <td className="px-2 py-1 text-gray-700">{ghost.description}</td>
+                  <td className="px-2 py-1 text-right font-mono">{formatIntensity(ghost.relative_intensity)}</td>
+                  <td className="px-2 py-1 text-right font-mono">
+                    {fmtLen(ghost.image_position_offset, displayUnit, 3)}
+                  </td>
+                  <td className="px-2 py-1 text-center">{ghost.is_in_field ? 'yes' : 'no'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

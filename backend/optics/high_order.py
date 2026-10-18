@@ -84,6 +84,54 @@ def opd_map(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1
     }
 
 
+def opd_fan(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1.0,
+            grid: int = 33) -> dict:
+    """
+    Tangential (py) and sagittal (px) cuts through the OPD at the system
+    image plane (meters, None where vignetted), with the RMS, peak-to-valley
+    and Strehl ratio of the full 2D pupil sampled on a ``grid`` x ``grid``
+    mesh.
+    """
+    seq = rt.build_sequence(system)
+    fo = rt.first_order(system, seq=seq)
+    p = np.linspace(-1.0, 1.0, num_rays)
+    z = np.zeros_like(p)
+    wt, okt, _ = rt.opd(system, 0.0, field_fraction, z, p, seq=seq, fo=fo)
+    ws, oks, _ = rt.opd(system, 0.0, field_fraction, p, z, seq=seq, fo=fo)
+    g = pp.wavefront_grid(system, field_fraction, grid)
+
+    def clean(w, ok):
+        return [float(v) if k and np.isfinite(v) else None for v, k in zip(w, ok)]
+
+    return {
+        "pupil": p.tolist(),
+        "opd_t": clean(wt, okt),
+        "opd_s": clean(ws, oks),
+        "opd_rms": g.rms,
+        "opd_peak_to_valley": g.peak_to_valley,
+        "strehl_ratio": pp.strehl_ratio(g),
+        "wavelength": g.wavelength,
+        "field_fraction": field_fraction,
+    }
+
+
+def field_extent(system: OpticalSystem) -> dict:
+    """The full field the fractions refer to: a half-angle in degrees for an
+    object at infinity, otherwise the object height in meters."""
+    fo = rt.first_order(system)
+    if fo.object_infinite:
+        return {"field_max": math.degrees(fo.field_angle), "field_unit": "deg"}
+    return {"field_max": system.object.height, "field_unit": "m"}
+
+
+def require_finite_image(system: OpticalSystem) -> None:
+    """Raise ValueError when the paraxial image is at infinity (afocal image
+    space), where image-plane ray errors and focus positions are undefined."""
+    if not math.isfinite(rt.first_order(system).image_z):
+        raise ValueError("Image is at infinity (afocal image space): transverse ray "
+                         "errors and focus positions are undefined.")
+
+
 def field_curves(system: OpticalSystem, num_fields: int = 11) -> dict:
     """
     Real tangential/sagittal foci and distortion versus field.
