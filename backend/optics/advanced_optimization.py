@@ -26,14 +26,15 @@ from .analysis import analyze_system, back_focal_length
 from .systems import update_component
 from .tolerance import tolerance_analysis, compute_yield
 
-
 # =============================================================================
 # Optimization Algorithms
 # =============================================================================
 
+
 class GlobalAlgorithm(str, Enum):
     DIFFERENTIAL_EVOLUTION = "differential_evolution"
     PARTICLE_SWARM = "particle_swarm"
+
 
 class LocalAlgorithm(str, Enum):
     DLS = "damped_least_squares"  # bounded trust-region (LM-style damping)
@@ -45,9 +46,11 @@ class LocalAlgorithm(str, Enum):
 # Constraint Definitions
 # =============================================================================
 
+
 @dataclass
 class OptimizationConstraint:
     """A constraint for optimization."""
+
     # "efl", "bfl", "image_distance", "magnification", "f_number", "rms_spot",
     # "numerical_aperture", "distortion", "center_thickness",
     # "edge_thickness", "air_gap", "total_track"
@@ -59,9 +62,11 @@ class OptimizationConstraint:
     weight: float = 1.0
     active: bool = True
 
+
 @dataclass
 class OptimizationConfig:
     """Configuration for advanced optimization."""
+
     # Algorithm selection
     global_algorithm: GlobalAlgorithm = GlobalAlgorithm.DIFFERENTIAL_EVOLUTION
     local_algorithm: LocalAlgorithm = LocalAlgorithm.DLS
@@ -95,6 +100,7 @@ class OptimizationConfig:
 # =============================================================================
 # Constraint Evaluation
 # =============================================================================
+
 
 def _evaluate_constraints(
     system: OpticalSystem,
@@ -132,7 +138,9 @@ def _edge_thickness(lens: ThickLens) -> float:
         if not R or not math.isfinite(R) or abs(R) >= 1e9:
             return 0.0
         if abs(R) < h:
-            raise ValueError(f"Lens '{lens.id}': radius {R} is smaller than the semi-aperture")
+            raise ValueError(
+                f"Lens '{lens.id}': radius {R} is smaller than the semi-aperture"
+            )
         return R - math.copysign(math.sqrt(R * R - h * h), R)
 
     return lens.thickness - sag(lens.radius1) + sag(lens.radius2)
@@ -168,6 +176,7 @@ def _get_constraint_value(
     if t == "distortion":
         # real chief-ray distortion at full field, as a fraction
         from .high_order import field_curves
+
         return field_curves(system, num_fields=2)["distortion"][-1]
     if t == "center_thickness":
         comp = _component_at(system, constraint.surface_index)
@@ -197,6 +206,7 @@ def _get_constraint_value(
 # Merit function: transverse ray aberrations
 # =============================================================================
 
+
 def ray_aberration_residuals(
     system: OpticalSystem,
     field_fractions: tuple = (0.0, 0.7, 1.0),
@@ -212,6 +222,7 @@ def ray_aberration_residuals(
     which pushes the optimiser away from vignetting.
     """
     from . import raytrace as rt
+
     wavelengths = wavelengths or [system.analysis_settings.wavelength]
     px, py = rt.pupil_grid(rings, "hexapolar")
     res = []
@@ -221,9 +232,18 @@ def ray_aberration_residuals(
         for ff in field_fractions:
             if ff and not system.object.height:
                 continue
-            b, _, _ = rt.trace_field_rays(system, 0.0, ff, np.concatenate([[0.0], px]),
-                                          np.concatenate([[0.0], py]), seq=seq, fo=fo)
-            P = rt._to_local(seq.image_origin, seq.image_rotation, b.image, b.directions)[0]
+            b, _, _ = rt.trace_field_rays(
+                system,
+                0.0,
+                ff,
+                np.concatenate([[0.0], px]),
+                np.concatenate([[0.0], py]),
+                seq=seq,
+                fo=fo,
+            )
+            P = rt._to_local(
+                seq.image_origin, seq.image_rotation, b.image, b.directions
+            )[0]
             if not b.valid[0]:
                 raise ValueError("Chief ray failed")
             ex = P[1:, 0] - P[0, 0]
@@ -243,6 +263,7 @@ def ray_aberration_residuals(
 # Particle Swarm Optimization
 # =============================================================================
 
+
 def _particle_swarm_optimize(
     objective: Callable[[np.ndarray], float],
     bounds: list[tuple[float, float]],
@@ -259,10 +280,9 @@ def _particle_swarm_optimize(
     n_dims = len(bounds)
 
     # Initialize particles
-    positions = np.array([
-        [rng.uniform(b[0], b[1]) for b in bounds]
-        for _ in range(popsize)
-    ])
+    positions = np.array(
+        [[rng.uniform(b[0], b[1]) for b in bounds] for _ in range(popsize)]
+    )
     velocities = np.zeros_like(positions)
 
     # Personal best
@@ -275,7 +295,7 @@ def _particle_swarm_optimize(
     global_best_val = personal_best_val[global_best_idx]
 
     # PSO parameters
-    w = 0.7   # inertia
+    w = 0.7  # inertia
     c1 = 1.5  # cognitive
     c2 = 1.5  # social
 
@@ -327,6 +347,7 @@ def _particle_swarm_optimize(
 # Damped Least Squares (Levenberg-Marquardt)
 # =============================================================================
 
+
 def _damped_least_squares(
     objective: Callable[[np.ndarray], object],
     x0: np.ndarray,
@@ -343,6 +364,7 @@ def _damped_least_squares(
     with SciPy's trust-region-reflective solver, whose Levenberg-Marquardt
     style damping is the bounded counterpart of classic DLS.
     """
+
     def residual(x):
         r = objective(x)
         r = np.atleast_1d(np.asarray(r, dtype=float))
@@ -351,13 +373,18 @@ def _damped_least_squares(
         return r
 
     result = least_squares(
-        residual, x0,
+        residual,
+        x0,
         bounds=([b[0] for b in bounds], [b[1] for b in bounds]),
-        method="trf", max_nfev=maxiter, ftol=tol, xtol=tol, gtol=tol,
+        method="trf",
+        max_nfev=maxiter,
+        ftol=tol,
+        xtol=tol,
+        gtol=tol,
     )
     return {
         "params": result.x.tolist(),
-        "objective": float(np.sum(result.fun ** 2)),
+        "objective": float(np.sum(result.fun**2)),
         "success": bool(result.success),
         "n_iterations": int(result.nfev),
         "message": result.message,
@@ -367,6 +394,7 @@ def _damped_least_squares(
 # =============================================================================
 # Hybrid Optimization Pipeline
 # =============================================================================
+
 
 def hybrid_optimize(
     system: OpticalSystem,
@@ -400,7 +428,9 @@ def hybrid_optimize(
     def build(x):
         modified = system
         for spec, value in zip(params, x):
-            modified = update_component(modified, spec["component_id"], **{spec["field"]: float(value)})
+            modified = update_component(
+                modified, spec["component_id"], **{spec["field"]: float(value)}
+            )
         return modified
 
     def residuals(x: np.ndarray):
@@ -458,14 +488,17 @@ def hybrid_optimize(
             )
             x_optimal = np.array(local_result["params"])
             final_objective = local_result["objective"]
-            local_iters, local_ok = local_result["n_iterations"], local_result["success"]
+            local_iters, local_ok = (
+                local_result["n_iterations"],
+                local_result["success"],
+            )
         elif config.local_algorithm == LocalAlgorithm.L_BFGS_B:
             local_result = minimize(
                 wrapped_objective,
                 x_global,
-                method='L-BFGS-B',
+                method="L-BFGS-B",
                 bounds=bounds,
-                options={'maxiter': config.local_maxiter, 'ftol': config.local_tol},
+                options={"maxiter": config.local_maxiter, "ftol": config.local_tol},
             )
             x_optimal = local_result.x
             final_objective = local_result.fun
@@ -478,7 +511,7 @@ def hybrid_optimize(
         final_objective = wrapped_objective(x_global)
 
     if wrapped_objective(x_optimal) > wrapped_objective(x_global):
-        x_optimal = np.asarray(x_global)   # the local step must not make things worse
+        x_optimal = np.asarray(x_global)  # the local step must not make things worse
     # Report the true merit: a local solver's own figure can be on another
     # scale (DLS square-roots a single residual, which is already sqrt(merit)).
     final_objective = wrapped_objective(x_optimal)
@@ -499,6 +532,7 @@ def hybrid_optimize(
 # =============================================================================
 # High-Yield Optimization
 # =============================================================================
+
 
 def high_yield_optimize(
     system: OpticalSystem,
@@ -543,13 +577,17 @@ def high_yield_optimize(
     for spec, (lo, hi) in zip(params, bounds):
         if not lo < hi:
             raise ValueError(f"Empty bounds [{lo}, {hi}] for {spec}")
-        update_component(system, spec["component_id"], **{spec["field"]: 0.5 * (lo + hi)})
+        update_component(
+            system, spec["component_id"], **{spec["field"]: 0.5 * (lo + hi)}
+        )
 
     def yield_aware_objective(x: np.ndarray) -> float:
         """Objective that penalizes low yield."""
         modified = system
         for spec, value in zip(params, x):
-            modified = update_component(modified, spec["component_id"], **{spec["field"]: value})
+            modified = update_component(
+                modified, spec["component_id"], **{spec["field"]: value}
+            )
 
         # Nominal performance
         nominal = float(objective(modified))
@@ -604,7 +642,9 @@ def high_yield_optimize(
     # Build final system
     final_system = system
     for spec, value in zip(params, x_optimal):
-        final_system = update_component(final_system, spec["component_id"], **{spec["field"]: value})
+        final_system = update_component(
+            final_system, spec["component_id"], **{spec["field"]: value}
+        )
 
     # Final yield analysis
     final_yield = None
@@ -632,6 +672,7 @@ def high_yield_optimize(
 # =============================================================================
 # Pareto Optimization
 # =============================================================================
+
 
 def pareto_optimize(
     system: OpticalSystem,
@@ -671,7 +712,11 @@ def pareto_optimize(
         w2 = 1 - w1
 
         def weighted_objective(sys: OpticalSystem) -> float:
-            return w1 * objectives[0](sys) + w2 * objectives[1](sys) if len(objectives) >= 2 else objectives[0](sys)
+            return (
+                w1 * objectives[0](sys) + w2 * objectives[1](sys)
+                if len(objectives) >= 2
+                else objectives[0](sys)
+            )
 
         result = hybrid_optimize(
             system,
@@ -683,12 +728,14 @@ def pareto_optimize(
 
         obj_values = [obj(result["system"]) for obj in objectives]
 
-        pareto_points.append({
-            "weights": [w1, w2],
-            "objectives": obj_values,
-            "system": result["system"],
-            "params": result["params"],
-        })
+        pareto_points.append(
+            {
+                "weights": [w1, w2],
+                "objectives": obj_values,
+                "system": result["system"],
+                "params": result["params"],
+            }
+        )
 
     # Keep only non-dominated points (weighted sums can return dominated or
     # duplicate solutions).
@@ -697,7 +744,8 @@ def pareto_optimize(
         dominated = any(
             all(a <= b for a, b in zip(q["objectives"], p["objectives"]))
             and any(a < b for a, b in zip(q["objectives"], p["objectives"]))
-            for q in pareto_points)
+            for q in pareto_points
+        )
         duplicate = any(np.allclose(q["objectives"], p["objectives"]) for q in front)
         if not dominated and not duplicate:
             front.append(p)

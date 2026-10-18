@@ -13,7 +13,9 @@ from ..nsc.system import Object3D, Vector3
 class FoldMirror(Object3D):
     """Flat fold mirror for beam steering."""
 
-    def __init__(self, position=None, normal=None, size=25.4, coating="ProtectedAluminum"):
+    def __init__(
+        self, position=None, normal=None, size=25.4, coating="ProtectedAluminum"
+    ):
         super().__init__(
             name="FoldMirror",
             position=position or Vector3(),
@@ -38,7 +40,9 @@ class FoldMirror(Object3D):
             "Dielectric": 0.995,
         }
         if self.coating not in coatings:
-            raise ValueError(f"Unknown coating '{self.coating}'; set reflectivity explicitly")
+            raise ValueError(
+                f"Unknown coating '{self.coating}'; set reflectivity explicitly"
+            )
         return coatings[self.coating]
 
 
@@ -46,8 +50,14 @@ class FoldMirror(Object3D):
 class DichroicMirror(Object3D):
     """Dichroic/beamsplitter mirror."""
 
-    def __init__(self, position=None, normal=None, size=25.4,
-                 cutoff_wavelength=550.0, coating="longpass"):
+    def __init__(
+        self,
+        position=None,
+        normal=None,
+        size=25.4,
+        cutoff_wavelength=550.0,
+        coating="longpass",
+    ):
         super().__init__(
             name="DichroicMirror",
             position=position or Vector3(),
@@ -67,8 +77,11 @@ class DichroicMirror(Object3D):
         the reverse. ``reflectivity`` and ``transmission`` are the in-band
         levels (no absorption assumed).
         """
-        passes = (wavelength > self.cutoff_wavelength) if self.coating == "longpass" \
+        passes = (
+            (wavelength > self.cutoff_wavelength)
+            if self.coating == "longpass"
             else (wavelength < self.cutoff_wavelength)
+        )
         if passes:
             return (1 - self.transmission, self.transmission)
         return (self.reflectivity, 1 - self.reflectivity)

@@ -36,5 +36,7 @@ class OpticalComponentBase(BaseModel):
         if not isinstance(v, (int, float)):
             raise ValueError("Position must be a number")
         if abs(v) > 1e6:
-            raise ValueError("Position must be within reasonable bounds (|z| < 1000 km)")
+            raise ValueError(
+                "Position must be within reasonable bounds (|z| < 1000 km)"
+            )
         return float(v)

@@ -13,6 +13,7 @@ import numpy as np
 @dataclass
 class Vector3:
     """3D vector for positions and directions."""
+
     x: float = 0.0
     y: float = 0.0
     z: float = 0.0
@@ -29,7 +30,7 @@ class Vector3:
     def magnitude(self) -> float:
         return np.sqrt(self.x**2 + self.y**2 + self.z**2)
 
-    def normalized(self) -> 'Vector3':
+    def normalized(self) -> "Vector3":
         mag = self.magnitude()
         if mag < 1e-15:
             return Vector3(0, 0, 0)
@@ -42,13 +43,14 @@ class Vector3:
         return np.array([self.x, self.y, self.z])
 
     @staticmethod
-    def from_array(arr: np.ndarray) -> 'Vector3':
+    def from_array(arr: np.ndarray) -> "Vector3":
         return Vector3(arr[0], arr[1], arr[2])
 
 
 @dataclass
 class Ray:
     """A ray in 3D space."""
+
     origin: Vector3
     direction: Vector3
     intensity: float = 1.0
@@ -64,6 +66,7 @@ class Ray:
 @dataclass
 class HitPoint:
     """Where a ray hits an object."""
+
     ray: Ray
     object_id: int
     point: Vector3
@@ -75,6 +78,7 @@ class HitPoint:
 @dataclass
 class Source:
     """Ray source object."""
+
     name: str = "Source"
     position: Vector3 = field(default_factory=Vector3)
     direction: Vector3 = field(default_factory=lambda: Vector3(0, 0, 1))
@@ -99,12 +103,14 @@ class Source:
                 dy = np.sin(phi) * np.sin(theta)
                 dz = np.cos(phi)
 
-                rays.append(Ray(
-                    origin=self.position,
-                    direction=Vector3(dx, dy, dz).normalized(),
-                    intensity=self.intensity / self.num_rays,
-                    wavelength=self.wavelength
-                ))
+                rays.append(
+                    Ray(
+                        origin=self.position,
+                        direction=Vector3(dx, dy, dz).normalized(),
+                        intensity=self.intensity / self.num_rays,
+                        wavelength=self.wavelength,
+                    )
+                )
 
         elif self.source_type == "lambertian":
             # Lambertian: radiance constant, so the ray density in direction
@@ -121,22 +127,26 @@ class Source:
                 # Rotate to align with source direction
                 world_dir = self._rotate_to_direction(local_dir)
 
-                rays.append(Ray(
-                    origin=self.position,
-                    direction=world_dir,
-                    intensity=self.intensity / self.num_rays,
-                    wavelength=self.wavelength
-                ))
+                rays.append(
+                    Ray(
+                        origin=self.position,
+                        direction=world_dir,
+                        intensity=self.intensity / self.num_rays,
+                        wavelength=self.wavelength,
+                    )
+                )
 
         elif self.source_type == "collimated":
             # Collimated beam with slight divergence
             for i in range(self.num_rays):
-                rays.append(Ray(
-                    origin=self.position,
-                    direction=self.direction.normalized(),
-                    intensity=self.intensity / self.num_rays,
-                    wavelength=self.wavelength
-                ))
+                rays.append(
+                    Ray(
+                        origin=self.position,
+                        direction=self.direction.normalized(),
+                        intensity=self.intensity / self.num_rays,
+                        wavelength=self.wavelength,
+                    )
+                )
 
         return rays
 
@@ -153,7 +163,7 @@ class Source:
         axis = Vector3(
             up.y * target.z - up.z * target.y,
             up.z * target.x - up.x * target.z,
-            up.x * target.y - up.y * target.x
+            up.x * target.y - up.y * target.x,
         ).normalized()
 
         cos_angle = up.dot(target)
@@ -167,17 +177,15 @@ class Source:
         sin_a = np.sin(angle)
 
         result = Vector3(
-            local_dir.x * (cos_a + axis.x**2 * (1 - cos_a)) +
-            local_dir.y * (axis.x * axis.y * (1 - cos_a) - axis.z * sin_a) +
-            local_dir.z * (axis.x * axis.z * (1 - cos_a) + axis.y * sin_a),
-
-            local_dir.x * (axis.y * axis.x * (1 - cos_a) + axis.z * sin_a) +
-            local_dir.y * (cos_a + axis.y**2 * (1 - cos_a)) +
-            local_dir.z * (axis.y * axis.z * (1 - cos_a) - axis.x * sin_a),
-
-            local_dir.x * (axis.z * axis.x * (1 - cos_a) - axis.y * sin_a) +
-            local_dir.y * (axis.z * axis.y * (1 - cos_a) + axis.x * sin_a) +
-            local_dir.z * (cos_a + axis.z**2 * (1 - cos_a))
+            local_dir.x * (cos_a + axis.x**2 * (1 - cos_a))
+            + local_dir.y * (axis.x * axis.y * (1 - cos_a) - axis.z * sin_a)
+            + local_dir.z * (axis.x * axis.z * (1 - cos_a) + axis.y * sin_a),
+            local_dir.x * (axis.y * axis.x * (1 - cos_a) + axis.z * sin_a)
+            + local_dir.y * (cos_a + axis.y**2 * (1 - cos_a))
+            + local_dir.z * (axis.y * axis.z * (1 - cos_a) - axis.x * sin_a),
+            local_dir.x * (axis.z * axis.x * (1 - cos_a) - axis.y * sin_a)
+            + local_dir.y * (axis.z * axis.y * (1 - cos_a) + axis.x * sin_a)
+            + local_dir.z * (cos_a + axis.z**2 * (1 - cos_a)),
         )
 
         return result.normalized()
@@ -186,6 +194,7 @@ class Source:
 @dataclass
 class Object3D:
     """3D object in non-sequential mode."""
+
     name: str = "Object"
     object_type: str = "sphere"  # sphere, cylinder, box, lens
     position: Vector3 = field(default_factory=Vector3)
@@ -262,7 +271,7 @@ class Object3D:
             point=point,
             normal=normal,
             distance=t,
-            inside=inside
+            inside=inside,
         )
 
     def _intersect_cylinder(self, ray: Ray) -> Optional[HitPoint]:
@@ -297,7 +306,7 @@ class Object3D:
                     normal = Vector3(
                         (point.x - self.position.x) / self.radius,
                         (point.y - self.position.y) / self.radius,
-                        0
+                        0,
                     ).normalized()
 
                     if local_origin.x**2 + local_origin.y**2 > self.radius**2:
@@ -312,7 +321,7 @@ class Object3D:
                         point=point,
                         normal=normal,
                         distance=t,
-                        inside=inside
+                        inside=inside,
                     )
 
         return None
@@ -384,7 +393,7 @@ class Object3D:
             point=ray.point_at(t),
             normal=normal,
             distance=t,
-            inside=False
+            inside=False,
         )
 
     def _intersect_lens(self, ray: Ray) -> Optional[HitPoint]:
@@ -398,8 +407,10 @@ class Object3D:
         """
         best = None
         zc = self.position.z
-        for vz, R, outward_sign in ((zc - self.thickness / 2, self.radius1, -1.0),
-                                    (zc + self.thickness / 2, self.radius2, +1.0)):
+        for vz, R, outward_sign in (
+            (zc - self.thickness / 2, self.radius1, -1.0),
+            (zc + self.thickness / 2, self.radius2, +1.0),
+        ):
             hits = []
             if R == 0 or abs(R) >= 1e9:
                 if abs(ray.direction.z) > 1e-15:
@@ -434,14 +445,21 @@ class Object3D:
         if best is None:
             return None
         t, n = best
-        inside = ray.direction.dot(n) > 0     # leaving the glass
-        return HitPoint(ray=ray, object_id=self.object_id, point=ray.point_at(t),
-                        normal=n, distance=t, inside=inside)
+        inside = ray.direction.dot(n) > 0  # leaving the glass
+        return HitPoint(
+            ray=ray,
+            object_id=self.object_id,
+            point=ray.point_at(t),
+            normal=n,
+            distance=t,
+            inside=inside,
+        )
 
 
 @dataclass
 class Detector:
     """Detector object for collecting rays."""
+
     name: str = "Detector"
     position: Vector3 = field(default_factory=lambda: Vector3(0, 0, 100))
     normal: Vector3 = field(default_factory=lambda: Vector3(0, 0, -1))
@@ -472,8 +490,11 @@ class Detector:
     def _basis(self):
         n = self.normal.normalized()
         ref = Vector3(1, 0, 0) if abs(n.x) < 0.9 else Vector3(0, 1, 0)
-        u = Vector3(ref.y * n.z - ref.z * n.y, ref.z * n.x - ref.x * n.z,
-                    ref.x * n.y - ref.y * n.x).normalized()
+        u = Vector3(
+            ref.y * n.z - ref.z * n.y,
+            ref.z * n.x - ref.x * n.z,
+            ref.x * n.y - ref.y * n.x,
+        ).normalized()
         v = Vector3(n.y * u.z - n.z * u.y, n.z * u.x - n.x * u.z, n.x * u.y - n.y * u.x)
         return n, u, v
 
@@ -514,6 +535,7 @@ class Detector:
 @dataclass
 class NSCSystem:
     """Non-sequential optical system."""
+
     sources: list[Source] = field(default_factory=list)
     objects: list[Object3D] = field(default_factory=list)
     detectors: list[Detector] = field(default_factory=list)

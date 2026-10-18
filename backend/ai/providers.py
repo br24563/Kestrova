@@ -27,14 +27,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-
 # =============================================================================
 # Data types
 # =============================================================================
 
+
 @dataclass
 class LLMResponse:
     """Raw response from a language model."""
+
     text: str
     provider: str
     model: str
@@ -50,7 +51,8 @@ class LLMResponse:
 @dataclass
 class ProviderConfig:
     """Configuration for selecting and calling an LLM provider."""
-    provider: str = "auto"          # auto | ollama | openai | mock
+
+    provider: str = "auto"  # auto | ollama | openai | mock
     model: str = "llama3.2"
     base_url: str = "http://localhost:11434"
     api_key: str = ""
@@ -64,20 +66,24 @@ class ProviderConfig:
         """Build a config from environment variables."""
         return cls(
             provider=os.environ.get("AI_PROVIDER", "auto"),
-            model=os.environ.get("AI_MODEL", os.environ.get("OLLAMA_MODEL", "llama3.2")),
+            model=os.environ.get(
+                "AI_MODEL", os.environ.get("OLLAMA_MODEL", "llama3.2")
+            ),
             base_url=os.environ.get(
                 "AI_BASE_URL",
                 os.environ.get("OLLAMA_URL", "http://localhost:11434"),
             ),
             api_key=os.environ.get("AI_API_KEY", ""),
             timeout_s=float(os.environ.get("AI_TIMEOUT_S", "30")),
-            enabled=os.environ.get("AI_ENABLED", "true").lower() not in ("0", "false", "no"),
+            enabled=os.environ.get("AI_ENABLED", "true").lower()
+            not in ("0", "false", "no"),
         )
 
 
 # =============================================================================
 # Provider interface
 # =============================================================================
+
 
 class LLMProvider(ABC):
     """Abstract base class for a text-generation backend."""
@@ -135,6 +141,7 @@ class OllamaProvider(LLMProvider):
             return False
         try:
             import urllib.request
+
             req = urllib.request.Request(self.base_url + "/api/tags")
             with urllib.request.urlopen(req, timeout=1.5):
                 return True
@@ -146,15 +153,17 @@ class OllamaProvider(LLMProvider):
 
         start = time.perf_counter()
         full_prompt = (system + "\n\n" + prompt) if system else prompt
-        payload = json.dumps({
-            "model": self.config.model,
-            "prompt": full_prompt,
-            "stream": False,
-            "options": {
-                "temperature": self.config.temperature,
-                "num_predict": self.config.max_tokens,
-            },
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self.config.model,
+                "prompt": full_prompt,
+                "stream": False,
+                "options": {
+                    "temperature": self.config.temperature,
+                    "num_predict": self.config.max_tokens,
+                },
+            }
+        ).encode("utf-8")
 
         req = urllib.request.Request(
             self.base_url + "/api/generate",
@@ -173,8 +182,11 @@ class OllamaProvider(LLMProvider):
             )
         except Exception as exc:
             return LLMResponse(
-                text="", provider=self.name, model=self.config.model,
-                duration_s=time.perf_counter() - start, error=str(exc),
+                text="",
+                provider=self.name,
+                model=self.config.model,
+                duration_s=time.perf_counter() - start,
+                error=str(exc),
             )
 
 
@@ -203,19 +215,23 @@ class OpenAICompatProvider(LLMProvider):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        payload = json.dumps({
-            "model": self.config.model,
-            "messages": messages,
-            "temperature": self.config.temperature,
-            "max_tokens": self.config.max_tokens,
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self.config.model,
+                "messages": messages,
+                "temperature": self.config.temperature,
+                "max_tokens": self.config.max_tokens,
+            }
+        ).encode("utf-8")
 
         headers = {"Content-Type": "application/json"}
         if self.config.api_key:
             headers["Authorization"] = "Bearer " + self.config.api_key
 
         req = urllib.request.Request(
-            self.base_url + "/chat/completions", data=payload, headers=headers,
+            self.base_url + "/chat/completions",
+            data=payload,
+            headers=headers,
         )
 
         try:
@@ -226,13 +242,18 @@ class OpenAICompatProvider(LLMProvider):
                 raise ValueError("no choices in response")
             text = choices[0].get("message", {}).get("content", "")
             return LLMResponse(
-                text=text, provider=self.name, model=self.config.model,
+                text=text,
+                provider=self.name,
+                model=self.config.model,
                 duration_s=time.perf_counter() - start,
             )
         except Exception as exc:
             return LLMResponse(
-                text="", provider=self.name, model=self.config.model,
-                duration_s=time.perf_counter() - start, error=str(exc),
+                text="",
+                provider=self.name,
+                model=self.config.model,
+                duration_s=time.perf_counter() - start,
+                error=str(exc),
             )
 
 
@@ -297,21 +318,28 @@ class ProviderChain:
 # =============================================================================
 
 COMMAND_ACTIONS = (
-    "modify_component", "add_component", "remove_component",
-    "set_object", "set_image_plane", "analyze", "optimize",
-    "explain", "diagnose", "design",
+    "modify_component",
+    "add_component",
+    "remove_component",
+    "set_object",
+    "set_image_plane",
+    "analyze",
+    "optimize",
+    "explain",
+    "diagnose",
+    "design",
 )
 
 COMMAND_SCHEMA_HINT = (
     "Return ONLY a JSON array. Each element must be an object with an "
-    "\"action\" field set to one of: " + ", ".join(COMMAND_ACTIONS) + ". "
+    '"action" field set to one of: ' + ", ".join(COMMAND_ACTIONS) + ". "
     "Examples:\n"
-    "  [{\"action\": \"set_image_plane\", \"position\": 0.25}]\n"
-    "  [{\"action\": \"modify_component\", \"component_id\": \"L1\", "
-    "\"field\": \"focal_length\", \"value\": 0.075}]\n"
-    "  [{\"action\": \"optimize\", \"objective\": \"rms_spot\", "
-    "\"params\": [{\"component_id\": \"L1\", \"field\": \"focal_length\"}], "
-    "\"bounds\": [[0.02, 0.2]]}\n"
+    '  [{"action": "set_image_plane", "position": 0.25}]\n'
+    '  [{"action": "modify_component", "component_id": "L1", '
+    '"field": "focal_length", "value": 0.075}]\n'
+    '  [{"action": "optimize", "objective": "rms_spot", '
+    '"params": [{"component_id": "L1", "field": "focal_length"}], '
+    '"bounds": [[0.02, 0.2]]}\n'
     "All lengths are in METERS. Emit no prose, no markdown fences."
 )
 
@@ -356,17 +384,17 @@ def extract_json_array(text: str) -> Optional[str]:
         elif ch == "]":
             depth -= 1
             if depth == 0:
-                return text[start:i + 1]
+                return text[start : i + 1]
     return None
 
 
 def repair_json(text: str) -> str:
-    '''Apply light-touch repairs to common LLM JSON mistakes.
+    """Apply light-touch repairs to common LLM JSON mistakes.
 
     Fixes: smart quotes, Python literals, trailing commas, and
     single-quoted strings (both keys and values). Implemented with
     a character scanner so that no fragile regex escaping is needed.
-    '''
+    """
     if not text:
         return text
 
@@ -472,7 +500,7 @@ def salvage_objects(text: str) -> list:
         elif ch == "}":
             depth -= 1
             if depth == 0 and start is not None:
-                objects.append(text[start:i + 1])
+                objects.append(text[start : i + 1])
                 start = None
     return objects
 
@@ -480,6 +508,7 @@ def salvage_objects(text: str) -> list:
 @dataclass
 class StructuredResult:
     """Outcome of a structured (schema-constrained) generation attempt."""
+
     objects: list = field(default_factory=list)
     raw_text: str = ""
     provider: str = ""
@@ -509,8 +538,7 @@ class StructuredGenerator:
     Providers never raise; failures surface as ``StructuredResult.errors``.
     """
 
-    def __init__(self, chain: Optional[ProviderChain] = None,
-                 max_attempts: int = 2):
+    def __init__(self, chain: Optional[ProviderChain] = None, max_attempts: int = 2):
         self.chain = chain or ProviderChain.from_config()
         self.max_attempts = max(1, max_attempts)
 
@@ -533,7 +561,11 @@ class StructuredGenerator:
         Returns:
             StructuredResult with validated ``objects`` (or empty on failure).
         """
-        system = (system_prompt or "You are an optical design assistant.") + "\n\n" + COMMAND_SCHEMA_HINT
+        system = (
+            (system_prompt or "You are an optical design assistant.")
+            + "\n\n"
+            + COMMAND_SCHEMA_HINT
+        )
         if context_note:
             system = system + "\n\nCurrent system:\n" + context_note
 

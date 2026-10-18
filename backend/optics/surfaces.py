@@ -135,8 +135,7 @@ def lensmaker_focal_length(
         raise ValueError("Both radii are zero: lens is a slab.")
 
     inv_f = (n - 1) * (
-        1.0 / radius1 - 1.0 / radius2
-        + (n - 1) * thickness / (n * radius1 * radius2)
+        1.0 / radius1 - 1.0 / radius2 + (n - 1) * thickness / (n * radius1 * radius2)
     )
 
     if abs(inv_f) < 1e-15:

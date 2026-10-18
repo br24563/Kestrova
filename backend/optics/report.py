@@ -42,9 +42,12 @@ def _summary_dict(system: OpticalSystem, label: str) -> dict:
 # Design comparison
 # ---------------------------------------------------------------------------
 
+
 def compare_systems(
-    system_a: OpticalSystem, system_b: OpticalSystem,
-    label_a: str = "Design A", label_b: str = "Design B",
+    system_a: OpticalSystem,
+    system_b: OpticalSystem,
+    label_a: str = "Design A",
+    label_b: str = "Design B",
 ) -> dict:
     """
     Compare two optical systems side by side.
@@ -79,12 +82,14 @@ def compare_systems(
     ]:
         av, bv = sa[key], sb[key]
         advantage = "a" if av < bv else ("b" if bv < av else "tie")
-        rows.append({
-            "metric": label,
-            "a": av,
-            "b": bv,
-            "advantage": advantage,
-        })
+        rows.append(
+            {
+                "metric": label,
+                "a": av,
+                "b": bv,
+                "advantage": advantage,
+            }
+        )
 
     return {"rows": rows, "summary_a": sa, "summary_b": sb}
 
@@ -92,6 +97,7 @@ def compare_systems(
 # ---------------------------------------------------------------------------
 # Exportable plot (SVG spot diagram)
 # ---------------------------------------------------------------------------
+
 
 def system_spot_svg(
     system: OpticalSystem,
@@ -113,7 +119,7 @@ def system_spot_svg(
         An SVG XML string.
     """
     analysis = analyze_system(system)
-    pts = analysis.spot_points            # real rays, relative to the centroid
+    pts = analysis.spot_points  # real rays, relative to the centroid
     margin = 24
     half = max((max(abs(p[0]), abs(p[1])) for p in pts), default=0.0) or 1e-9
     scale = (min(width, height) / 2.0 - margin) / half
@@ -131,8 +137,8 @@ def system_spot_svg(
         f'<line x1="{cx:.1f}" y1="{margin}" x2="{cx:.1f}" y2="{height - margin}" '
         f'stroke="#d1d5db" stroke-dasharray="4 4"/>'
         f'<text x="{margin}" y="{height - 6}" font-size="10" fill="#6b7280">'
-        f'{len(pts)} real rays at full field, RMS {analysis.rms_spot_radius * 1e6:.2f} um, '
-        f'half-width {half * 1e6:.2f} um</text>'
+        f"{len(pts)} real rays at full field, RMS {analysis.rms_spot_radius * 1e6:.2f} um, "
+        f"half-width {half * 1e6:.2f} um</text>"
         f"{circles}"
         f"</svg>"
     )
@@ -141,6 +147,7 @@ def system_spot_svg(
 # ---------------------------------------------------------------------------
 # Engineering report (Markdown)
 # ---------------------------------------------------------------------------
+
 
 def engineering_report_markdown(
     system_a: Optional[OpticalSystem] = None,
@@ -169,7 +176,9 @@ def engineering_report_markdown(
     lines: list[str] = []
     lines.append(f"# Engineering Report")
     lines.append("")
-    lines.append("Values at the analysis wavelength; spot and NA from real rays, other quantities paraxial.")
+    lines.append(
+        "Values at the analysis wavelength; spot and NA from real rays, other quantities paraxial."
+    )
     lines.append("")
 
     def add_summary(s, title):

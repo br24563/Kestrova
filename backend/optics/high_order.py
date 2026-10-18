@@ -30,7 +30,9 @@ def _local_image(seq, b):
     return rt._to_local(seq.image_origin, seq.image_rotation, b.image, b.directions)[0]
 
 
-def ray_fan(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1.0) -> dict:
+def ray_fan(
+    system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1.0
+) -> dict:
     """
     Tangential and sagittal ray fans at the system image plane.
 
@@ -47,10 +49,24 @@ def ray_fan(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1
     fo = rt.first_order(system, seq=seq)
     p = np.linspace(-1.0, 1.0, num_rays)
     z = np.zeros_like(p)
-    bt, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, np.concatenate([[0.0], z]),
-                                   np.concatenate([[0.0], p]), seq=seq, fo=fo)
-    bs, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, np.concatenate([[0.0], p]),
-                                   np.concatenate([[0.0], z]), seq=seq, fo=fo)
+    bt, _, _ = rt.trace_field_rays(
+        system,
+        0.0,
+        field_fraction,
+        np.concatenate([[0.0], z]),
+        np.concatenate([[0.0], p]),
+        seq=seq,
+        fo=fo,
+    )
+    bs, _, _ = rt.trace_field_rays(
+        system,
+        0.0,
+        field_fraction,
+        np.concatenate([[0.0], p]),
+        np.concatenate([[0.0], z]),
+        seq=seq,
+        fo=fo,
+    )
     Pt, Ps = _local_image(seq, bt), _local_image(seq, bs)
     chief = Pt[0]
     et = np.where(bt.valid[1:], Pt[1:, 1] - chief[1], np.nan)
@@ -69,7 +85,9 @@ def ray_fan(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1
     }
 
 
-def opd_map(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1.0) -> dict:
+def opd_map(
+    system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1.0
+) -> dict:
     """OPD over the 2D pupil (NaN entries returned as None)."""
     g = pp.wavefront_grid(system, field_fraction, num_rays)
     W = np.where(g.mask, g.W, np.nan)
@@ -84,8 +102,12 @@ def opd_map(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1
     }
 
 
-def opd_fan(system: OpticalSystem, num_rays: int = 21, field_fraction: float = 1.0,
-            grid: int = 33) -> dict:
+def opd_fan(
+    system: OpticalSystem,
+    num_rays: int = 21,
+    field_fraction: float = 1.0,
+    grid: int = 33,
+) -> dict:
     """
     Tangential (py) and sagittal (px) cuts through the OPD at the system
     image plane (meters, None where vignetted), with the RMS, peak-to-valley
@@ -128,8 +150,10 @@ def require_finite_image(system: OpticalSystem) -> None:
     """Raise ValueError when the paraxial image is at infinity (afocal image
     space), where image-plane ray errors and focus positions are undefined."""
     if not math.isfinite(rt.first_order(system).image_z):
-        raise ValueError("Image is at infinity (afocal image space): transverse ray "
-                         "errors and focus positions are undefined.")
+        raise ValueError(
+            "Image is at infinity (afocal image space): transverse ray "
+            "errors and focus positions are undefined."
+        )
 
 
 def field_curves(system: OpticalSystem, num_fields: int = 11) -> dict:
@@ -164,8 +188,16 @@ def field_curves(system: OpticalSystem, num_fields: int = 11) -> dict:
         if ff == 0.0 or not fo.image_height:
             dist.append(0.0)
             continue
-        b, _, _ = rt.trace_field_rays(s, 0.0, float(ff), np.array([0.0]), np.array([0.0]),
-                                      seq=seq, fo=fo, clip=False)
+        b, _, _ = rt.trace_field_rays(
+            s,
+            0.0,
+            float(ff),
+            np.array([0.0]),
+            np.array([0.0]),
+            seq=seq,
+            fo=fo,
+            clip=False,
+        )
         yc = _local_image(seq, b)[0, 1]
         hp = fo.image_height * ff
         dist.append(float((yc - hp) / hp))
@@ -180,18 +212,32 @@ def field_curves(system: OpticalSystem, num_fields: int = 11) -> dict:
     }
 
 
-def through_focus_mtf(system: OpticalSystem, defocus_range: tuple = (-50e-6, 50e-6),
-                      num_points: int = 21, spatial_frequency: float = 50.0,
-                      field_fraction: float = 0.0, grid: int = 48) -> dict:
+def through_focus_mtf(
+    system: OpticalSystem,
+    defocus_range: tuple = (-50e-6, 50e-6),
+    num_points: int = 21,
+    spatial_frequency: float = 50.0,
+    field_fraction: float = 0.0,
+    grid: int = 48,
+) -> dict:
     """
     Diffraction MTF (tangential) at one spatial frequency (cycles/mm) versus
     image-plane position, from the pupil function at each focus.
     """
     nu = spatial_frequency * 1e3
     dz = np.linspace(defocus_range[0], defocus_range[1], num_points)
-    vals = np.array([pp.mtf_at(pp.mtf(pp.wavefront_grid(system, field_fraction, grid,
-                                                         defocus=float(z))), nu, "tangential")
-                     for z in dz])
+    vals = np.array(
+        [
+            pp.mtf_at(
+                pp.mtf(
+                    pp.wavefront_grid(system, field_fraction, grid, defocus=float(z))
+                ),
+                nu,
+                "tangential",
+            )
+            for z in dz
+        ]
+    )
     i = int(np.argmax(vals))
     above = dz[vals >= 0.5 * vals[i]]
     return {
@@ -204,8 +250,12 @@ def through_focus_mtf(system: OpticalSystem, defocus_range: tuple = (-50e-6, 50e
     }
 
 
-def zernike_from_rays(system: OpticalSystem, num_rays: int = 51, num_zernike: int = 16,
-                      field_fraction: float = 1.0) -> dict:
+def zernike_from_rays(
+    system: OpticalSystem,
+    num_rays: int = 51,
+    num_zernike: int = 16,
+    field_fraction: float = 1.0,
+) -> dict:
     """Noll Zernike fit of the real-ray wavefront."""
     z = zernike_decompose(system, num_rays, num_zernike, field_fraction)
     return {
@@ -221,8 +271,13 @@ def zernike_from_rays(system: OpticalSystem, num_rays: int = 51, num_zernike: in
     }
 
 
-def high_order_analysis(system: OpticalSystem, num_rays_fan: int = 21, num_rays_opd: int = 21,
-                        num_fields: int = 11, num_zernike: int = 16) -> dict:
+def high_order_analysis(
+    system: OpticalSystem,
+    num_rays_fan: int = 21,
+    num_rays_opd: int = 21,
+    num_fields: int = 11,
+    num_zernike: int = 16,
+) -> dict:
     """Ray fans, OPD map, field curves and Zernike fit at full field."""
     fan = ray_fan(system, num_rays_fan, 1.0)
     opd = opd_map(system, num_rays_opd, 1.0)

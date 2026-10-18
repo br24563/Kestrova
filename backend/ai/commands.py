@@ -15,10 +15,10 @@ from pydantic import BaseModel, Field
 
 from optics.models import OpticalComponent
 
-
 # ---------------------------------------------------------------------------
 # Component Commands
 # ---------------------------------------------------------------------------
+
 
 class ModifyComponentCommand(BaseModel):
     """
@@ -29,7 +29,9 @@ class ModifyComponentCommand(BaseModel):
 
     action: Literal["modify_component"] = "modify_component"
     component_id: str = Field(..., description="ID of the component to modify")
-    field: str = Field(..., description="Field to modify (e.g. 'position', 'focal_length')")
+    field: str = Field(
+        ..., description="Field to modify (e.g. 'position', 'focal_length')"
+    )
     value: float = Field(..., description="New value (meters for lengths)")
 
 
@@ -58,6 +60,7 @@ class RemoveComponentCommand(BaseModel):
 # Object and Image Plane Commands
 # ---------------------------------------------------------------------------
 
+
 class SetObjectCommand(BaseModel):
     """
     Set the object position and/or height.
@@ -84,6 +87,7 @@ class SetImagePlaneCommand(BaseModel):
 # ---------------------------------------------------------------------------
 # Analysis and Optimization Commands
 # ---------------------------------------------------------------------------
+
 
 class AnalyzeCommand(BaseModel):
     """
@@ -124,6 +128,7 @@ class OptimizeCommand(BaseModel):
 # Explanation and Troubleshooting Commands
 # ---------------------------------------------------------------------------
 
+
 class ExplainCommand(BaseModel):
     """
     Produce a rich natural-language explanation of the current system.
@@ -151,6 +156,7 @@ class DiagnoseCommand(BaseModel):
 # ---------------------------------------------------------------------------
 # Design-from-Requirements Command
 # ---------------------------------------------------------------------------
+
 
 class DesignCommand(BaseModel):
     """

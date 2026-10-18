@@ -13,28 +13,40 @@ from typing import Union
 
 from optics.models import OpticalSystem, AnalysisResult
 from optics.systems import (
-    add_component, remove_component, update_component,
-    sort_components, validate_system,
+    add_component,
+    remove_component,
+    update_component,
+    sort_components,
+    validate_system,
 )
 from optics.analysis import analyze_system
 from optics.optimization import (
     optimize_system as run_optimization,
-    minimize_rms_spot, target_magnification, target_efl,
+    minimize_rms_spot,
+    target_magnification,
+    target_efl,
 )
 
 from .commands import (
-    AICommand, ModifyComponentCommand, AddComponentCommand,
-    RemoveComponentCommand, SetObjectCommand, SetImagePlaneCommand,
-    AnalyzeCommand, OptimizeCommand, ExplainCommand, DiagnoseCommand,
+    AICommand,
+    ModifyComponentCommand,
+    AddComponentCommand,
+    RemoveComponentCommand,
+    SetObjectCommand,
+    SetImagePlaneCommand,
+    AnalyzeCommand,
+    OptimizeCommand,
+    ExplainCommand,
+    DiagnoseCommand,
     DesignCommand,
 )
 from .explanations import explain_system, diagnose_system
 from .design import design_from_requirements
 
-
 # ---------------------------------------------------------------------------
 # Command Application
 # ---------------------------------------------------------------------------
+
 
 def apply_command(system: OpticalSystem, command: AICommand) -> OpticalSystem:
     """
@@ -55,7 +67,9 @@ def apply_command(system: OpticalSystem, command: AICommand) -> OpticalSystem:
         ValueError: If the command is invalid (e.g. component not found).
     """
     if isinstance(command, ModifyComponentCommand):
-        return update_component(system, command.component_id, **{command.field: command.value})
+        return update_component(
+            system, command.component_id, **{command.field: command.value}
+        )
 
     if isinstance(command, AddComponentCommand):
         return add_component(system, command.component)
@@ -77,7 +91,11 @@ def apply_command(system: OpticalSystem, command: AICommand) -> OpticalSystem:
 
     if isinstance(command, SetImagePlaneCommand):
         return system.model_copy(
-            update={"image_plane": system.image_plane.model_copy(update={"position": command.position})}
+            update={
+                "image_plane": system.image_plane.model_copy(
+                    update={"position": command.position}
+                )
+            }
         )
 
     if isinstance(command, AnalyzeCommand):
@@ -95,9 +113,7 @@ def apply_command(system: OpticalSystem, command: AICommand) -> OpticalSystem:
     raise ValueError(f"Unknown command type: {type(command).__name__}")
 
 
-def execute_command(
-    system: OpticalSystem, command: AICommand
-) -> dict:
+def execute_command(system: OpticalSystem, command: AICommand) -> dict:
     """
     Execute a command and return a result dict.
 
@@ -151,11 +167,15 @@ def execute_command(
             objective = minimize_rms_spot
         elif command.objective == "magnification":
             if command.target is None:
-                raise ValueError("OptimizeCommand with objective='magnification' requires a target.")
+                raise ValueError(
+                    "OptimizeCommand with objective='magnification' requires a target."
+                )
             objective = lambda s: target_magnification(s, command.target)
         elif command.objective == "efl":
             if command.target is None:
-                raise ValueError("OptimizeCommand with objective='efl' requires a target.")
+                raise ValueError(
+                    "OptimizeCommand with objective='efl' requires a target."
+                )
             objective = lambda s: target_efl(s, command.target)
         else:
             raise ValueError(f"Unknown objective: {command.objective}")
@@ -201,8 +221,11 @@ def execute_command(
         return {
             "system": system,
             # warnings are plain strings; the structured findings stay in result
-            "warnings": [f"[{f['level']}] {f['message']}" for f in diagnosis["findings"]
-                         if f["level"] in ("warning", "error")],
+            "warnings": [
+                f"[{f['level']}] {f['message']}"
+                for f in diagnosis["findings"]
+                if f["level"] in ("warning", "error")
+            ],
             "result": diagnosis,
             "message": message,
         }
@@ -240,7 +263,9 @@ def execute_command(
 
     # Build a human-readable message
     if isinstance(command, ModifyComponentCommand):
-        message = f"Modified {command.component_id}.{command.field} = {command.value:.6g}."
+        message = (
+            f"Modified {command.component_id}.{command.field} = {command.value:.6g}."
+        )
     elif isinstance(command, AddComponentCommand):
         message = f"Added component '{command.component.id}'."
     elif isinstance(command, RemoveComponentCommand):

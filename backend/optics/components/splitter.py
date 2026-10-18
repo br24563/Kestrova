@@ -12,7 +12,7 @@ from ..nsc.system import Object3D, Vector3
 @dataclass
 class BeamSplitCube(Object3D):
     """Cube beam splitter."""
-    
+
     def __init__(self, position=None, size=25.4, ratio=0.5, coating="dielectric"):
         super().__init__(
             name="BeamSplitCube",
@@ -29,9 +29,16 @@ class BeamSplitCube(Object3D):
 @dataclass
 class BeamSplitPlate(Object3D):
     """Plate beam splitter."""
-    
-    def __init__(self, position=None, normal=None, size=25.4, ratio=0.5, 
-                 coating="dielectric", compensate=False):
+
+    def __init__(
+        self,
+        position=None,
+        normal=None,
+        size=25.4,
+        ratio=0.5,
+        coating="dielectric",
+        compensate=False,
+    ):
         super().__init__(
             name="BeamSplitPlate",
             position=position or Vector3(),

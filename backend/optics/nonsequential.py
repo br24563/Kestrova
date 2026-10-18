@@ -35,25 +35,29 @@ import numpy as np
 from .models import OpticalSystem
 from . import raytrace as rt
 
-
 # =============================================================================
 # Ghost reflections
 # =============================================================================
 
+
 @dataclass
 class GhostPath:
     """A double-reflection ghost path."""
-    surfaces: tuple[int, int]      # (second reflecting surface, first reflecting surface)
+
+    surfaces: tuple[int, int]  # (second reflecting surface, first reflecting surface)
     reflection_count: int
-    relative_intensity: float      # ghost irradiance relative to the primary image
-    image_position: float          # ghost focus minus image-plane position (m)
-    is_in_field: bool              # ghost lands within the primary image height at the image plane
+    relative_intensity: float  # ghost irradiance relative to the primary image
+    image_position: float  # ghost focus minus image-plane position (m)
+    is_in_field: bool  # ghost lands within the primary image height at the image plane
     description: str
 
 
-def analyze_ghost_reflections(system: OpticalSystem, n_reflections: int = 2,
-                              threshold: float = 1e-6,
-                              coating_reflectance: Optional[float] = None) -> list:
+def analyze_ghost_reflections(
+    system: OpticalSystem,
+    n_reflections: int = 2,
+    threshold: float = 1e-6,
+    coating_reflectance: Optional[float] = None,
+) -> list:
     """
     Real-ray double-reflection ghosts brighter than ``threshold``.
 
@@ -65,26 +69,35 @@ def analyze_ghost_reflections(system: OpticalSystem, n_reflections: int = 2,
     if n_reflections != 2:
         raise ValueError("Only double-reflection (order 2) ghosts reach the detector")
     from .ghost import analyze_ghosts
-    ghosts = analyze_ghosts(system, field_fraction=0.0, num_rays=5,
-                            min_relative_irradiance=threshold,
-                            coating_reflectance=coating_reflectance)
+
+    ghosts = analyze_ghosts(
+        system,
+        field_fraction=0.0,
+        num_rays=5,
+        min_relative_irradiance=threshold,
+        coating_reflectance=coating_reflectance,
+    )
     h_img = abs(rt.first_order(system).image_height)
     out = []
     for g in ghosts:
-        out.append(GhostPath(
-            surfaces=(g.second_surface, g.first_surface),
-            reflection_count=2,
-            relative_intensity=g.relative_irradiance,
-            image_position=g.ghost_focus_offset,
-            is_in_field=abs(g.ghost_image_height) <= h_img + g.ghost_spot_rms_at_image,
-            description=f"{g.first_label} then {g.second_label}",
-        ))
+        out.append(
+            GhostPath(
+                surfaces=(g.second_surface, g.first_surface),
+                reflection_count=2,
+                relative_intensity=g.relative_irradiance,
+                image_position=g.ghost_focus_offset,
+                is_in_field=abs(g.ghost_image_height)
+                <= h_img + g.ghost_spot_rms_at_image,
+                description=f"{g.first_label} then {g.second_label}",
+            )
+        )
     return out
 
 
 # =============================================================================
 # BRDF / BSDF models
 # =============================================================================
+
 
 @dataclass
 class BRDFParameters:
@@ -99,6 +112,7 @@ class BRDFParameters:
         Gaussian of width ``sigma`` in direction-cosine space,
         BSDF = TS exp(-d^2 / 2 sigma^2) / (2 pi sigma^2 cos theta_s).
     """
+
     model: str
     A: float = 0.0
     B: float = 1.0
@@ -115,12 +129,15 @@ def compute_brdf(angle_in: float, angle_out: float, params: BRDFParameters) -> f
         return params.diffuse_fraction / math.pi
     d = abs(math.sin(angle_out) - math.sin(angle_in))
     if model == "abg":
-        return params.A / (params.B + d ** params.G)
+        return params.A / (params.B + d**params.G)
     if model == "gaussian":
         if params.sigma <= 0:
             raise ValueError("Gaussian scatter needs sigma > 0")
-        return (params.diffuse_fraction * math.exp(-0.5 * (d / params.sigma) ** 2)
-                / (2.0 * math.pi * params.sigma ** 2 * max(math.cos(angle_out), 1e-6)))
+        return (
+            params.diffuse_fraction
+            * math.exp(-0.5 * (d / params.sigma) ** 2)
+            / (2.0 * math.pi * params.sigma**2 * max(math.cos(angle_out), 1e-6))
+        )
     raise ValueError(f"Unknown BRDF model '{params.model}'")
 
 
@@ -128,14 +145,16 @@ def compute_brdf(angle_in: float, angle_out: float, params: BRDFParameters) -> f
 # Scatter and point source transmittance
 # =============================================================================
 
+
 @dataclass
 class StrayLightPath:
     """Scatter contribution of one surface."""
+
     path_id: int
-    source_surface: int          # surface index in the sequence
-    scatter_surface: int         # same surface (first-order scatter)
+    source_surface: int  # surface index in the sequence
+    scatter_surface: int  # same surface (first-order scatter)
     detector_position: float
-    relative_intensity: float    # contribution to the PST
+    relative_intensity: float  # contribution to the PST
     path_type: str
     description: str
 
@@ -147,7 +166,7 @@ def _coverage(system: OpticalSystem, seq, angle_rad: float, n: int = 15) -> np.n
     semi = first.semi_aperture or max((s.semi_aperture or 0.0) for s in seq.surfaces)
     g = np.linspace(-1.0, 1.0, n)
     X, Y = np.meshgrid(g, g)
-    m = X ** 2 + Y ** 2 <= 1.0
+    m = X**2 + Y**2 <= 1.0
     x, y = X[m] * semi, Y[m] * semi
     d = np.array([0.0, math.sin(angle_rad), math.cos(angle_rad)])
     z0 = first.z - 1e-3
@@ -156,18 +175,31 @@ def _coverage(system: OpticalSystem, seq, angle_rad: float, n: int = 15) -> np.n
     d0 = np.tile(d, (len(x), 1))
     cov = np.zeros(len(seq.surfaces))
     for i in range(len(seq.surfaces)):
-        sub = rt.Sequence(seq.surfaces[:i + 1], seq.wavelength, seq.object_z,
-                          seq.object_height, True, seq.surfaces[i].z,
-                          seq.surfaces[i].origin, seq.surfaces[i].rotation, 1,
-                          seq.n_object, seq.n_image, 0)
+        sub = rt.Sequence(
+            seq.surfaces[: i + 1],
+            seq.wavelength,
+            seq.object_z,
+            seq.object_height,
+            True,
+            seq.surfaces[i].z,
+            seq.surfaces[i].origin,
+            seq.surfaces[i].rotation,
+            1,
+            seq.n_object,
+            seq.n_image,
+            0,
+        )
         b = rt.trace_bundle(sub, p0, d0, clip=True)
         cov[i] = b.valid.mean()
     return cov
 
 
-def analyze_stray_light(system: OpticalSystem, source_angle: float = 30.0,
-                        brdf_params: Optional[BRDFParameters] = None,
-                        n_scatter_events: int = 1) -> list:
+def analyze_stray_light(
+    system: OpticalSystem,
+    source_angle: float = 30.0,
+    brdf_params: Optional[BRDFParameters] = None,
+    n_scatter_events: int = 1,
+) -> list:
     """
     First-order scatter contribution of every refracting/reflecting surface
     for a point source ``source_angle`` degrees off axis (see module notes).
@@ -180,6 +212,7 @@ def analyze_stray_light(system: OpticalSystem, source_angle: float = 30.0,
     if not seq.object_infinite:
         raise ValueError("PST is defined for a source at infinity (object at infinity)")
     from .pupil import image_space_na
+
     na = image_space_na(system, seq=seq)
     th = math.radians(source_angle)
     cov = _coverage(system, seq, th)
@@ -190,22 +223,33 @@ def analyze_stray_light(system: OpticalSystem, source_angle: float = 30.0,
         # specular direction ~ the source direction; detector-bound scatter ~ axial
         bsdf = compute_brdf(th, 0.0, brdf_params)
         contrib = cov[i] * bsdf * math.pi * na * na
-        paths.append(StrayLightPath(
-            path_id=len(paths), source_surface=i, scatter_surface=i,
-            detector_position=system.image_plane.position,
-            relative_intensity=float(contrib), path_type="scatter",
-            description=f"Scatter from {s.label} (beam coverage {cov[i]:.2f})",
-        ))
+        paths.append(
+            StrayLightPath(
+                path_id=len(paths),
+                source_surface=i,
+                scatter_surface=i,
+                detector_position=system.image_plane.position,
+                relative_intensity=float(contrib),
+                path_type="scatter",
+                description=f"Scatter from {s.label} (beam coverage {cov[i]:.2f})",
+            )
+        )
     paths.sort(key=lambda p: p.relative_intensity, reverse=True)
     return paths
 
 
-def compute_pst(system: OpticalSystem, angles: np.ndarray,
-                brdf_params: Optional[BRDFParameters] = None) -> np.ndarray:
+def compute_pst(
+    system: OpticalSystem,
+    angles: np.ndarray,
+    brdf_params: Optional[BRDFParameters] = None,
+) -> np.ndarray:
     """First-order PST (dB, 10 log10) versus source angle in degrees."""
     out = []
     for a in np.asarray(angles, dtype=float):
-        total = sum(p.relative_intensity for p in analyze_stray_light(system, float(a), brdf_params))
+        total = sum(
+            p.relative_intensity
+            for p in analyze_stray_light(system, float(a), brdf_params)
+        )
         out.append(10.0 * math.log10(total) if total > 0 else -math.inf)
     return np.array(out)
 
@@ -213,6 +257,7 @@ def compute_pst(system: OpticalSystem, angles: np.ndarray,
 # =============================================================================
 # Narcissus (YNI)
 # =============================================================================
+
 
 def analyze_narcissus(system: OpticalSystem) -> list:
     """
@@ -232,8 +277,9 @@ def analyze_narcissus(system: OpticalSystem) -> list:
             continue
         nb = idx[i][0]
         inc = m.u_before[i] + m.y[i] * s.curvature
-        rows.append({"surface_index": i, "surface_id": s.label,
-                     "yni": float(m.y[i] * nb * inc)})
+        rows.append(
+            {"surface_index": i, "surface_id": s.label, "yni": float(m.y[i] * nb * inc)}
+        )
     big = max((abs(r["yni"]) for r in rows), default=0.0)
     for r in rows:
         r["relative_yni"] = abs(r["yni"]) / big if big > 0 else 0.0

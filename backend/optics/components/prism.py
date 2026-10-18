@@ -17,6 +17,7 @@ from ..nsc.system import Object3D, Vector3
 @dataclass
 class Prism(Object3D):
     """Base prism component."""
+
     prism_type: str = "generic"
     material: str = "N-BK7"
     apex_angle: float = 60.0  # degrees
@@ -29,7 +30,9 @@ class Prism(Object3D):
 
     def path_length(self, beam_height: Optional[float] = None) -> float:
         """Unfolded glass path (same units as base_size)."""
-        raise NotImplementedError(f"No tunnel-diagram length for a {self.prism_type} prism")
+        raise NotImplementedError(
+            f"No tunnel-diagram length for a {self.prism_type} prism"
+        )
 
     def deviation_angle(self) -> float:
         """Calculate beam deviation angle."""
@@ -103,6 +106,7 @@ class DovePrism(Prism):
         """Image rotation (2x prism rotation)."""
         return 0.0  # No deviation, just rotation
 
+
 class RoofPrism(Prism):
     """Roof prism (Amici, Pechan, etc.)."""
 
@@ -174,6 +178,7 @@ class WedgePrism(Prism):
         asin(n sin(alpha)) - alpha (-> (n-1) alpha for a thin wedge).
         """
         from ..materials import refractive_index
+
         n = refractive_index(self.material, wavelength)
         a = np.radians(self.wedge_angle)
         s = n * np.sin(a)
@@ -214,7 +219,9 @@ def create_prism(prism_type, **kwargs):
     cls = mapping.get(key)
     if cls is None:
         raise ValueError(
-            "Unknown prism type: " + str(prism_type)
-            + ". Known types: " + ", ".join(sorted(mapping))
+            "Unknown prism type: "
+            + str(prism_type)
+            + ". Known types: "
+            + ", ".join(sorted(mapping))
         )
     return cls(**kwargs)

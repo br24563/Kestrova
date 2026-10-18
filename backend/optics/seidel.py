@@ -54,16 +54,25 @@ def _real_measures(system: OpticalSystem, fo: rt.FirstOrder) -> dict:
         return rt._to_local(o, R, b.image, b.directions)
 
     out = {}
-    b, _, _ = rt.trace_field_rays(s, 0, 0, np.array([0.0, 0.0]), np.array([0.0, 1.0]),
-                                  seq=seq, fo=fo2, clip=False)
+    b, _, _ = rt.trace_field_rays(
+        s, 0, 0, np.array([0.0, 0.0]), np.array([0.0, 1.0]), seq=seq, fo=fo2, clip=False
+    )
     P, D = local(b)
     if b.valid.all():
         out["transverse_spherical"] = float(P[1, 1] - P[0, 1])
         slope = D[1, 1] / D[1, 2]
         out["longitudinal_spherical"] = float(-P[1, 1] / slope * d) if slope else 0.0
     if system.object.height:
-        b, _, _ = rt.trace_field_rays(s, 0, 1, np.array([0.0, 0.0, 0.0]),
-                                      np.array([0.0, 1.0, -1.0]), seq=seq, fo=fo2, clip=False)
+        b, _, _ = rt.trace_field_rays(
+            s,
+            0,
+            1,
+            np.array([0.0, 0.0, 0.0]),
+            np.array([0.0, 1.0, -1.0]),
+            seq=seq,
+            fo=fo2,
+            clip=False,
+        )
         P, _ = local(b)
         if b.valid.all():
             out["tangential_coma"] = float((P[1, 1] + P[2, 1]) / 2.0 - P[0, 1])
@@ -83,8 +92,10 @@ def spherical_aberration(system: OpticalSystem) -> dict:
     """Third-order spherical aberration at full aperture:
     {"longitudinal": m, "transverse": m}."""
     _, _, t3 = _third_order(system)
-    return {"longitudinal": t3["longitudinal_spherical"],
-            "transverse": t3["transverse_spherical"]}
+    return {
+        "longitudinal": t3["longitudinal_spherical"],
+        "transverse": t3["transverse_spherical"],
+    }
 
 
 def coma(system: OpticalSystem) -> float:
@@ -139,7 +150,7 @@ def seidel_analysis(system: OpticalSystem) -> dict:
         "coma": t3["tangential_coma"],
         "astigmatism": zt - zs,
         "field_curvature": (zt + zs) / 2.0,
-        "tangential_focus": zt,     # relative to the paraxial image
+        "tangential_focus": zt,  # relative to the paraxial image
         "sagittal_focus": zs,
         "petzval_field_curvature": t3["petzval_field_curvature"],
         "distortion": t3["fractional_distortion"],
@@ -147,11 +158,21 @@ def seidel_analysis(system: OpticalSystem) -> dict:
         "lateral_color": t3["lateral_color"],
         "paraxial_image_position": fo.image_z,
         "paraxial_image_height": fo.image_height,
-        "seidel_sums": {"S1": sums.S1, "S2": sums.S2, "S3": sums.S3, "S4": sums.S4,
-                        "S5": sums.S5, "CL": sums.CL, "CT": sums.CT},
+        "seidel_sums": {
+            "S1": sums.S1,
+            "S2": sums.S2,
+            "S3": sums.S3,
+            "S4": sums.S4,
+            "S5": sums.S5,
+            "CL": sums.CL,
+            "CT": sums.CT,
+        },
         "wavefront_coefficients": {
-            "W040": sums.S1 / 8.0, "W131": sums.S2 / 2.0, "W222": sums.S3 / 2.0,
-            "W220": (sums.S3 + sums.S4) / 4.0, "W311": sums.S5 / 2.0,
+            "W040": sums.S1 / 8.0,
+            "W131": sums.S2 / 2.0,
+            "W222": sums.S3 / 2.0,
+            "W220": (sums.S3 + sums.S4) / 4.0,
+            "W311": sums.S5 / 2.0,
         },
         "per_surface": sums.per_surface,
         "unsupported_surfaces": sums.unsupported,

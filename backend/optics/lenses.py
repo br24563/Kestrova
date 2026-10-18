@@ -21,10 +21,10 @@ import math
 import numpy as np
 from dataclasses import dataclass
 
-
 # ---------------------------------------------------------------------------
 # Thin Lens Equation: 1/f = 1/s' - 1/s
 # ---------------------------------------------------------------------------
+
 
 def image_distance(f: float, s: float) -> float:
     """
@@ -57,7 +57,7 @@ def image_distance(f: float, s: float) -> float:
         >>> image_distance(0.05, float('-inf'))
         0.05
     """
-    if s == float('inf') or s == float('-inf'):
+    if s == float("inf") or s == float("-inf"):
         # Object at infinity: image forms at the focal plane
         return f
 
@@ -97,7 +97,7 @@ def object_distance(f: float, s_prime: float) -> float:
         >>> object_distance(0.05, 0.10)
         -0.1
     """
-    if s_prime == float('inf') or s_prime == float('-inf'):
+    if s_prime == float("inf") or s_prime == float("-inf"):
         return f
 
     if abs(s_prime - f) < 1e-15:
@@ -151,6 +151,7 @@ def focal_length(s: float, s_prime: float) -> float:
 # ---------------------------------------------------------------------------
 # Magnification
 # ---------------------------------------------------------------------------
+
 
 def magnification(s: float, s_prime: float) -> float:
     """
@@ -210,6 +211,7 @@ def magnification_from_f(f: float, s: float) -> float:
 # ---------------------------------------------------------------------------
 # Two-Lens System
 # ---------------------------------------------------------------------------
+
 
 def two_lens_effective_focal_length(f1: float, f2: float, d: float) -> float:
     """
@@ -337,6 +339,7 @@ def two_lens_system_image(
 # Ray Transfer Matrix (ABCD Matrix) Method
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RayVector:
     """
@@ -375,8 +378,7 @@ def propagation_matrix(d: float) -> np.ndarray:
     Returns:
         2x2 ABCD matrix as a NumPy array.
     """
-    return np.array([[1.0, d],
-                     [0.0, 1.0]])
+    return np.array([[1.0, d], [0.0, 1.0]])
 
 
 def thin_lens_matrix(f: float) -> np.ndarray:
@@ -392,8 +394,7 @@ def thin_lens_matrix(f: float) -> np.ndarray:
     Returns:
         2x2 ABCD matrix as a NumPy array.
     """
-    return np.array([[1.0, 0.0],
-                     [-1.0 / f, 1.0]])
+    return np.array([[1.0, 0.0], [-1.0 / f, 1.0]])
 
 
 def apply_matrix(matrix: np.ndarray, ray: RayVector) -> RayVector:
@@ -437,6 +438,7 @@ def system_matrix(matrices: list[np.ndarray]) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # F-number and Numerical Aperture
 # ---------------------------------------------------------------------------
+
 
 def f_number(f: float, d: float) -> float:
     """

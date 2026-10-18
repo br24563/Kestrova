@@ -19,14 +19,18 @@ import numpy as np
 from .models import OpticalSystem, Ray
 from . import raytrace as rt
 
-
 # ---------------------------------------------------------------------------
 # Geometric helpers (2D, meridional plane)
 # ---------------------------------------------------------------------------
 
+
 def _sphere_intersection(
-    z0: float, y0: float, dz: float, dy: float,
-    z_vertex: float, radius: float,
+    z0: float,
+    y0: float,
+    dz: float,
+    dy: float,
+    z_vertex: float,
+    radius: float,
 ) -> Optional[tuple[float, float]]:
     """
     Intersection of a ray with the sphere through ``z_vertex`` of signed
@@ -36,7 +40,7 @@ def _sphere_intersection(
     """
     zc = z_vertex + radius
     b = 2.0 * (dz * (z0 - zc) + dy * y0)
-    c = (z0 - zc) ** 2 + y0 ** 2 - radius ** 2
+    c = (z0 - zc) ** 2 + y0**2 - radius**2
     disc = b * b - 4.0 * c
     if disc < 0.0:
         return None
@@ -85,6 +89,7 @@ def _snell_refract(
 # Real ray tracing
 # ---------------------------------------------------------------------------
 
+
 def trace_real_ray(
     system: OpticalSystem,
     ray: Ray,
@@ -122,6 +127,7 @@ def trace_real_ray(
 # ---------------------------------------------------------------------------
 # Path helpers
 # ---------------------------------------------------------------------------
+
 
 def real_intercept_at_plane(points: list[list[float]], z_plane: float) -> float:
     """Height where the last straight segment of a path meets z = z_plane."""

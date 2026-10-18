@@ -29,7 +29,8 @@ def zernike_radial(n: int, m: int, rho: np.ndarray) -> np.ndarray:
     R = np.zeros_like(rho)
     for k in range((n - m) // 2 + 1):
         coeff = ((-1) ** k * factorial(n - k)) / (
-            factorial(k) * factorial((n + m) // 2 - k) * factorial((n - m) // 2 - k))
+            factorial(k) * factorial((n + m) // 2 - k) * factorial((n - m) // 2 - k)
+        )
         R = R + coeff * rho ** (n - 2 * k)
     return R
 
@@ -52,12 +53,12 @@ def _fringe_to_nm(j: int) -> Tuple[int, int]:
     if j < 1:
         raise ValueError("Fringe index starts at 1")
     k = int(np.floor(np.sqrt(j - 1)))
-    pos = j - 1 - k * k           # position within group k (0 .. 2k)
-    mag = k - pos // 2            # |m| decreases through the group
+    pos = j - 1 - k * k  # position within group k (0 .. 2k)
+    mag = k - pos // 2  # |m| decreases through the group
     n = 2 * k - mag
     if mag == 0:
         return n, 0
-    return n, (mag if pos % 2 == 0 else -mag)   # cosine first, then sine
+    return n, (mag if pos % 2 == 0 else -mag)  # cosine first, then sine
 
 
 def zernike_standard(index: int, rho: np.ndarray, theta: np.ndarray) -> np.ndarray:
@@ -92,7 +93,7 @@ def _annular_radial_coeffs(n: int, m: int, eps: float) -> tuple:
     m = abs(m)
     x, w = np.polynomial.legendre.leggauss(200)
     r = eps + (1 - eps) * (x + 1) / 2
-    w = w * (1 - eps) / 2 * r              # include the rho weight
+    w = w * (1 - eps) / 2 * r  # include the rho weight
     basis: list = []
     for nn in range(m, n + 1, 2):
         v = np.zeros(nn + 1)
@@ -102,11 +103,11 @@ def _annular_radial_coeffs(n: int, m: int, eps: float) -> tuple:
             bb = np.polynomial.polynomial.polyval(r, b)
             proj = np.sum(vb * bb * w) / np.sum(bb * bb * w)
             vv = np.zeros(max(len(v), len(b)))
-            vv[:len(v)] += v
-            vv[:len(b)] -= proj * np.asarray(b)
+            vv[: len(v)] += v
+            vv[: len(b)] -= proj * np.asarray(b)
             v = vv
         val = np.polynomial.polynomial.polyval(r, v)
-        target = (1 - eps ** 2) / (2 * (nn + 1))
+        target = (1 - eps**2) / (2 * (nn + 1))
         v = v * np.sqrt(target / np.sum(val * val * w))
         if np.polynomial.polynomial.polyval(1.0, v) < 0:
             v = -v
@@ -114,7 +115,9 @@ def _annular_radial_coeffs(n: int, m: int, eps: float) -> tuple:
     return tuple(basis[-1])
 
 
-def zernike_annular(index: int, rho: np.ndarray, theta: np.ndarray, epsilon: float) -> np.ndarray:
+def zernike_annular(
+    index: int, rho: np.ndarray, theta: np.ndarray, epsilon: float
+) -> np.ndarray:
     """
     Annular Zernike polynomial (Noll ordering), orthonormal over the annulus
     epsilon <= rho <= 1. Reduces to :func:`zernike_standard` for epsilon = 0.
@@ -126,7 +129,9 @@ def zernike_annular(index: int, rho: np.ndarray, theta: np.ndarray, epsilon: flo
     n, m = _noll_to_nm(index)
     rho = np.asarray(rho, dtype=float)
     theta = np.asarray(theta, dtype=float)
-    R = np.polynomial.polynomial.polyval(rho, _annular_radial_coeffs(n, abs(m), float(epsilon)))
+    R = np.polynomial.polynomial.polyval(
+        rho, _annular_radial_coeffs(n, abs(m), float(epsilon))
+    )
     # with R normalised as above, the mean square over the annulus is 1
     norm = np.sqrt(2.0 * (n + 1.0))
     if m == 0:
@@ -162,7 +167,9 @@ def zernike_fit(
     theta = np.arctan2(y, x)
     mask = (rho <= 1.0 + 1e-12) & np.isfinite(wavefront)
     f = _basis(zernike_type)
-    A = np.stack([f(j, rho[mask], theta[mask]) for j in range(1, num_terms + 1)], axis=1)
+    A = np.stack(
+        [f(j, rho[mask], theta[mask]) for j in range(1, num_terms + 1)], axis=1
+    )
     coeffs, *_ = np.linalg.lstsq(A, wavefront[mask], rcond=None)
     return coeffs
 
@@ -217,9 +224,18 @@ def zernike_to_wavefront(
 
 def _identify_aberrations(coeffs: np.ndarray) -> dict:
     """Named primary terms of a Noll-ordered coefficient vector."""
-    names = {2: "tilt_x", 3: "tilt_y", 4: "defocus", 5: "astigmatism_45",
-             6: "astigmatism_0", 7: "coma_y", 8: "coma_x", 9: "trefoil_y",
-             10: "trefoil_x", 11: "spherical_primary"}
+    names = {
+        2: "tilt_x",
+        3: "tilt_y",
+        4: "defocus",
+        5: "astigmatism_45",
+        6: "astigmatism_0",
+        7: "coma_y",
+        8: "coma_x",
+        9: "trefoil_y",
+        10: "trefoil_x",
+        11: "spherical_primary",
+    }
     return {name: float(coeffs[j - 1]) for j, name in names.items() if j <= len(coeffs)}
 
 
@@ -228,12 +244,22 @@ def _zernike_name(n: int, m: int) -> str:
     if n == 0:
         return "Piston"
     table = {
-        (1, 1): "X Tilt", (1, -1): "Y Tilt",
-        (2, 0): "Defocus", (2, -2): "Astigmatism 45", (2, 2): "Astigmatism 0",
-        (3, -1): "Coma Y", (3, 1): "Coma X", (3, -3): "Trefoil Y", (3, 3): "Trefoil X",
-        (4, 0): "Spherical Primary", (4, 2): "Secondary Astigmatism 0",
-        (4, -2): "Secondary Astigmatism 45", (4, 4): "Tetrafoil 0", (4, -4): "Tetrafoil 45",
-        (5, 1): "Secondary Coma X", (5, -1): "Secondary Coma Y",
+        (1, 1): "X Tilt",
+        (1, -1): "Y Tilt",
+        (2, 0): "Defocus",
+        (2, -2): "Astigmatism 45",
+        (2, 2): "Astigmatism 0",
+        (3, -1): "Coma Y",
+        (3, 1): "Coma X",
+        (3, -3): "Trefoil Y",
+        (3, 3): "Trefoil X",
+        (4, 0): "Spherical Primary",
+        (4, 2): "Secondary Astigmatism 0",
+        (4, -2): "Secondary Astigmatism 45",
+        (4, 4): "Tetrafoil 0",
+        (4, -4): "Tetrafoil 45",
+        (5, 1): "Secondary Coma X",
+        (5, -1): "Secondary Coma Y",
         (6, 0): "Secondary Spherical",
     }
     return table.get((n, m), f"Z(n={n}, m={m})")

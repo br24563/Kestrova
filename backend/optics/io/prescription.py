@@ -17,8 +17,15 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..models import (
-    OpticalSystem, ThinLens, ThickLens, SphericalSurface, ApertureStop, Mirror,
-    Object, ImagePlane, AnalysisSettings,
+    OpticalSystem,
+    ThinLens,
+    ThickLens,
+    SphericalSurface,
+    ApertureStop,
+    Mirror,
+    Object,
+    ImagePlane,
+    AnalysisSettings,
 )
 from ..advanced_surfaces import AsphericSurface
 from ..materials import MATERIALS
@@ -26,11 +33,11 @@ from ..materials import MATERIALS
 
 @dataclass
 class Row:
-    radius: float = 0.0               # 0 = flat
+    radius: float = 0.0  # 0 = flat
     conic: float = 0.0
-    asphere: list = field(default_factory=list)   # A4, A6, ...
-    glass: Optional[str] = None       # medium after; "MIRROR" for a mirror
-    thickness: float = 0.0            # to the next surface (signed)
+    asphere: list = field(default_factory=list)  # A4, A6, ...
+    glass: Optional[str] = None  # medium after; "MIRROR" for a mirror
+    thickness: float = 0.0  # to the next surface (signed)
     semi_aperture: Optional[float] = None
     stop: bool = False
     paraxial_focal_length: Optional[float] = None  # ideal lens (Zemax PARAXIAL)
@@ -47,6 +54,7 @@ def system_to_rows(system: OpticalSystem) -> tuple[list, float, Any]:
     """
     from .. import raytrace as rt
     from ..models import Mirror as _M
+
     comps = rt.ordered_components(system)
     rows: list[Row] = []
     zs: list[float] = []
@@ -55,42 +63,87 @@ def system_to_rows(system: OpticalSystem) -> tuple[list, float, Any]:
     direction = 1
     for c in comps:
         if isinstance(c, ThinLens):
-            rows.append(Row(semi_aperture=c.aperture_diameter / 2, glass=medium,
-                            paraxial_focal_length=c.focal_length, label=c.id))
+            rows.append(
+                Row(
+                    semi_aperture=c.aperture_diameter / 2,
+                    glass=medium,
+                    paraxial_focal_length=c.focal_length,
+                    label=c.id,
+                )
+            )
             zs.append(c.position)
         elif isinstance(c, ThickLens):
             outer = medium
-            rows.append(Row(radius=c.radius1, glass=c.material,
-                            semi_aperture=c.aperture_diameter / 2, label=f"{c.id}.front"))
+            rows.append(
+                Row(
+                    radius=c.radius1,
+                    glass=c.material,
+                    semi_aperture=c.aperture_diameter / 2,
+                    label=f"{c.id}.front",
+                )
+            )
             zs.append(c.position)
-            rows.append(Row(radius=c.radius2, glass=outer,
-                            semi_aperture=c.aperture_diameter / 2, label=f"{c.id}.back"))
+            rows.append(
+                Row(
+                    radius=c.radius2,
+                    glass=outer,
+                    semi_aperture=c.aperture_diameter / 2,
+                    label=f"{c.id}.back",
+                )
+            )
             zs.append(c.position + direction * c.thickness)
         elif isinstance(c, SphericalSurface):
             medium = None if c.material.lower() == "air" else c.material
-            rows.append(Row(radius=c.radius, glass=medium,
-                            semi_aperture=(c.aperture_diameter / 2 if c.aperture_diameter else None),
-                            label=c.id))
+            rows.append(
+                Row(
+                    radius=c.radius,
+                    glass=medium,
+                    semi_aperture=(
+                        c.aperture_diameter / 2 if c.aperture_diameter else None
+                    ),
+                    label=c.id,
+                )
+            )
             zs.append(c.position)
             continue
         elif isinstance(c, AsphericSurface):
-            medium = None if (not c.material or c.material.lower() == "air") else c.material
-            rows.append(Row(radius=c.radius, conic=c.conic, asphere=list(c.aspheric_coeffs),
-                            glass=medium, semi_aperture=c.aperture_diameter / 2, label=c.id))
+            medium = (
+                None if (not c.material or c.material.lower() == "air") else c.material
+            )
+            rows.append(
+                Row(
+                    radius=c.radius,
+                    conic=c.conic,
+                    asphere=list(c.aspheric_coeffs),
+                    glass=medium,
+                    semi_aperture=c.aperture_diameter / 2,
+                    label=c.id,
+                )
+            )
             zs.append(c.position)
             continue
         elif isinstance(c, ApertureStop):
-            rows.append(Row(semi_aperture=c.diameter / 2, glass=medium, stop=True, label=c.id))
+            rows.append(
+                Row(semi_aperture=c.diameter / 2, glass=medium, stop=True, label=c.id)
+            )
             zs.append(c.position)
         elif isinstance(c, _M):
-            rows.append(Row(radius=c.radius, conic=c.conic, glass="MIRROR",
-                            semi_aperture=(c.aperture_diameter or c.width) / 2, label=f"{c.id}.mirror"))
+            rows.append(
+                Row(
+                    radius=c.radius,
+                    conic=c.conic,
+                    glass="MIRROR",
+                    semi_aperture=(c.aperture_diameter or c.width) / 2,
+                    label=f"{c.id}.mirror",
+                )
+            )
             zs.append(c.position)
             direction = -direction
         else:
             raise ValueError(
                 f"Component '{c.id}' ({type(c).__name__}) has no standard-surface "
-                "equivalent in this exporter")
+                "equivalent in this exporter"
+            )
     if not rows:
         raise ValueError("System has no surfaces")
     for k in range(len(rows) - 1):
@@ -133,9 +186,14 @@ def resolve_glass(name: str) -> str:
     raise ValueError(f"Glass '{name}' is ambiguous: {matches}")
 
 
-def rows_to_system(rows: list, object_distance: float, object_height: float,
-                   wavelengths: list, reference_index: int = 0,
-                   name: str = "") -> OpticalSystem:
+def rows_to_system(
+    rows: list,
+    object_distance: float,
+    object_height: float,
+    wavelengths: list,
+    reference_index: int = 0,
+    name: str = "",
+) -> OpticalSystem:
     """
     Build an OpticalSystem from surface rows. The first surface is placed at
     z = 0. Singlets in air become ThickLens; other refracting surfaces become
@@ -153,49 +211,110 @@ def rows_to_system(rows: list, object_distance: float, object_height: float,
     while i < len(rows):
         r = rows[i]
         cid = r.label.split(".")[0] if r.label else f"S{i + 1}"
-        if r.stop and r.radius == 0 and r.paraxial_focal_length is None and (r.glass or None) == medium:
-            comps.append(ApertureStop(id=cid, position=zs[i], diameter=2 * (r.semi_aperture or 0.0)))
+        if (
+            r.stop
+            and r.radius == 0
+            and r.paraxial_focal_length is None
+            and (r.glass or None) == medium
+        ):
+            comps.append(
+                ApertureStop(
+                    id=cid, position=zs[i], diameter=2 * (r.semi_aperture or 0.0)
+                )
+            )
             i += 1
             continue
         if r.stop and r.semi_aperture:
-            comps.append(ApertureStop(id=f"{cid}_stop", position=zs[i], diameter=2 * r.semi_aperture))
+            comps.append(
+                ApertureStop(
+                    id=f"{cid}_stop", position=zs[i], diameter=2 * r.semi_aperture
+                )
+            )
         if r.paraxial_focal_length is not None:
-            comps.append(ThinLens(id=cid, position=zs[i], focal_length=r.paraxial_focal_length,
-                                  aperture_diameter=2 * (r.semi_aperture or 0.0125)))
+            comps.append(
+                ThinLens(
+                    id=cid,
+                    position=zs[i],
+                    focal_length=r.paraxial_focal_length,
+                    aperture_diameter=2 * (r.semi_aperture or 0.0125),
+                )
+            )
             i += 1
             continue
         if r.glass == "MIRROR":
-            comps.append(Mirror(id=cid, position=zs[i], width=2 * (r.semi_aperture or 0.0125),
-                                radius=r.radius, conic=r.conic))
+            comps.append(
+                Mirror(
+                    id=cid,
+                    position=zs[i],
+                    width=2 * (r.semi_aperture or 0.0125),
+                    radius=r.radius,
+                    conic=r.conic,
+                )
+            )
             i += 1
             continue
         nxt = rows[i + 1] if i + 1 < len(rows) else None
-        simple = (r.conic == 0 and not r.asphere and r.glass and medium is None and nxt is not None
-                  and nxt.glass is None and nxt.conic == 0 and not nxt.asphere and not nxt.stop
-                  and nxt.paraxial_focal_length is None and r.thickness > 0)
+        simple = (
+            r.conic == 0
+            and not r.asphere
+            and r.glass
+            and medium is None
+            and nxt is not None
+            and nxt.glass is None
+            and nxt.conic == 0
+            and not nxt.asphere
+            and not nxt.stop
+            and nxt.paraxial_focal_length is None
+            and r.thickness > 0
+        )
         if simple:
             assert nxt is not None
             semi = max(r.semi_aperture or 0.0, nxt.semi_aperture or 0.0) or 0.0125
-            comps.append(ThickLens(id=cid, position=zs[i], radius1=r.radius, radius2=nxt.radius,
-                                   thickness=r.thickness, aperture_diameter=2 * semi,
-                                   material=r.glass))
+            comps.append(
+                ThickLens(
+                    id=cid,
+                    position=zs[i],
+                    radius1=r.radius,
+                    radius2=nxt.radius,
+                    thickness=r.thickness,
+                    aperture_diameter=2 * semi,
+                    material=r.glass,
+                )
+            )
             i += 2
             continue
         mat = r.glass or "air"
         if r.conic or r.asphere:
-            comps.append(AsphericSurface(id=cid, position=zs[i], radius=r.radius, conic=r.conic,
-                                         aspheric_coeffs=list(r.asphere),
-                                         aperture_diameter=2 * (r.semi_aperture or 0.0125),
-                                         material=mat))
+            comps.append(
+                AsphericSurface(
+                    id=cid,
+                    position=zs[i],
+                    radius=r.radius,
+                    conic=r.conic,
+                    aspheric_coeffs=list(r.asphere),
+                    aperture_diameter=2 * (r.semi_aperture or 0.0125),
+                    material=mat,
+                )
+            )
         else:
-            comps.append(SphericalSurface(id=cid, position=zs[i], radius=r.radius, thickness=r.thickness,
-                                          material=mat,
-                                          aperture_diameter=(2 * r.semi_aperture if r.semi_aperture else None)))
+            comps.append(
+                SphericalSurface(
+                    id=cid,
+                    position=zs[i],
+                    radius=r.radius,
+                    thickness=r.thickness,
+                    material=mat,
+                    aperture_diameter=(
+                        2 * r.semi_aperture if r.semi_aperture else None
+                    ),
+                )
+            )
         medium = r.glass
         i += 1
     wl = wavelengths[reference_index] if wavelengths else 587.5618e-9
     return OpticalSystem(
-        components=comps, wavelengths=wavelengths or [wl],
+        components=comps,
+        wavelengths=wavelengths or [wl],
         object=Object(position=-object_distance, height=object_height),
         image_plane=ImagePlane(position=image_z),
         analysis_settings=AnalysisSettings(wavelength=wl),

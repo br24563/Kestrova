@@ -13,13 +13,14 @@ from .profile import GRINProfile, RadialGRIN
 @dataclass
 class GRINMaterial:
     """GRIN material: index profile plus optional published properties."""
+
     name: str
     profile: GRINProfile
     abbe_number: Optional[float] = None
-    transmission_range: Optional[tuple] = None   # nm
-    density: Optional[float] = None              # g/cm^3
-    thermal_expansion: Optional[float] = None    # 1e-6/K
-    dn_dT: Optional[float] = None                # 1e-6/K
+    transmission_range: Optional[tuple] = None  # nm
+    density: Optional[float] = None  # g/cm^3
+    thermal_expansion: Optional[float] = None  # 1e-6/K
+    dn_dT: Optional[float] = None  # 1e-6/K
 
     def index_at(self, *args) -> float:
         return self.profile.index(*args)
@@ -29,11 +30,7 @@ class GRINMaterial:
 
 
 def create_grin_material(
-    name: str,
-    profile_type: str = 'radial',
-    n0: float = 1.5,
-    g: float = 0.1,
-    **kwargs
+    name: str, profile_type: str = "radial", n0: float = 1.5, g: float = 0.1, **kwargs
 ) -> GRINMaterial:
     """
     Create a GRIN material.
@@ -48,15 +45,17 @@ def create_grin_material(
     Returns:
         GRINMaterial instance
     """
-    if profile_type == 'radial':
+    if profile_type == "radial":
         profile: GRINProfile = RadialGRIN(n0=n0, g=g)
-    elif profile_type == 'axial':
+    elif profile_type == "axial":
         from .profile import AxialGRIN
-        coefficients = kwargs.get('coefficients', [n0, 0.0, 0.0])
+
+        coefficients = kwargs.get("coefficients", [n0, 0.0, 0.0])
         profile = AxialGRIN(n0=n0, coefficients=coefficients)
-    elif profile_type == '3d':
+    elif profile_type == "3d":
         from .profile import GRIN3D
-        gradient = kwargs.get('gradient', np.zeros(3))
+
+        gradient = kwargs.get("gradient", np.zeros(3))
         profile = GRIN3D(n0=n0, gradient_vector=gradient)
     else:
         raise ValueError(f"Unknown profile type: {profile_type}")

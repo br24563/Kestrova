@@ -20,8 +20,9 @@ from .system import Ray, HitPoint, Vector3
 def _frame(normal: Vector3):
     n = normal.normalized()
     ref = Vector3(1, 0, 0) if abs(n.x) < 0.9 else Vector3(0, 1, 0)
-    t = Vector3(ref.y * n.z - ref.z * n.y, ref.z * n.x - ref.x * n.z,
-                ref.x * n.y - ref.y * n.x).normalized()
+    t = Vector3(
+        ref.y * n.z - ref.z * n.y, ref.z * n.x - ref.x * n.z, ref.x * n.y - ref.y * n.x
+    ).normalized()
     b = Vector3(n.y * t.z - n.z * t.y, n.z * t.x - n.x * t.z, n.x * t.y - n.y * t.x)
     return n, t, b
 
@@ -56,12 +57,20 @@ class ScatterModel:
             lz = np.sqrt(max(0.0, 1 - r * r))
             beta = float(np.hypot(lx - s0[0], ly - s0[1]))
             w = np.pi * self.bsdf(beta, lz) / self.num_rays
-            direction = Vector3(lx * t.x + ly * b.x + lz * n.x,
-                                lx * t.y + ly * b.y + lz * n.y,
-                                lx * t.z + ly * b.z + lz * n.z).normalized()
-            out.append(Ray(origin=hit.point, direction=direction,
-                           intensity=ray.intensity * w, wavelength=ray.wavelength,
-                           order=ray.order + 1))
+            direction = Vector3(
+                lx * t.x + ly * b.x + lz * n.x,
+                lx * t.y + ly * b.y + lz * n.y,
+                lx * t.z + ly * b.z + lz * n.z,
+            ).normalized()
+            out.append(
+                Ray(
+                    origin=hit.point,
+                    direction=direction,
+                    intensity=ray.intensity * w,
+                    wavelength=ray.wavelength,
+                    order=ray.order + 1,
+                )
+            )
         return out
 
 
@@ -91,22 +100,29 @@ class GaussianScatter(ScatterModel):
     converted to direction-cosine units as s = sin(sigma).
     """
 
-    def __init__(self, num_rays: int = 10, sigma: float = 5.0, reflectance: float = 0.1):
+    def __init__(
+        self, num_rays: int = 10, sigma: float = 5.0, reflectance: float = 0.1
+    ):
         self.num_rays = num_rays
         self.s = np.sin(np.radians(sigma))
         self.reflectance = reflectance
 
     def bsdf(self, beta: float, cos_s: float = 1.0) -> float:
-        return (self.reflectance * np.exp(-0.5 * (beta / self.s) ** 2)
-                / (2 * np.pi * self.s ** 2 * max(cos_s, 1e-6)))
+        return (
+            self.reflectance
+            * np.exp(-0.5 * (beta / self.s) ** 2)
+            / (2 * np.pi * self.s**2 * max(cos_s, 1e-6))
+        )
 
 
 class ABgScatter(ScatterModel):
     """Harvey-Shack ABg: BSDF = A / (B + beta^g)."""
 
-    def __init__(self, num_rays: int = 10, A: float = 0.01, B: float = 0.01, G: float = 2.0):
+    def __init__(
+        self, num_rays: int = 10, A: float = 0.01, B: float = 0.01, G: float = 2.0
+    ):
         self.num_rays = num_rays
         self.A, self.B, self.G = A, B, G
 
     def bsdf(self, beta: float, cos_s: float = 1.0) -> float:
-        return self.A / (self.B + beta ** self.G)
+        return self.A / (self.B + beta**self.G)

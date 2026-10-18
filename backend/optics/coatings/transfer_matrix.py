@@ -41,20 +41,35 @@ def _admittance(n, cos_t, polarization):
     raise ValueError("polarization must be 's' or 'p'")
 
 
-def layer_matrix(layer: Layer, wavelength: float, angle: float = 0.0,
-                 polarization: str = "s", n_incident: float = 1.0) -> np.ndarray:
+def layer_matrix(
+    layer: Layer,
+    wavelength: float,
+    angle: float = 0.0,
+    polarization: str = "s",
+    n_incident: float = 1.0,
+) -> np.ndarray:
     """Characteristic matrix of one layer."""
     n = layer.n
-    assert n is not None        # Layer resolves its index on construction
+    assert n is not None  # Layer resolves its index on construction
     cos_t = _cos_in(n_incident, n, angle)
     delta = 2 * np.pi * n * layer.thickness * cos_t / wavelength
     eta = _admittance(n, cos_t, polarization)
-    return np.array([[np.cos(delta), 1j * np.sin(delta) / eta],
-                     [1j * eta * np.sin(delta), np.cos(delta)]], dtype=complex)
+    return np.array(
+        [
+            [np.cos(delta), 1j * np.sin(delta) / eta],
+            [1j * eta * np.sin(delta), np.cos(delta)],
+        ],
+        dtype=complex,
+    )
 
 
-def transfer_matrix(layers: list, wavelength: float, angle: float = 0.0,
-                    polarization: str = "s", n_incident: float = 1.0) -> np.ndarray:
+def transfer_matrix(
+    layers: list,
+    wavelength: float,
+    angle: float = 0.0,
+    polarization: str = "s",
+    n_incident: float = 1.0,
+) -> np.ndarray:
     """Product of the layer matrices, incident side first."""
     M = np.eye(2, dtype=complex)
     for layer in layers:
@@ -64,13 +79,20 @@ def transfer_matrix(layers: list, wavelength: float, angle: float = 0.0,
 
 def _ends(n_incident, n_substrate, angle, polarization):
     eta0 = _admittance(n_incident, _cos_in(n_incident, n_incident, angle), polarization)
-    etas = _admittance(n_substrate, _cos_in(n_incident, n_substrate, angle), polarization)
+    etas = _admittance(
+        n_substrate, _cos_in(n_incident, n_substrate, angle), polarization
+    )
     return eta0, etas
 
 
-def reflection_transmission(layers: list, wavelength: float, n_incident: float = 1.0,
-                            n_substrate: float = 1.5, angle: float = 0.0,
-                            polarization: str = "s") -> Tuple[float, float, complex, complex]:
+def reflection_transmission(
+    layers: list,
+    wavelength: float,
+    n_incident: float = 1.0,
+    n_substrate: float = 1.5,
+    angle: float = 0.0,
+    polarization: str = "s",
+) -> Tuple[float, float, complex, complex]:
     """(R, T, r, t) of a multilayer on a substrate."""
     M = transfer_matrix(layers, wavelength, angle, polarization, n_incident)
     eta0, etas = _ends(n_incident, n_substrate, angle, polarization)
@@ -83,19 +105,26 @@ def reflection_transmission(layers: list, wavelength: float, n_incident: float =
     return R, T, r, t
 
 
-def electric_field(layers: list, wavelength: float, n_incident: float = 1.0,
-                   n_substrate: float = 1.5, angle: float = 0.0,
-                   polarization: str = "s") -> np.ndarray:
+def electric_field(
+    layers: list,
+    wavelength: float,
+    n_incident: float = 1.0,
+    n_substrate: float = 1.5,
+    angle: float = 0.0,
+    polarization: str = "s",
+) -> np.ndarray:
     """
     |E| (tangential, relative to the incident wave) at each interface: the
     front surface, every internal interface, and the substrate.
     """
     eta0, etas = _ends(n_incident, n_substrate, angle, polarization)
-    mats = [layer_matrix(l, wavelength, angle, polarization, n_incident) for l in layers]
+    mats = [
+        layer_matrix(l, wavelength, angle, polarization, n_incident) for l in layers
+    ]
     BC = [np.array([1.0, etas], dtype=complex)]
     for M in reversed(mats):
         BC.append(M @ BC[-1])
-    BC = BC[::-1]                       # BC[0] = front surface, BC[-1] = substrate
+    BC = BC[::-1]  # BC[0] = front surface, BC[-1] = substrate
     B0, C0 = BC[0]
     scale = 2 * eta0 / (eta0 * B0 + C0)
     return np.abs(np.array([scale * bc[0] for bc in BC]))

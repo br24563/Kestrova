@@ -50,10 +50,10 @@ from scipy.special import j1
 
 from .models import OpticalSystem, ImagePlane
 
-
 # =============================================================================
 # Sensor model
 # =============================================================================
+
 
 @dataclass
 class SensorConfig:
@@ -62,16 +62,17 @@ class SensorConfig:
 
     Defaults describe a small scientific CMOS sensor.
     """
-    resolution: int = 128          # pixels per side (square sensor)
-    pixel_pitch: float = 5.0e-6    # m
+
+    resolution: int = 128  # pixels per side (square sensor)
+    pixel_pitch: float = 5.0e-6  # m
     quantum_efficiency: float = 0.6
-    full_well: float = 20000.0     # electrons
-    read_noise: float = 5.0        # electrons RMS
-    dark_current: float = 0.0      # electrons / pixel / second
+    full_well: float = 20000.0  # electrons
+    read_noise: float = 5.0  # electrons RMS
+    dark_current: float = 0.0  # electrons / pixel / second
     exposure_time: float = 1.0e-3  # s
     bit_depth: int = 12
-    gain: float = 4.88             # electrons per ADU; see the note below
-    fill_factor: float = 1.0       # fraction of the pixel that collects light
+    gain: float = 4.88  # electrons per ADU; see the note below
+    fill_factor: float = 1.0  # fraction of the pixel that collects light
 
     # The default gain is full_well / (2^bit_depth - 1) = 20000 / 4095, so the
     # ADC full scale coincides with the full well. A lower gain makes the ADC
@@ -89,10 +90,12 @@ class SensorConfig:
         return math.sqrt(2.0) * self.resolution * self.pixel_pitch / 2.0
 
 
-def effective_f_number(system: OpticalSystem,
-                       wavelength: Optional[float] = None) -> float:
+def effective_f_number(
+    system: OpticalSystem, wavelength: Optional[float] = None
+) -> float:
     """Infinite-conjugate F-number EFL / entrance-pupil diameter (inf if undefined)."""
     from .analysis import system_f_number
+
     try:
         fno = float(system_f_number(system))
     except ValueError:
@@ -100,10 +103,12 @@ def effective_f_number(system: OpticalSystem,
     return fno if math.isfinite(fno) and fno > 0 else float("inf")
 
 
-def working_f_number(system: OpticalSystem,
-                     wavelength: Optional[float] = None) -> float:
+def working_f_number(
+    system: OpticalSystem, wavelength: Optional[float] = None
+) -> float:
     """Working F-number 1 / (2 NA'), NA' from the real image-space marginal ray."""
     from .pupil import image_space_na
+
     try:
         na = image_space_na(system, wavelength)
     except ValueError:
@@ -111,13 +116,13 @@ def working_f_number(system: OpticalSystem,
     return 1.0 / (2.0 * na) if na > 0 else float("inf")
 
 
-def magnification(system: OpticalSystem,
-                  wavelength: Optional[float] = None) -> float:
+def magnification(system: OpticalSystem, wavelength: Optional[float] = None) -> float:
     """
     Paraxial lateral magnification. For an object at infinity, the ratio of
     image height to the object height at its (large) distance, -EFL/distance.
     """
     from . import raytrace as rt
+
     seq = rt.build_sequence(system, wavelength)
     fo = rt.first_order(system, seq=seq)
     if not seq.object_infinite:
@@ -125,8 +130,9 @@ def magnification(system: OpticalSystem,
     return -fo.efl / (seq.surfaces[0].z - system.object.position)
 
 
-def object_pixel_pitch(system: OpticalSystem, sensor: SensorConfig,
-                       wavelength: Optional[float] = None) -> float:
+def object_pixel_pitch(
+    system: OpticalSystem, sensor: SensorConfig, wavelength: Optional[float] = None
+) -> float:
     """Object-plane sampling pitch that maps onto one sensor pixel."""
     m = abs(magnification(system, wavelength))
     if m < 1e-15:
@@ -134,8 +140,9 @@ def object_pixel_pitch(system: OpticalSystem, sensor: SensorConfig,
     return sensor.pixel_pitch / m
 
 
-def field_of_view(system: OpticalSystem, sensor: SensorConfig,
-                  wavelength: Optional[float] = None) -> float:
+def field_of_view(
+    system: OpticalSystem, sensor: SensorConfig, wavelength: Optional[float] = None
+) -> float:
     """Object-plane extent covered by the sensor (meters)."""
     return sensor.resolution * object_pixel_pitch(system, sensor, wavelength)
 
@@ -144,9 +151,15 @@ def field_of_view(system: OpticalSystem, sensor: SensorConfig,
 # Point spread function
 # =============================================================================
 
-def _psf_grid_size(f_number: float, wavelength: float, pixel_pitch: float,
-                   rms_spot: float = 0.0,
-                   min_size: int = 33, max_size: int = 401) -> int:
+
+def _psf_grid_size(
+    f_number: float,
+    wavelength: float,
+    pixel_pitch: float,
+    rms_spot: float = 0.0,
+    min_size: int = 33,
+    max_size: int = 401,
+) -> int:
     """Odd PSF grid size that contains the Airy disk and the blur envelope."""
     airy_extent = 6.0 * wavelength * f_number if math.isfinite(f_number) else 0.0
     blur_extent = 4.0 * max(rms_spot, 0.0)
@@ -158,8 +171,9 @@ def _psf_grid_size(f_number: float, wavelength: float, pixel_pitch: float,
     return int(min(size, max_size))
 
 
-def airy_psf(f_number: float, wavelength: float, pixel_pitch: float,
-             size: Optional[int] = None) -> np.ndarray:
+def airy_psf(
+    f_number: float, wavelength: float, pixel_pitch: float, size: Optional[int] = None
+) -> np.ndarray:
     """
     Diffraction-limited PSF integrated over each sensor pixel.
 
@@ -208,8 +222,9 @@ def _overlap_matrix(centres: np.ndarray, width: float, edges: np.ndarray) -> np.
     return np.clip(b - a, 0.0, None) / width
 
 
-def _resample_psf(x: np.ndarray, psf2d: np.ndarray, pixel_pitch: float,
-                  size: Optional[int]) -> np.ndarray:
+def _resample_psf(
+    x: np.ndarray, psf2d: np.ndarray, pixel_pitch: float, size: Optional[int]
+) -> np.ndarray:
     """
     Integrate a finely sampled PSF into sensor pixels centred on its
     centroid, each sample treated as a uniform cell whose area is shared
@@ -220,8 +235,12 @@ def _resample_psf(x: np.ndarray, psf2d: np.ndarray, pixel_pitch: float,
     cx = float((w.sum(axis=0) * x).sum())
     cy = float((w.sum(axis=1) * x).sum())
     if size is None:
-        r = math.sqrt(float((w.sum(axis=0) * (x - cx) ** 2).sum()
-                            + (w.sum(axis=1) * (x - cy) ** 2).sum()))
+        r = math.sqrt(
+            float(
+                (w.sum(axis=0) * (x - cx) ** 2).sum()
+                + (w.sum(axis=1) * (x - cy) ** 2).sum()
+            )
+        )
         size = int(2 * math.ceil(4.0 * max(r, dx) / pixel_pitch) + 1)
         size = max(9, min(size, 401))
     half = size // 2
@@ -233,11 +252,14 @@ def _resample_psf(x: np.ndarray, psf2d: np.ndarray, pixel_pitch: float,
     return out / t if t > 0 else out
 
 
-def psf_for_system(system: OpticalSystem, field_fraction: float = 0.0,
-                   sensor: Optional[SensorConfig] = None,
-                   wavelength: Optional[float] = None,
-                   size: Optional[int] = None,
-                   num_rays: int = 64) -> np.ndarray:
+def psf_for_system(
+    system: OpticalSystem,
+    field_fraction: float = 0.0,
+    sensor: Optional[SensorConfig] = None,
+    wavelength: Optional[float] = None,
+    size: Optional[int] = None,
+    num_rays: int = 64,
+) -> np.ndarray:
     """
     The system's diffraction PSF at a field point from its real-ray
     wavefront, integrated into sensor pixels and normalised to sum 1.
@@ -247,6 +269,7 @@ def psf_for_system(system: OpticalSystem, field_fraction: float = 0.0,
     sample).
     """
     from . import pupil as pp
+
     if sensor is None:
         sensor = SensorConfig()
     if wavelength is None:
@@ -264,20 +287,30 @@ def psf_for_system(system: OpticalSystem, field_fraction: float = 0.0,
     # Zero-pad the pupil so the PSF is sampled at <= 1/16 pixel (sinc
     # interpolation), capped at a 4096-point FFT.
     if not g.na_image > 0:
-        raise ValueError("Image space is afocal (image at infinity): there is no "
-                         "image-plane PSF to simulate a sensor image with")
+        raise ValueError(
+            "Image space is afocal (image at infinity): there is no "
+            "image-plane PSF to simulate a sensor image with"
+        )
     m = g.W.shape[0]
     dx4 = wavelength * (m - 1) / (4 * m * 2.0 * g.na_image)
-    pad = int(min(max(4, math.ceil(4 * 16 * dx4 / sensor.pixel_pitch)), max(4, 4096 // m)))
+    pad = int(
+        min(max(4, math.ceil(4 * 16 * dx4 / sensor.pixel_pitch)), max(4, 4096 // m))
+    )
     res = pp.psf(g, pad=pad)
     return _resample_psf(res.x, res.intensity, sensor.pixel_pitch, size)
 
 
-def geometric_psf(system: OpticalSystem, field_fraction: float, sensor: SensorConfig,
-                  size: Optional[int] = None, grid: int = 41,
-                  wavelength: Optional[float] = None) -> np.ndarray:
+def geometric_psf(
+    system: OpticalSystem,
+    field_fraction: float,
+    sensor: SensorConfig,
+    size: Optional[int] = None,
+    grid: int = 41,
+    wavelength: Optional[float] = None,
+) -> np.ndarray:
     """Geometric PSF: real-ray image-plane intercepts binned into pixels."""
     from .analysis import real_spot
+
     pts, _, _, _, _ = real_spot(system, field_fraction, grid, wavelength=wavelength)
     pts = np.asarray(pts)
     if size is None:
@@ -295,11 +328,15 @@ def geometric_psf(system: OpticalSystem, field_fraction: float, sensor: SensorCo
     return out / out.sum()
 
 
-def rms_spot_radius(system: OpticalSystem, field_fraction: float = 0.0,
-                    num_rays: int = 15,
-                    wavelength: Optional[float] = None) -> float:
+def rms_spot_radius(
+    system: OpticalSystem,
+    field_fraction: float = 0.0,
+    num_rays: int = 15,
+    wavelength: Optional[float] = None,
+) -> float:
     """Real-ray RMS spot radius about the centroid (meters)."""
     from .analysis import real_spot
+
     return real_spot(system, field_fraction, num_rays, wavelength=wavelength)[1]
 
 
@@ -308,7 +345,13 @@ def rms_spot_radius(system: OpticalSystem, field_fraction: float = 0.0,
 # =============================================================================
 
 TEST_TARGETS = (
-    "bars", "siemens", "grid", "checkerboard", "edge", "point", "flat",
+    "bars",
+    "siemens",
+    "grid",
+    "checkerboard",
+    "edge",
+    "point",
+    "flat",
 )
 
 
@@ -318,10 +361,16 @@ def _square_wave(coord: np.ndarray, period: float, duty: float = 0.5) -> np.ndar
     return (phase < duty).astype(float)
 
 
-def test_target(kind: str = "bars", size: int = 128,
-                periods=(4, 8, 16, 32), duty: float = 0.5,
-                num_spokes: int = 36, line_width: int = 2,
-                contrast: float = 1.0, background: float = 0.0) -> np.ndarray:
+def test_target(
+    kind: str = "bars",
+    size: int = 128,
+    periods=(4, 8, 16, 32),
+    duty: float = 0.5,
+    num_spokes: int = 36,
+    line_width: int = 2,
+    contrast: float = 1.0,
+    background: float = 0.0,
+) -> np.ndarray:
     """
     Build an object-plane test pattern.
 
@@ -342,7 +391,8 @@ def test_target(kind: str = "bars", size: int = 128,
     kind = (kind or "bars").strip().lower()
     if kind not in TEST_TARGETS:
         raise ValueError(
-            f"Unknown test target {kind!r}; expected one of {TEST_TARGETS}")
+            f"Unknown test target {kind!r}; expected one of {TEST_TARGETS}"
+        )
 
     n = max(4, int(size))
     coord = np.arange(n, dtype=float)
@@ -398,13 +448,16 @@ def test_target(kind: str = "bars", size: int = 128,
 # Field-dependent effects
 # =============================================================================
 
-def distortion_curve(system: OpticalSystem, num_fields: int = 11,
-                     field_fraction_max: float = 1.0) -> dict:
+
+def distortion_curve(
+    system: OpticalSystem, num_fields: int = 11, field_fraction_max: float = 1.0
+) -> dict:
     """
     Distortion from real chief rays at the paraxial image plane:
     D = 100 (h_real - h_paraxial) / h_paraxial.
     """
     from . import raytrace as rt
+
     seq0 = rt.build_sequence(system)
     fo0 = rt.first_order(system, seq=seq0)
     s = system.model_copy(update={"image_plane": ImagePlane(position=fo0.image_z)})
@@ -413,10 +466,21 @@ def distortion_curve(system: OpticalSystem, num_fields: int = 11,
     fractions = np.linspace(0.0, float(field_fraction_max), max(2, num_fields))
     real_mm, par_mm, dist = [], [], []
     for ff in fractions:
-        b, _, _ = rt.trace_field_rays(s, 0.0, float(ff), np.array([0.0]), np.array([0.0]),
-                                      seq=seq, fo=fo, clip=False)
-        h_real = float(rt._to_local(seq.image_origin, seq.image_rotation, b.image,
-                                    b.directions)[0][0, 1])
+        b, _, _ = rt.trace_field_rays(
+            s,
+            0.0,
+            float(ff),
+            np.array([0.0]),
+            np.array([0.0]),
+            seq=seq,
+            fo=fo,
+            clip=False,
+        )
+        h_real = float(
+            rt._to_local(seq.image_origin, seq.image_rotation, b.image, b.directions)[
+                0
+            ][0, 1]
+        )
         h_par = fo.image_height * float(ff)
         real_mm.append(h_real * 1e3)
         par_mm.append(h_par * 1e3)
@@ -434,22 +498,32 @@ def distortion_curve(system: OpticalSystem, num_fields: int = 11,
 def relative_illumination_profile(system: OpticalSystem, num_fields: int = 11) -> dict:
     """Relative illumination versus field (see :mod:`optics.illumination`)."""
     from .illumination import relative_illumination
+
     return relative_illumination(system, num_fields=num_fields)
 
 
-def relative_illumination_map(system: OpticalSystem, sensor: SensorConfig,
-                              num_fields: int = 11, vignetting: bool = True) -> np.ndarray:
+def relative_illumination_map(
+    system: OpticalSystem,
+    sensor: SensorConfig,
+    num_fields: int = 11,
+    vignetting: bool = True,
+) -> np.ndarray:
     """
     Relative illumination over the sensor, the sensor half-diagonal being the
     edge of the field. With ``vignetting=False`` only the thin-lens cos^4
     obliquity factor is applied.
     """
     from .illumination import relative_illumination, cos4_falloff, chief_ray_image_angle
+
     fractions = np.linspace(0.0, 1.0, max(2, num_fields))
     if vignetting:
-        values = np.asarray(relative_illumination(system, len(fractions))["relative_illumination"])
+        values = np.asarray(
+            relative_illumination(system, len(fractions))["relative_illumination"]
+        )
     else:
-        values = np.array([cos4_falloff(chief_ray_image_angle(system, float(f))) for f in fractions])
+        values = np.array(
+            [cos4_falloff(chief_ray_image_angle(system, float(f))) for f in fractions]
+        )
         values = values / values[0]
     n = sensor.resolution
     half = (n - 1) / 2.0
@@ -462,10 +536,14 @@ def relative_illumination_map(system: OpticalSystem, sensor: SensorConfig,
 # Sensor response
 # =============================================================================
 
-def sensor_response(image: np.ndarray, sensor: SensorConfig,
-                    peak_fraction_of_full_well: float = 0.8,
-                    seed: Optional[int] = None,
-                    noise: bool = True) -> dict:
+
+def sensor_response(
+    image: np.ndarray,
+    sensor: SensorConfig,
+    peak_fraction_of_full_well: float = 0.8,
+    seed: Optional[int] = None,
+    noise: bool = True,
+) -> dict:
     """
     Apply the detector model to a normalised irradiance map.
 
@@ -514,7 +592,8 @@ def sensor_response(image: np.ndarray, sensor: SensorConfig,
 
     if noise and sensor.read_noise > 0:
         signal_electrons = signal_electrons + rng.normal(
-            0.0, sensor.read_noise, size=arr.shape)
+            0.0, sensor.read_noise, size=arr.shape
+        )
 
     gain = max(1e-9, float(sensor.gain))
     # Electrons the ADC can represent at this gain. When the gain is set low
@@ -522,18 +601,26 @@ def sensor_response(image: np.ndarray, sensor: SensorConfig,
     # the signal clips in the ADC before the well fills.
     adc_full_scale = float(sensor.max_adu) * gain
 
-    saturated = int(np.count_nonzero(
-        (signal_electrons >= sensor.full_well)
-        | (signal_electrons >= adc_full_scale)))
+    saturated = int(
+        np.count_nonzero(
+            (signal_electrons >= sensor.full_well)
+            | (signal_electrons >= adc_full_scale)
+        )
+    )
     clipped = np.clip(signal_electrons, 0.0, min(sensor.full_well, adc_full_scale))
 
     adu = np.clip(np.floor(clipped / gain), 0, sensor.max_adu).astype(np.uint16)
 
     shot = np.sqrt(np.maximum(np.abs(signal_electrons), 1.0))
-    noise_total = np.sqrt(shot ** 2 + max(0.0, sensor.read_noise) ** 2
-                          + max(dark_mean, 0.0))
-    snr = np.divide(signal_electrons, noise_total,
-                    out=np.zeros_like(signal_electrons), where=noise_total > 0)
+    noise_total = np.sqrt(
+        shot**2 + max(0.0, sensor.read_noise) ** 2 + max(dark_mean, 0.0)
+    )
+    snr = np.divide(
+        signal_electrons,
+        noise_total,
+        out=np.zeros_like(signal_electrons),
+        where=noise_total > 0,
+    )
 
     return {
         "electrons": signal_electrons,
@@ -552,13 +639,15 @@ def sensor_response(image: np.ndarray, sensor: SensorConfig,
 # Full simulation
 # =============================================================================
 
+
 @dataclass
 class SimulationResult:
     """Output of :func:`simulate_image`."""
-    image: np.ndarray            # displayed image, 0 to 1
-    adu: np.ndarray              # raw ADU
+
+    image: np.ndarray  # displayed image, 0 to 1
+    adu: np.ndarray  # raw ADU
     electrons: np.ndarray
-    ideal: np.ndarray            # before blur, illumination and noise
+    ideal: np.ndarray  # before blur, illumination and noise
     psf: np.ndarray
     illumination: np.ndarray
     sensor: SensorConfig = field(default_factory=SensorConfig)
@@ -567,18 +656,21 @@ class SimulationResult:
     def as_dict(self) -> dict:
         """Summary dict (arrays are summarised, not serialised)."""
         md = dict(self.metadata)
-        md.update({
-            "shape": list(self.image.shape),
-            "image_min": float(self.image.min()),
-            "image_max": float(self.image.max()),
-            "image_mean": float(self.image.mean()),
-            "ideal_mean": float(self.ideal.mean()),
-            "psf_shape": list(self.psf.shape),
-        })
+        md.update(
+            {
+                "shape": list(self.image.shape),
+                "image_min": float(self.image.min()),
+                "image_max": float(self.image.max()),
+                "image_mean": float(self.image.mean()),
+                "ideal_mean": float(self.ideal.mean()),
+                "psf_shape": list(self.psf.shape),
+            }
+        )
         return md
 
-    def ascii_preview(self, width: int = 56, height: Optional[int] = None,
-                      chars: str = " .:-=+*#%@") -> str:
+    def ascii_preview(
+        self, width: int = 56, height: Optional[int] = None, chars: str = " .:-=+*#%@"
+    ) -> str:
         """Render the image as ASCII so results are visible in a terminal."""
         return ascii_preview(self.image, width=width, height=height, chars=chars)
 
@@ -593,8 +685,7 @@ class SimulationResult:
         return path
 
 
-def _distort(image: np.ndarray, sensor: SensorConfig,
-             curve: dict) -> np.ndarray:
+def _distort(image: np.ndarray, sensor: SensorConfig, curve: dict) -> np.ndarray:
     """
     Remap an ideal image by the system's radial distortion.
 
@@ -620,9 +711,9 @@ def _distort(image: np.ndarray, sensor: SensorConfig,
 
     n = sensor.resolution
     half = (n - 1) / 2.0
-    coords = (np.arange(n, dtype=float) - half)
+    coords = np.arange(n, dtype=float) - half
     # Sensor radius in the same units the curve uses.
-    scale = sensor.pixel_pitch * 1e3   # m -> mm per pixel
+    scale = sensor.pixel_pitch * 1e3  # m -> mm per pixel
     yy, xx = np.meshgrid(coords, coords, indexing="ij")
     r_mm = np.hypot(xx, yy) * scale
 
@@ -631,8 +722,9 @@ def _distort(image: np.ndarray, sensor: SensorConfig,
         factor = np.where(r_mm > 1e-12, r_par / r_mm, 1.0)
     src_y = (half + (yy - 0.0) * factor).ravel()
     src_x = (half + (xx - 0.0) * factor).ravel()
-    sampled = map_coordinates(np.asarray(image, dtype=float),
-                              [src_y, src_x], order=1, mode="nearest")
+    sampled = map_coordinates(
+        np.asarray(image, dtype=float), [src_y, src_x], order=1, mode="nearest"
+    )
     return sampled.reshape(n, n)
 
 
@@ -666,21 +758,23 @@ def _convolve_psf(image: np.ndarray, psf: np.ndarray) -> np.ndarray:
     return blurred / weight
 
 
-def simulate_image(system: OpticalSystem,
-                   target=None,
-                   sensor: Optional[SensorConfig] = None,
-                   target_kind: str = "bars",
-                   field_fraction: float = 0.0,
-                   full_field: bool = False,
-                   with_diffraction: bool = True,
-                   with_aberration: bool = True,
-                   with_vignetting: bool = True,
-                   with_distortion: bool = True,
-                   with_noise: bool = True,
-                   peak_fraction_of_full_well: float = 0.8,
-                   num_rays: int = 9,
-                   seed: Optional[int] = None,
-                   target_kwargs: Optional[dict] = None) -> SimulationResult:
+def simulate_image(
+    system: OpticalSystem,
+    target=None,
+    sensor: Optional[SensorConfig] = None,
+    target_kind: str = "bars",
+    field_fraction: float = 0.0,
+    full_field: bool = False,
+    with_diffraction: bool = True,
+    with_aberration: bool = True,
+    with_vignetting: bool = True,
+    with_distortion: bool = True,
+    with_noise: bool = True,
+    peak_fraction_of_full_well: float = 0.8,
+    num_rays: int = 9,
+    seed: Optional[int] = None,
+    target_kwargs: Optional[dict] = None,
+) -> SimulationResult:
     """
     Simulate an image of a test target through the real system.
 
@@ -726,16 +820,23 @@ def simulate_image(system: OpticalSystem,
 
     # --- distortion -------------------------------------------------------
     curve = distortion_curve(system) if full_field else None
-    working = _distort(ideal, sensor, curve) if (full_field and with_distortion
-                                                and curve) else ideal.copy()
+    working = (
+        _distort(ideal, sensor, curve)
+        if (full_field and with_distortion and curve)
+        else ideal.copy()
+    )
 
     # --- point spread function -------------------------------------------
     def make_psf(ff, size=None):
         if with_diffraction and with_aberration:
             return psf_for_system(system, ff, sensor, wavelength, size=size)
         if with_diffraction:
-            return airy_psf(working_f_number(system, wavelength), wavelength,
-                            sensor.pixel_pitch, size)
+            return airy_psf(
+                working_f_number(system, wavelength),
+                wavelength,
+                sensor.pixel_pitch,
+                size,
+            )
         if with_aberration:
             return geometric_psf(system, ff, sensor, size)
         p = np.zeros((size or 1, size or 1))
@@ -762,9 +863,17 @@ def simulate_image(system: OpticalSystem,
             illum_map = relative_illumination_map(system, sensor)
         else:
             prof = relative_illumination_profile(system)
-            idx = int(round(np.clip(field_fraction, 0.0, 1.0)
-                            * (len(prof["relative_illumination"]) - 1)))
-            level = prof["relative_illumination"][idx] if prof["relative_illumination"] else 1.0
+            idx = int(
+                round(
+                    np.clip(field_fraction, 0.0, 1.0)
+                    * (len(prof["relative_illumination"]) - 1)
+                )
+            )
+            level = (
+                prof["relative_illumination"][idx]
+                if prof["relative_illumination"]
+                else 1.0
+            )
             illum_map = np.full((n, n), level, dtype=float)
     else:
         illum_map = np.ones((n, n), dtype=float)
@@ -772,9 +881,13 @@ def simulate_image(system: OpticalSystem,
     lit = np.clip(blurred * illum_map, 0.0, None)
 
     # --- sensor -----------------------------------------------------------
-    response = sensor_response(lit, sensor,
-                               peak_fraction_of_full_well=peak_fraction_of_full_well,
-                               seed=seed, noise=with_noise)
+    response = sensor_response(
+        lit,
+        sensor,
+        peak_fraction_of_full_well=peak_fraction_of_full_well,
+        seed=seed,
+        noise=with_noise,
+    )
 
     metadata = {
         "sensor": {
@@ -825,6 +938,7 @@ def simulate_image(system: OpticalSystem,
 # PSF helpers
 # =============================================================================
 
+
 def _gaussian_psf(size: int, sigma_pixels: float) -> np.ndarray:
     """Normalised sampled Gaussian PSF of the given grid size."""
     size = max(1, int(size))
@@ -855,7 +969,7 @@ def _pad_psf(psf: np.ndarray, size: int) -> np.ndarray:
         return psf
     out = np.zeros((size, size), dtype=float)
     offset = (size - n) // 2
-    out[offset:offset + n, offset:offset + n] = psf
+    out[offset : offset + n, offset : offset + n] = psf
     return out
 
 
@@ -884,6 +998,7 @@ def _psf_fwhm_pixels(psf: np.ndarray) -> float:
 # Analysis of the simulated image
 # =============================================================================
 
+
 def _fundamental_amplitude(profile, period_pixels: float) -> float:
     """Amplitude of the fundamental at the given period along a 1D profile."""
     x = np.asarray(profile, dtype=float)
@@ -906,8 +1021,9 @@ def bars_band_rows(size: int, index: int, count: int) -> range:
     return range(lo, min(hi, size))
 
 
-def mtf_from_bar_target(ideal, simulated, periods=(4, 8, 16, 32),
-                        pixel_pitch: float = 5.0e-6) -> dict:
+def mtf_from_bar_target(
+    ideal, simulated, periods=(4, 8, 16, 32), pixel_pitch: float = 5.0e-6
+) -> dict:
     """
     Measure the achieved MTF from a simulated bar target.
 
@@ -936,10 +1052,16 @@ def mtf_from_bar_target(ideal, simulated, periods=(4, 8, 16, 32),
     freqs, mtfs, obj_mod, img_mod = [], [], [], []
     for i, p in enumerate(periods):
         rows = list(bars_band_rows(size, i, num))
-        a_obj = float(np.mean([_fundamental_amplitude(obj[r], float(p))
-                               for r in rows])) if rows else 0.0
-        a_img = float(np.mean([_fundamental_amplitude(img[r], float(p))
-                               for r in rows])) if rows else 0.0
+        a_obj = (
+            float(np.mean([_fundamental_amplitude(obj[r], float(p)) for r in rows]))
+            if rows
+            else 0.0
+        )
+        a_img = (
+            float(np.mean([_fundamental_amplitude(img[r], float(p)) for r in rows]))
+            if rows
+            else 0.0
+        )
         # period (pixels) -> period (mm) -> cycles/mm
         period_mm = float(p) * pixel_pitch * 1e3
         freqs.append(1.0 / period_mm if period_mm > 0 else 0.0)
@@ -956,8 +1078,9 @@ def mtf_from_bar_target(ideal, simulated, periods=(4, 8, 16, 32),
     }
 
 
-def image_quality_metrics(ideal, simulated,
-                          period_pixels: Optional[float] = None) -> dict:
+def image_quality_metrics(
+    ideal, simulated, period_pixels: Optional[float] = None
+) -> dict:
     """
     Compare a simulated image against the ideal object.
 
@@ -978,9 +1101,11 @@ def image_quality_metrics(ideal, simulated,
         raise ValueError("ideal and simulated must have the same shape")
 
     diff = img - obj
-    rmse = float(np.sqrt(np.mean(diff ** 2)))
+    rmse = float(np.sqrt(np.mean(diff**2)))
     peak = float(np.max(np.abs(obj)))
-    psnr = (20.0 * math.log10(peak / rmse)) if rmse > 1e-12 and peak > 0 else float("inf")
+    psnr = (
+        (20.0 * math.log10(peak / rmse)) if rmse > 1e-12 and peak > 0 else float("inf")
+    )
 
     obj_flat = obj.ravel()
     img_flat = img.ravel()
@@ -1004,10 +1129,12 @@ def image_quality_metrics(ideal, simulated,
 
     if period_pixels is not None and period_pixels > 0:
         rows = range(max(1, obj.shape[0] // 3), max(2, 2 * obj.shape[0] // 3))
-        a_obj = float(np.mean([_fundamental_amplitude(obj[r], period_pixels)
-                               for r in rows]))
-        a_img = float(np.mean([_fundamental_amplitude(img[r], period_pixels)
-                               for r in rows]))
+        a_obj = float(
+            np.mean([_fundamental_amplitude(obj[r], period_pixels) for r in rows])
+        )
+        a_img = float(
+            np.mean([_fundamental_amplitude(img[r], period_pixels) for r in rows])
+        )
         out["modulation_ideal"] = a_obj
         out["modulation_simulated"] = a_img
         out["mtf_measured"] = (a_img / a_obj) if a_obj > 1e-12 else 0.0
@@ -1019,8 +1146,10 @@ def image_quality_metrics(ideal, simulated,
 # Output helpers (no image library required)
 # =============================================================================
 
-def _to_uint8(image: np.ndarray, invert: bool = False,
-              normalize: bool = True) -> np.ndarray:
+
+def _to_uint8(
+    image: np.ndarray, invert: bool = False, normalize: bool = True
+) -> np.ndarray:
     """Scale a float image to 8 bits, optionally stretching the range."""
     arr = np.asarray(image, dtype=float)
     if arr.ndim != 2:
@@ -1032,8 +1161,9 @@ def _to_uint8(image: np.ndarray, invert: bool = False,
     return (255 - data) if invert else data
 
 
-def encode_png_gray(image: np.ndarray, invert: bool = False,
-                    normalize: bool = True) -> bytes:
+def encode_png_gray(
+    image: np.ndarray, invert: bool = False, normalize: bool = True
+) -> bytes:
     """
     Encode a 2D array as an 8-bit greyscale PNG.
 
@@ -1053,31 +1183,41 @@ def encode_png_gray(image: np.ndarray, invert: bool = False,
 
     raw = bytearray()
     for row in data:
-        raw.append(0)              # per-scanline filter: None
+        raw.append(0)  # per-scanline filter: None
         raw.extend(row.tobytes())
 
     def _chunk(tag: bytes, payload: bytes) -> bytes:
-        return (struct.pack(">I", len(payload)) + tag + payload
-                + struct.pack(">I", zlib.crc32(tag + payload) & 0xFFFFFFFF))
+        return (
+            struct.pack(">I", len(payload))
+            + tag
+            + payload
+            + struct.pack(">I", zlib.crc32(tag + payload) & 0xFFFFFFFF)
+        )
 
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)
-    return (b"\x89PNG\r\n\x1a\n"
-            + _chunk(b"IHDR", ihdr)
-            + _chunk(b"IDAT", zlib.compress(bytes(raw), 9))
-            + _chunk(b"IEND", b""))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _chunk(b"IHDR", ihdr)
+        + _chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+        + _chunk(b"IEND", b"")
+    )
 
 
-def save_png(path: str, image: np.ndarray, invert: bool = False,
-             normalize: bool = True) -> str:
+def save_png(
+    path: str, image: np.ndarray, invert: bool = False, normalize: bool = True
+) -> str:
     """Write a 2D array to an 8-bit greyscale PNG; returns the path."""
     with open(path, "wb") as fh:
         fh.write(encode_png_gray(image, invert=invert, normalize=normalize))
     return path
 
 
-def ascii_preview(image: np.ndarray, width: int = 56,
-                  height: Optional[int] = None,
-                  chars: str = " .:-=+*#%@") -> str:
+def ascii_preview(
+    image: np.ndarray,
+    width: int = 56,
+    height: Optional[int] = None,
+    chars: str = " .:-=+*#%@",
+) -> str:
     """
     Render a 2D array as ASCII art for terminal inspection.
 

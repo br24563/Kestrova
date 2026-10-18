@@ -1,4 +1,3 @@
-
 """Advanced Surface Types for Sequential Optical Design.
 
 Provides professional-grade surface types that go beyond simple spheres.
@@ -14,10 +13,10 @@ import numpy as np
 from .base import OpticalComponentBase
 from .materials import refractive_index
 
-
 # =============================================================================
 # Aspheric Surface Types
 # =============================================================================
+
 
 class AsphericSurface(OpticalComponentBase):
     """Even aspheric surface for sequential ray tracing.
@@ -25,6 +24,7 @@ class AsphericSurface(OpticalComponentBase):
     Sag equation:
         z(r) = r^2/(R(1+sqrt(1-(1+k)r^2/R^2))) + sum(A_i * r^(2i))
     """
+
     type: Literal["aspheric"] = "aspheric"
     radius: float = 0.1
     conic: float = 0.0
@@ -57,7 +57,9 @@ class AsphericSurface(OpticalComponentBase):
         norm = math.sqrt(1.0 + dz_dr * dz_dr)
         return 1.0 / norm, -dz_dr / norm
 
-    def intersect(self, z0: float, y0: float, dz: float, dy: float) -> Optional[tuple[float, float]]:
+    def intersect(
+        self, z0: float, y0: float, dz: float, dy: float
+    ) -> Optional[tuple[float, float]]:
         """Find intersection using Newton method."""
         t = (self.position - z0) / dz if abs(dz) > 1e-15 else 0.0
         for _ in range(100):
@@ -79,6 +81,7 @@ class AsphericSurface(OpticalComponentBase):
 
 class OddAsphericSurface(OpticalComponentBase):
     """Odd aspheric surface with additional odd-power terms."""
+
     type: Literal["odd_aspheric"] = "odd_aspheric"
     radius: float = 0.1
     conic: float = 0.0
@@ -111,7 +114,9 @@ class OddAsphericSurface(OpticalComponentBase):
         norm = math.sqrt(1.0 + dz_dr * dz_dr)
         return 1.0 / norm, -dz_dr / norm
 
-    def intersect(self, z0: float, y0: float, dz: float, dy: float) -> Optional[tuple[float, float]]:
+    def intersect(
+        self, z0: float, y0: float, dz: float, dy: float
+    ) -> Optional[tuple[float, float]]:
         t = (self.position - z0) / dz if abs(dz) > 1e-15 else 0.0
         for _ in range(100):
             z, y = z0 + t * dz, y0 + t * dy
@@ -132,6 +137,7 @@ class OddAsphericSurface(OpticalComponentBase):
 
 class QAsphericSurface(OpticalComponentBase):
     """Q-type aspheric surface for better optimization behavior."""
+
     type: Literal["q_aspheric"] = "q_aspheric"
     radius: float = 0.1
     conic: float = 0.0
@@ -170,7 +176,9 @@ class QAsphericSurface(OpticalComponentBase):
         norm = math.sqrt(1.0 + dz_dr * dz_dr)
         return 1.0 / norm, -dz_dr / norm
 
-    def intersect(self, z0: float, y0: float, dz: float, dy: float) -> Optional[tuple[float, float]]:
+    def intersect(
+        self, z0: float, y0: float, dz: float, dy: float
+    ) -> Optional[tuple[float, float]]:
         t = (self.position - z0) / dz if abs(dz) > 1e-15 else 0.0
         for _ in range(100):
             z, y = z0 + t * dz, y0 + t * dy
@@ -191,6 +199,7 @@ class QAsphericSurface(OpticalComponentBase):
 
 class ZernikeSurface(OpticalComponentBase):
     """Zernike polynomial surface for freeform wavefront correction."""
+
     type: Literal["zernike"] = "zernike"
     zernike_coeffs: list[float] = Field(default_factory=list)
     norm_radius: float = 0.025
@@ -200,13 +209,16 @@ class ZernikeSurface(OpticalComponentBase):
 
     def sag(self, r: float) -> float:
         from .zernike import zernike_standard
+
         rho = r / self.norm_radius if self.norm_radius > 1e-15 else 0.0
         if rho > 1.0:
             return 0.0
         z = 0.0
         theta = 0.0
         for i, coeff in enumerate(self.zernike_coeffs):
-            z += coeff * float(zernike_standard(i + 1, np.array([rho]), np.array([theta]))[0])
+            z += coeff * float(
+                zernike_standard(i + 1, np.array([rho]), np.array([theta]))[0]
+            )
         return z
 
     def sag_derivative(self, r: float) -> float:
@@ -218,7 +230,9 @@ class ZernikeSurface(OpticalComponentBase):
         norm = math.sqrt(1.0 + dz_dr * dz_dr)
         return 1.0 / norm, -dz_dr / norm
 
-    def intersect(self, z0: float, y0: float, dz: float, dy: float) -> Optional[tuple[float, float]]:
+    def intersect(
+        self, z0: float, y0: float, dz: float, dy: float
+    ) -> Optional[tuple[float, float]]:
         t = (self.position - z0) / dz if abs(dz) > 1e-15 else 0.0
         for _ in range(100):
             z, y = z0 + t * dz, y0 + t * dy
@@ -239,6 +253,7 @@ class ZernikeSurface(OpticalComponentBase):
 
 class DiffractiveOpticalElement(OpticalComponentBase):
     """Diffractive Optical Element (DOE) surface."""
+
     type: Literal["doe"] = "doe"
     doe_type: str = "kinoform"
     design_wavelength: float = 550e-9
@@ -286,7 +301,9 @@ class DiffractiveOpticalElement(OpticalComponentBase):
         norm = math.sqrt(1.0 + dz_dr * dz_dr)
         return 1.0 / norm, -dz_dr / norm
 
-    def intersect(self, z0: float, y0: float, dz: float, dy: float) -> Optional[tuple[float, float]]:
+    def intersect(
+        self, z0: float, y0: float, dz: float, dy: float
+    ) -> Optional[tuple[float, float]]:
         t = (self.position - z0) / dz if abs(dz) > 1e-15 else 0.0
         for _ in range(100):
             z, y = z0 + t * dz, y0 + t * dy
@@ -307,6 +324,7 @@ class DiffractiveOpticalElement(OpticalComponentBase):
 
 class ToricSurface(OpticalComponentBase):
     """Toric/Cylindrical surface for astigmatism correction."""
+
     type: Literal["toric"] = "toric"
     radius_tangential: float = 0.1
     radius_sagittal: float = 0.1
@@ -332,7 +350,9 @@ class ToricSurface(OpticalComponentBase):
         norm = math.sqrt(1.0 + dz_dr * dz_dr)
         return 1.0 / norm, -dz_dr / norm
 
-    def intersect(self, z0: float, y0: float, dz: float, dy: float) -> Optional[tuple[float, float]]:
+    def intersect(
+        self, z0: float, y0: float, dz: float, dy: float
+    ) -> Optional[tuple[float, float]]:
         t = (self.position - z0) / dz if abs(dz) > 1e-15 else 0.0
         for _ in range(100):
             z, y = z0 + t * dz, y0 + t * dy
@@ -353,6 +373,7 @@ class ToricSurface(OpticalComponentBase):
 
 class CoordinateBreak(OpticalComponentBase):
     """Coordinate break for decenter and tilt."""
+
     type: Literal["coordinate_break"] = "coordinate_break"
     decenter_x: float = 0.0
     decenter_y: float = 0.0

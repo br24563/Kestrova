@@ -29,7 +29,9 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 from optics.models import (
-    OpticalSystem, RayTraceResult, AnalysisResult,
+    OpticalSystem,
+    RayTraceResult,
+    AnalysisResult,
 )
 from optics.systems import create_default_system, validate_system
 from optics.rays import trace_system
@@ -38,7 +40,9 @@ from optics.aberration import chromatic_aberration_analysis
 from optics.optimization import (
     optimize_system as run_optimization,
     parameter_sweep as run_parameter_sweep,
-    minimize_rms_spot, target_magnification, target_efl,
+    minimize_rms_spot,
+    target_magnification,
+    target_efl,
 )
 from optics.batch import (
     batch_analyze_systems as run_batch_analyze,
@@ -69,13 +73,14 @@ from ai.commands import AICommand
 from ai.engine import execute_command
 from ai.local_provider import LocalLLMProvider
 
-
 # ---------------------------------------------------------------------------
 # Request/Response Models
 # ---------------------------------------------------------------------------
 
+
 class TraceRequest(BaseModel):
     """Request body for ray tracing."""
+
     system: OpticalSystem
     num_rays: Optional[int] = None
     aperture_fraction: Optional[float] = None
@@ -83,6 +88,7 @@ class TraceRequest(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     """Request body for analysis."""
+
     system: OpticalSystem
     num_rays: Optional[int] = None
     aperture_fraction: Optional[float] = None
@@ -90,12 +96,14 @@ class AnalyzeRequest(BaseModel):
 
 class AberrationRequest(BaseModel):
     """Request body for chromatic aberration analysis."""
+
     system: OpticalSystem
     wavelengths: Optional[list[float]] = None
 
 
 class OptimizeRequest(BaseModel):
     """Request body for numerical optimization."""
+
     system: OpticalSystem
     objective: str
     target: Optional[float] = None
@@ -105,6 +113,7 @@ class OptimizeRequest(BaseModel):
 
 class SweepRequest(BaseModel):
     """Request body for a parameter sweep."""
+
     system: OpticalSystem
     param: dict
     values: list[float]
@@ -114,6 +123,7 @@ class SweepRequest(BaseModel):
 
 class CompareRequest(BaseModel):
     """Request body for comparing two systems."""
+
     system_a: OpticalSystem
     system_b: OpticalSystem
     label_a: str = "Design A"
@@ -122,11 +132,13 @@ class CompareRequest(BaseModel):
 
 class BatchRequest(BaseModel):
     """Request body for batch analysis."""
+
     systems: list[OpticalSystem]
 
 
 class ToleranceRequest(BaseModel):
     """Request body for Monte-Carlo tolerance analysis."""
+
     system: OpticalSystem
     tolerances: Optional[dict[str, float]] = None
     trials: int = 100
@@ -135,6 +147,7 @@ class ToleranceRequest(BaseModel):
 
 class ReportRequest(BaseModel):
     """Request body for generating an engineering report."""
+
     system_a: Optional[OpticalSystem] = None
     system_b: Optional[OpticalSystem] = None
     label_a: str = "Design A"
@@ -144,6 +157,7 @@ class ReportRequest(BaseModel):
 
 class FieldAnalysisRequest(BaseModel):
     """Request body for ray-fan and OPD-fan analysis at one field point."""
+
     system: OpticalSystem
     field_fraction: float = Field(default=1.0, ge=0.0, le=1.0)
     num_rays: int = Field(default=21, ge=3, le=201)
@@ -151,24 +165,28 @@ class FieldAnalysisRequest(BaseModel):
 
 class FieldCurvesRequest(BaseModel):
     """Request body for field curvature / distortion curves."""
+
     system: OpticalSystem
     num_fields: int = Field(default=11, ge=2, le=51)
 
 
 class SystemResponse(BaseModel):
     """Response containing the optical system and validation warnings."""
+
     system: OpticalSystem
     warnings: list[str] = Field(default_factory=list)
 
 
 class SaveSystemRequest(BaseModel):
     """Request body for saving a system to the database."""
+
     name: str
     system: OpticalSystem
 
 
 class SystemMetadata(BaseModel):
     """Metadata for a saved system (without the full system JSON)."""
+
     id: int
     name: str
     created_at: str
@@ -177,6 +195,7 @@ class SystemMetadata(BaseModel):
 
 class SavedSystemResponse(BaseModel):
     """A saved system with its metadata and JSON."""
+
     id: int
     name: str
     system_json: str
@@ -186,12 +205,14 @@ class SavedSystemResponse(BaseModel):
 
 class AICommandRequest(BaseModel):
     """Request body for executing an AI command."""
+
     system: OpticalSystem
     command: AICommand
 
 
 class AICommandResponse(BaseModel):
     """Response from executing an AI command."""
+
     system: OpticalSystem
     warnings: list[str] = Field(default_factory=list)
     result: Optional[dict] = None
@@ -200,12 +221,14 @@ class AICommandResponse(BaseModel):
 
 class AIInterpretRequest(BaseModel):
     """Request body for interpreting a natural-language prompt."""
+
     system: OpticalSystem
     prompt: str
 
 
 class AIInterpretResponse(BaseModel):
     """Response from interpreting a natural-language prompt."""
+
     commands: list[AICommand]
     message: str
 
@@ -225,10 +248,13 @@ def _json_safe(obj):
     import math
     import numpy as np
     from pydantic import BaseModel as _BM
+
     if isinstance(obj, _BM):
         return _json_safe(obj.model_dump())
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return _json_safe({f.name: getattr(obj, f.name) for f in dataclasses.fields(obj)})
+        return _json_safe(
+            {f.name: getattr(obj, f.name) for f in dataclasses.fields(obj)}
+        )
     if isinstance(obj, np.ndarray):
         return _json_safe(obj.tolist())
     if isinstance(obj, dict):
@@ -252,9 +278,12 @@ def _register_numpy_encoders():
     the response class renders them) accept NumPy scalars and arrays."""
     import numpy as np
     import fastapi.encoders as fe
+
     fe.ENCODERS_BY_TYPE[np.ndarray] = lambda a: a.tolist()
     fe.ENCODERS_BY_TYPE[np.generic] = lambda v: v.item()
-    fe.encoders_by_class_tuples = fe.generate_encoders_by_class_tuples(fe.ENCODERS_BY_TYPE)
+    fe.encoders_by_class_tuples = fe.generate_encoders_by_class_tuples(
+        fe.ENCODERS_BY_TYPE
+    )
 
 
 _register_numpy_encoders()
@@ -392,6 +421,7 @@ async def get_presets_list():
     system data. Use GET /api/presets/{id} to get a specific preset.
     """
     from optics.presets import get_presets
+
     presets = get_presets()
     # Return metadata only (without full system JSON)
     return [
@@ -413,6 +443,7 @@ async def get_preset(preset_id: str):
     Returns the full optical system for the requested preset.
     """
     from optics.presets import get_preset_by_id
+
     preset = get_preset_by_id(preset_id)
     if preset is None:
         raise HTTPException(status_code=404, detail=f"Preset '{preset_id}' not found")
@@ -557,8 +588,10 @@ async def compare(request: CompareRequest):
     """Compare two optical systems side by side."""
     try:
         return run_compare(
-            request.system_a, request.system_b,
-            request.label_a, request.label_b,
+            request.system_a,
+            request.system_b,
+            request.label_a,
+            request.label_b,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -660,8 +693,14 @@ async def analyze_diffraction(request: AnalyzeRequest):
         # Convert complex OTF to magnitude/phase for JSON serialization
         if "otf" in result and "otf" in result["otf"]:
             otf_complex = result["otf"]["otf"]
-            result["otf"]["otf_mag"] = [abs(v) for v in otf_complex] if not isinstance(otf_complex[0], complex) else [abs(v) for v in otf_complex]
-            result["otf"]["otf_phase"] = [0.0] * len(otf_complex)  # aberration-free => zero phase
+            result["otf"]["otf_mag"] = (
+                [abs(v) for v in otf_complex]
+                if not isinstance(otf_complex[0], complex)
+                else [abs(v) for v in otf_complex]
+            )
+            result["otf"]["otf_phase"] = [0.0] * len(
+                otf_complex
+            )  # aberration-free => zero phase
             del result["otf"]["otf"]  # remove complex array
         return _make_serializable(result)
     except ValueError as e:
@@ -765,6 +804,7 @@ async def validate(system: OpticalSystem):
 # Persistence Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/api/systems", response_model=list[SystemMetadata])
 async def list_saved_systems():
     """
@@ -828,7 +868,8 @@ async def ai_provider():
     Returns whether Ollama is enabled and the model/URL in use.
     """
     return {
-        "use_ollama": os.environ.get("OLLAMA_ENABLED", "").lower() in ("1", "true", "yes"),
+        "use_ollama": os.environ.get("OLLAMA_ENABLED", "").lower()
+        in ("1", "true", "yes"),
         "model": os.environ.get("OLLAMA_MODEL", "llama3.2"),
         "ollama_url": os.environ.get("OLLAMA_URL", "http://localhost:11434"),
     }
@@ -851,13 +892,14 @@ async def ai_interpret(request: AIInterpretRequest):
     """
     try:
         provider = LocalLLMProvider(
-            use_ollama=os.environ.get("OLLAMA_ENABLED", "").lower() in ("1", "true", "yes"),
+            use_ollama=os.environ.get("OLLAMA_ENABLED", "").lower()
+            in ("1", "true", "yes"),
             model=os.environ.get("OLLAMA_MODEL", "llama3.2"),
             ollama_url=os.environ.get("OLLAMA_URL", "http://localhost:11434"),
         )
         commands = provider.interpret(
-            request.prompt,
-            {"component_ids": [c.id for c in request.system.components]})
+            request.prompt, {"component_ids": [c.id for c in request.system.components]}
+        )
         return AIInterpretResponse(
             commands=commands,
             message=f"Interpreted {len(commands)} command(s).",
@@ -887,7 +929,9 @@ async def ai_command(request: AICommandRequest):
         return AICommandResponse(
             system=result["system"],
             warnings=result["warnings"],
-            result=_json_safe(result["result"]) if result["result"] is not None else None,
+            result=(
+                _json_safe(result["result"]) if result["result"] is not None else None
+            ),
             message=result["message"],
         )
     except ValueError as e:
@@ -921,6 +965,7 @@ async def delete_system(system_id: int):
 
 class HybridOptimizeRequest(BaseModel):
     """Request body for hybrid optimization."""
+
     system: OpticalSystem
     objective: str = "rms_spot"  # rms_spot, efl, magnification
     target: Optional[float] = None  # required for the efl / magnification objectives
@@ -967,13 +1012,15 @@ async def hybrid_optimize(request: HybridOptimizeRequest):
         constraints = []
         for c in request.constraints:
             # a missing or null bound means unbounded on that side
-            constraints.append(OptimizationConstraint(
-                type=c.get("type", ""),
-                surface_index=c.get("surface_index"),
-                lower=c.get("lower") if c.get("lower") is not None else -np.inf,
-                upper=c.get("upper") if c.get("upper") is not None else np.inf,
-                weight=c.get("weight", 1.0),
-            ))
+            constraints.append(
+                OptimizationConstraint(
+                    type=c.get("type", ""),
+                    surface_index=c.get("surface_index"),
+                    lower=c.get("lower") if c.get("lower") is not None else -np.inf,
+                    upper=c.get("upper") if c.get("upper") is not None else np.inf,
+                    weight=c.get("weight", 1.0),
+                )
+            )
 
         # Build config
         config = OptimizationConfig(
@@ -1009,8 +1056,11 @@ async def hybrid_optimize(request: HybridOptimizeRequest):
 
 class ConstraintValuesRequest(BaseModel):
     """Request body for evaluating optimization constraint operands."""
+
     system: OpticalSystem
-    constraints: list[dict]  # [{"type": "efl", "surface_index": None, "lower": .., "upper": .., "weight": ..}]
+    constraints: list[
+        dict
+    ]  # [{"type": "efl", "surface_index": None, "lower": .., "upper": .., "weight": ..}]
 
 
 @app.post("/api/optimize/constraints")
@@ -1021,7 +1071,10 @@ async def evaluate_constraints(request: ConstraintValuesRequest):
     Operands that cannot be evaluated for this system come back with a null
     value and an error message.
     """
-    from optics.advanced_optimization import OptimizationConstraint, _get_constraint_value
+    from optics.advanced_optimization import (
+        OptimizationConstraint,
+        _get_constraint_value,
+    )
 
     try:
         analysis = analyze_system(request.system)
@@ -1039,17 +1092,32 @@ async def evaluate_constraints(request: ConstraintValuesRequest):
         try:
             value = float(_get_constraint_value(request.system, analysis, con))
         except ValueError as e:
-            rows.append({"type": con.type, "value": None, "violation": None,
-                         "penalty": None, "error": str(e)})
+            rows.append(
+                {
+                    "type": con.type,
+                    "value": None,
+                    "violation": None,
+                    "penalty": None,
+                    "error": str(e),
+                }
+            )
             continue
         violation = max(con.lower - value, value - con.upper, 0.0)
-        rows.append({"type": con.type, "value": value, "violation": violation,
-                     "penalty": con.weight * violation * 1e6, "error": None})
+        rows.append(
+            {
+                "type": con.type,
+                "value": value,
+                "violation": violation,
+                "penalty": con.weight * violation * 1e6,
+                "error": None,
+            }
+        )
     return _make_serializable({"constraints": rows})
 
 
 class HighYieldOptimizeRequest(BaseModel):
     """Request body for high-yield optimization."""
+
     system: OpticalSystem
     objective: str = "rms_spot"
     params: list[dict]
@@ -1083,7 +1151,9 @@ async def high_yield_optimize(request: HighYieldOptimizeRequest):
 
     try:
         if request.objective != "rms_spot":
-            raise ValueError("High-yield optimization supports only the rms_spot objective.")
+            raise ValueError(
+                "High-yield optimization supports only the rms_spot objective."
+            )
         config = OptimizationConfig(
             global_maxiter=request.global_maxiter,
             local_maxiter=request.local_maxiter,
@@ -1120,6 +1190,7 @@ async def high_yield_optimize(request: HighYieldOptimizeRequest):
 
 class GhostAnalysisRequest(BaseModel):
     """Request body for ghost reflection analysis."""
+
     system: OpticalSystem
     n_reflections: int = 2
     threshold: float = 1e-4
@@ -1168,6 +1239,7 @@ async def analyze_ghosts(request: GhostAnalysisRequest):
 
 class StrayLightRequest(BaseModel):
     """Request body for stray light analysis."""
+
     system: OpticalSystem
     source_angle: float = 30.0
     brdf_model: str = "lambertian"
@@ -1219,6 +1291,7 @@ async def analyze_stray_light(request: StrayLightRequest):
 
 class PSTRequest(BaseModel):
     """Request body for Point Source Transmittance analysis."""
+
     system: OpticalSystem
     angles: list[float] = [5, 10, 15, 20, 25, 30, 35, 40, 45]
     brdf_model: str = "lambertian"
@@ -1268,6 +1341,7 @@ async def compute_pst_endpoint(request: PSTRequest):
 
 class IlluminationRequest(BaseModel):
     """Request body for illumination and vignetting analysis."""
+
     system: OpticalSystem
     num_fields: int = 11
     num_rays: int = 21
@@ -1307,6 +1381,7 @@ async def analyze_illumination(request: IlluminationRequest):
 
 class GhostPathRequest(BaseModel):
     """Request body for real-ray ghost reflection analysis."""
+
     system: OpticalSystem
     field_fraction: Optional[float] = None
     num_rays: int = 5
@@ -1350,18 +1425,22 @@ async def analyze_ghost_paths(request: GhostPathRequest):
         if request.field_fraction is None:
             return _make_serializable(run_ghost_analysis(request.system, **kwargs))
         ghosts = run_analyze_ghosts(
-            request.system, field_fraction=request.field_fraction, **kwargs)
-        return _make_serializable({
-            "field_fraction": request.field_fraction,
-            "ghosts": [g.as_dict() for g in ghosts],
-            "num_ghosts": len(ghosts),
-        })
+            request.system, field_fraction=request.field_fraction, **kwargs
+        )
+        return _make_serializable(
+            {
+                "field_fraction": request.field_fraction,
+                "ghosts": [g.as_dict() for g in ghosts],
+                "num_ghosts": len(ghosts),
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 class ImagingRequest(BaseModel):
     """Request body for image simulation."""
+
     system: OpticalSystem
     target_kind: str = "bars"
     resolution: int = 128
@@ -1396,8 +1475,9 @@ async def analyze_imaging(request: ImagingRequest):
     from optics.imaging import image_quality_metrics, mtf_from_bar_target
     from optics.imaging import simulate_image as run_simulate
 
-    sensor = SensorConfig(resolution=request.resolution,
-                          pixel_pitch=request.pixel_pitch)
+    sensor = SensorConfig(
+        resolution=request.resolution, pixel_pitch=request.pixel_pitch
+    )
     try:
         simulation = run_simulate(
             request.system,
@@ -1415,7 +1495,8 @@ async def analyze_imaging(request: ImagingRequest):
         }
         if request.include_image:
             result["png_base64"] = base64.b64encode(
-                encode_png_gray(simulation.image)).decode("ascii")
+                encode_png_gray(simulation.image)
+            ).decode("ascii")
         return _make_serializable(result)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1438,19 +1519,20 @@ async def list_brdf_surfaces():
     surfaces = []
     for name in sorted(BRDF_DATABASE):
         params = BRDF_DATABASE[name]
-        surfaces.append({
-            "name": name,
-            "model": params.model,
-            "source": params.source,
-            "target_tis": params.target_tis,
-            "total_integrated_scatter": total_integrated_scatter(params),
-            "A": params.A,
-            "B": params.B,
-            "g": params.g,
-            "diffuse_fraction": params.diffuse_fraction,
-        })
+        surfaces.append(
+            {
+                "name": name,
+                "model": params.model,
+                "source": params.source,
+                "target_tis": params.target_tis,
+                "total_integrated_scatter": total_integrated_scatter(params),
+                "A": params.A,
+                "B": params.B,
+                "g": params.g,
+                "diffuse_fraction": params.diffuse_fraction,
+            }
+        )
     return _make_serializable({"surfaces": surfaces, "count": len(surfaces)})
-
 
 
 # ---------------------------------------------------------------------------
@@ -1460,6 +1542,7 @@ async def list_brdf_surfaces():
 
 class ExportRequest(BaseModel):
     """Request body for export operations."""
+
     system: OpticalSystem
     format: str = "zmx"  # "zmx", "seq", "svg", "bom", "sag", "iso10110"
 
@@ -1484,32 +1567,40 @@ async def export_design(request: ExportRequest):
         Exported file content as string.
     """
     from optics.io import export_zmx, export_seq
-    from optics.io.drawings import generate_lens_drawing, generate_iso10110_drawing, generate_sag_table
+    from optics.io.drawings import (
+        generate_lens_drawing,
+        generate_iso10110_drawing,
+        generate_sag_table,
+    )
     from optics.io.bom import generate_bom
 
     import tempfile
     import os
 
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix=f'.{request.format}', delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=f".{request.format}", delete=False
+        ) as f:
             filepath = f.name
 
-        if request.format == 'zmx':
+        if request.format == "zmx":
             export_zmx(request.system, filepath)
-        elif request.format == 'seq':
+        elif request.format == "seq":
             export_seq(request.system, filepath)
-        elif request.format == 'svg':
-            generate_lens_drawing(request.system, filepath, format='svg')
-        elif request.format == 'bom':
-            generate_bom(request.system, filepath, format='text')
-        elif request.format == 'sag':
+        elif request.format == "svg":
+            generate_lens_drawing(request.system, filepath, format="svg")
+        elif request.format == "bom":
+            generate_bom(request.system, filepath, format="text")
+        elif request.format == "sag":
             generate_sag_table(request.system, filepath)
-        elif request.format == 'iso10110':
+        elif request.format == "iso10110":
             generate_iso10110_drawing(request.system, filepath)
         else:
-            raise HTTPException(status_code=400, detail=f"Unsupported format: {request.format}")
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported format: {request.format}"
+            )
 
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             content = f.read()
 
         os.unlink(filepath)
@@ -1530,6 +1621,7 @@ async def export_design(request: ExportRequest):
 
 class ExplainRequest(BaseModel):
     """Request body for explanation."""
+
     system: OpticalSystem
     question: str  # "Why does MTF drop?", "What are the main aberrations?", etc.
 
@@ -1554,26 +1646,41 @@ async def ai_explain(request: ExplainRequest):
         # Route question to appropriate handler
         question_lower = request.question.lower()
 
-        if 'mtf' in question_lower or 'drop' in question_lower or 'performance' in question_lower:
+        if (
+            "mtf" in question_lower
+            or "drop" in question_lower
+            or "performance" in question_lower
+        ):
             response = explain_mtf_drop(request.system)
-        elif 'aberration' in question_lower:
+        elif "aberration" in question_lower:
             from ai.explanations import diagnose_system
+
             diagnosis = diagnose_system(request.system)
             response = CopilotResponse(
-                answer=" ".join(f["message"] for f in diagnosis["findings"]) or diagnosis["summary"],
+                answer=" ".join(f["message"] for f in diagnosis["findings"])
+                or diagnosis["summary"],
                 citations=[f"Finding: {f['message']}" for f in diagnosis["findings"]],
                 confidence=1.0,
-                suggested_actions=[f"Suggestion: {f['suggestion']}" for f in diagnosis["findings"]],
+                suggested_actions=[
+                    f"Suggestion: {f['suggestion']}" for f in diagnosis["findings"]
+                ],
                 verified=True,
             )
         else:
             from ai.explanations import explain_system
+
             explanation = explain_system(request.system)
             response = CopilotResponse(
                 answer=" ".join(explanation["parts"]),
-                citations=[f"Metric: {k}={v}" for k, v in explanation.get("metrics", {}).items()],
+                citations=[
+                    f"Metric: {k}={v}"
+                    for k, v in explanation.get("metrics", {}).items()
+                ],
                 confidence=1.0,
-                suggested_actions=["Ask about specific aberrations", "Ask about optimization suggestions"],
+                suggested_actions=[
+                    "Ask about specific aberrations",
+                    "Ask about optimization suggestions",
+                ],
                 verified=True,
             )
 
@@ -1590,6 +1697,7 @@ async def ai_explain(request: ExplainRequest):
 
 class DesignSuggestionRequest(BaseModel):
     """Request body for design suggestions."""
+
     requirements: dict  # {"magnification": 5, "f_number": 2.8, "field_of_view": 10}
 
 
@@ -1621,6 +1729,7 @@ async def ai_suggest_design(request: DesignSuggestionRequest):
 
 class NLToPrescriptionRequest(BaseModel):
     """Request body for natural language to prescription."""
+
     description: str  # "Design a 5x magnification system at f/2.8"
 
 
@@ -1653,6 +1762,7 @@ async def ai_nl_to_prescription(request: NLToPrescriptionRequest):
 
 class VerifyRequest(BaseModel):
     """Request body for verification."""
+
     system: OpticalSystem
     claim: str  # "EFL is 100mm"
 
@@ -1692,6 +1802,7 @@ async def ai_verify(request: VerifyRequest):
 
 class NSCSourceRequest(BaseModel):
     """NSC source configuration."""
+
     name: str = "Source"
     position: list[float] = [0, 0, 0]
     direction: list[float] = [0, 0, 1]
@@ -1704,6 +1815,7 @@ class NSCSourceRequest(BaseModel):
 
 class NSCObjectRequest(BaseModel):
     """NSC object configuration."""
+
     name: str = "Object"
     object_type: str = "sphere"  # sphere, cylinder, box, lens, aspheric
     position: list[float] = [0, 0, 0]
@@ -1724,6 +1836,7 @@ class NSCObjectRequest(BaseModel):
 
 class NSCDetectorRequest(BaseModel):
     """NSC detector configuration."""
+
     name: str = "Detector"
     position: list[float] = [0, 0, 100]
     normal: list[float] = [0, 0, -1]
@@ -1735,6 +1848,7 @@ class NSCDetectorRequest(BaseModel):
 
 class NSCTraceRequest(BaseModel):
     """NSC trace request."""
+
     sources: list[NSCSourceRequest]
     objects: list[NSCObjectRequest]
     detectors: list[NSCDetectorRequest]
@@ -1756,14 +1870,18 @@ async def nsc_trace(request: NSCTraceRequest):
         Tracing results including detector data.
     """
     from optics.nsc import (
-        NSCSystem, Source, Detector, Object3D, Vector3,
-        NSCTracer, AsphericSurface
+        NSCSystem,
+        Source,
+        Detector,
+        Object3D,
+        Vector3,
+        NSCTracer,
+        AsphericSurface,
     )
 
     try:
         system = NSCSystem(
-            max_order=request.max_order,
-            min_intensity=request.min_intensity
+            max_order=request.max_order, min_intensity=request.min_intensity
         )
 
         # Add sources
@@ -1776,7 +1894,7 @@ async def nsc_trace(request: NSCTraceRequest):
                 wavelength=src_req.wavelength * 1e-9,  # nm to m
                 num_rays=src_req.num_rays,
                 source_type=src_req.source_type,
-                half_angle=src_req.half_angle
+                half_angle=src_req.half_angle,
             )
             system.add_source(source)
 
@@ -1790,7 +1908,7 @@ async def nsc_trace(request: NSCTraceRequest):
                     conic=obj_req.conic,
                     aspheric_coeffs=obj_req.aspheric_coeffs,
                     aperture_radius=obj_req.radius,
-                    material=obj_req.material
+                    material=obj_req.material,
                 )
             else:
                 obj = Object3D(
@@ -1807,7 +1925,7 @@ async def nsc_trace(request: NSCTraceRequest):
                     thickness=obj_req.thickness,
                     reflectivity=obj_req.reflectivity,
                     transmission=obj_req.transmission,
-                    absorption=obj_req.absorption
+                    absorption=obj_req.absorption,
                 )
             system.add_object(obj)
 
@@ -1820,7 +1938,7 @@ async def nsc_trace(request: NSCTraceRequest):
                 width=det_req.width,
                 height=det_req.height,
                 pixels_x=det_req.pixels_x,
-                pixels_y=det_req.pixels_y
+                pixels_y=det_req.pixels_y,
             )
             system.add_detector(detector)
 
@@ -1845,76 +1963,92 @@ async def nsc_examples():
             {
                 "name": "Single Lens Focus",
                 "description": "Collimated beam focused by a single lens",
-                "sources": [{
-                    "name": "Collimated",
-                    "position": [0, 0, 0],
-                    "direction": [0, 0, 1],
-                    "source_type": "collimated",
-                    "num_rays": 1000
-                }],
-                "objects": [{
-                    "name": "Lens",
-                    "object_type": "lens",
-                    "position": [0, 0, 50],
-                    "radius1": 25,
-                    "radius2": -25,
-                    "thickness": 10,
-                    "material": "N-BK7"
-                }],
-                "detectors": [{
-                    "name": "Focus",
-                    "position": [0, 0, 100],
-                    "width": 10,
-                    "height": 10,
-                    "pixels_x": 50,
-                    "pixels_y": 50
-                }]
+                "sources": [
+                    {
+                        "name": "Collimated",
+                        "position": [0, 0, 0],
+                        "direction": [0, 0, 1],
+                        "source_type": "collimated",
+                        "num_rays": 1000,
+                    }
+                ],
+                "objects": [
+                    {
+                        "name": "Lens",
+                        "object_type": "lens",
+                        "position": [0, 0, 50],
+                        "radius1": 25,
+                        "radius2": -25,
+                        "thickness": 10,
+                        "material": "N-BK7",
+                    }
+                ],
+                "detectors": [
+                    {
+                        "name": "Focus",
+                        "position": [0, 0, 100],
+                        "width": 10,
+                        "height": 10,
+                        "pixels_x": 50,
+                        "pixels_y": 50,
+                    }
+                ],
             },
             {
                 "name": "Mirror Reflection",
                 "description": "Beam reflected by a spherical mirror",
-                "sources": [{
-                    "name": "Source",
-                    "position": [0, 0, 0],
-                    "direction": [0, 0, 1],
-                    "source_type": "collimated",
-                    "num_rays": 500
-                }],
-                "objects": [{
-                    "name": "Mirror",
-                    "object_type": "sphere",
-                    "position": [0, 0, 50],
-                    "radius": 100,
-                    "reflectivity": 0.95
-                }],
-                "detectors": [{
-                    "name": "Detector",
-                    "position": [0, 0, 100],
-                    "width": 50,
-                    "height": 50
-                }]
+                "sources": [
+                    {
+                        "name": "Source",
+                        "position": [0, 0, 0],
+                        "direction": [0, 0, 1],
+                        "source_type": "collimated",
+                        "num_rays": 500,
+                    }
+                ],
+                "objects": [
+                    {
+                        "name": "Mirror",
+                        "object_type": "sphere",
+                        "position": [0, 0, 50],
+                        "radius": 100,
+                        "reflectivity": 0.95,
+                    }
+                ],
+                "detectors": [
+                    {
+                        "name": "Detector",
+                        "position": [0, 0, 100],
+                        "width": 50,
+                        "height": 50,
+                    }
+                ],
             },
             {
                 "name": "Lambertian Source",
                 "description": "LED-like source with Lambertian distribution",
-                "sources": [{
-                    "name": "LED",
-                    "position": [0, 0, 0],
-                    "direction": [0, 0, 1],
-                    "source_type": "lambertian",
-                    "half_angle": 30,
-                    "num_rays": 10000
-                }],
+                "sources": [
+                    {
+                        "name": "LED",
+                        "position": [0, 0, 0],
+                        "direction": [0, 0, 1],
+                        "source_type": "lambertian",
+                        "half_angle": 30,
+                        "num_rays": 10000,
+                    }
+                ],
                 "objects": [],
-                "detectors": [{
-                    "name": "Detector",
-                    "position": [0, 0, 50],
-                    "width": 50,
-                    "height": 50,
-                    "pixels_x": 100,
-                    "pixels_y": 100
-                }]
-            }
+                "detectors": [
+                    {
+                        "name": "Detector",
+                        "position": [0, 0, 50],
+                        "width": 50,
+                        "height": 50,
+                        "pixels_x": 100,
+                        "pixels_y": 100,
+                    }
+                ],
+            },
         ]
     }
 
@@ -1958,11 +2092,24 @@ async def cad_import(file: UploadFile = File(...)):
             "mesh": {
                 "name": Path(file.filename or "mesh").stem,
                 "num_triangles": mesh.num_triangles,
-                "num_vertices": len({(v.x, v.y, v.z) for t in mesh.triangles
-                                     for v in (t.v0, t.v1, t.v2)}),
-                "bbox_min": [mesh.bbox_min.x, mesh.bbox_min.y, mesh.bbox_min.z] if mesh.bbox_min else None,
-                "bbox_max": [mesh.bbox_max.x, mesh.bbox_max.y, mesh.bbox_max.z] if mesh.bbox_max else None,
-            }
+                "num_vertices": len(
+                    {
+                        (v.x, v.y, v.z)
+                        for t in mesh.triangles
+                        for v in (t.v0, t.v1, t.v2)
+                    }
+                ),
+                "bbox_min": (
+                    [mesh.bbox_min.x, mesh.bbox_min.y, mesh.bbox_min.z]
+                    if mesh.bbox_min
+                    else None
+                ),
+                "bbox_max": (
+                    [mesh.bbox_max.x, mesh.bbox_max.y, mesh.bbox_max.z]
+                    if mesh.bbox_max
+                    else None
+                ),
+            },
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1977,6 +2124,7 @@ async def cad_formats():
         Dictionary of supported formats and their capabilities.
     """
     from optics.nsc.cad import get_supported_formats
+
     return get_supported_formats()
 
 
@@ -1987,6 +2135,7 @@ async def cad_formats():
 
 class CADExportRequest(BaseModel):
     """CAD export of a system's element geometry (millimetres)."""
+
     system: OpticalSystem
     format: str = "stl"  # stl, obj, ply (STEP/IGES are not implemented)
     binary: bool = True  # For STL format
@@ -2010,14 +2159,16 @@ async def cad_export(request: CADExportRequest):
     try:
         meshes, skipped = system_meshes(request.system)
         if not meshes:
-            raise ValueError("No element has physical geometry to export "
-                             "(ideal thin lenses are skipped)")
+            raise ValueError(
+                "No element has physical geometry to export "
+                "(ideal thin lenses are skipped)"
+            )
         mesh = merge_meshes(meshes)
-        fd, path = tempfile.mkstemp(suffix=f'.{request.format}')
+        fd, path = tempfile.mkstemp(suffix=f".{request.format}")
         os.close(fd)
         try:
             export_mesh(mesh, path, format=request.format)
-            with open(path, 'rb') as f:
+            with open(path, "rb") as f:
                 content = f.read()
         finally:
             os.unlink(path)
@@ -2027,7 +2178,7 @@ async def cad_export(request: CADExportRequest):
             "format": request.format,
             "units": "mm",
             "skipped": [{"id": c, "reason": r} for c, r in skipped],
-            "content": content.hex()  # Hex encode for JSON
+            "content": content.hex(),  # Hex encode for JSON
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -2040,12 +2191,14 @@ async def cad_export(request: CADExportRequest):
 
 class ChatTurnModel(BaseModel):
     """One prior exchange, supplied by the client to rebuild session state."""
+
     user: str
     assistant: str = ""
 
 
 class ChatRequest(BaseModel):
     """Request body for a conversational refinement turn."""
+
     system: OpticalSystem
     message: str
     history: Optional[list[ChatTurnModel]] = None
@@ -2070,7 +2223,7 @@ async def ai_chat(request: ChatRequest):
 
     try:
         session = ConversationSession(request.system)
-        for turn in (request.history or []):
+        for turn in request.history or []:
             try:
                 session.ask(turn.user)
             except Exception:
@@ -2095,6 +2248,7 @@ async def ai_chat(request: ChatRequest):
 
 class BriefRequest(BaseModel):
     """Request body for parsing statements into a design brief."""
+
     statements: list[str]
 
 
@@ -2126,6 +2280,7 @@ async def ai_brief(request: BriefRequest):
 
 class VerifyClaimsRequest(BaseModel):
     """Request body for verifying stated claims about a system."""
+
     system: OpticalSystem
     claims: list[str]
     tolerance: Optional[float] = None
@@ -2156,6 +2311,7 @@ async def ai_verify_claims(request: VerifyClaimsRequest):
 
 class PrescriptionVerifyRequest(BaseModel):
     """Request body for reference-prescription comparison."""
+
     system: OpticalSystem
     tolerance: Optional[float] = None
 
@@ -2181,6 +2337,7 @@ async def ai_verify_prescription(request: PrescriptionVerifyRequest):
 
 class DesignRulesRequest(BaseModel):
     """Request body for manufacturability rule checks."""
+
     system: OpticalSystem
 
 
@@ -2202,6 +2359,7 @@ async def ai_design_rules(request: DesignRulesRequest):
 
 class FullVerifyRequest(BaseModel):
     """Request body for the combined verification report."""
+
     system: OpticalSystem
     claims: Optional[list[str]] = None
     tolerance: Optional[float] = None

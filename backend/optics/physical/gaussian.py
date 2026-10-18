@@ -25,58 +25,63 @@ from numpy import pi, sqrt, exp, angle, abs, conj
 @dataclass
 class BeamParameter:
     """Complex beam parameter q = z + i*z_R."""
+
     q: complex  # Complex beam parameter
     wavelength: float = 550e-9  # m
-    
+
     @property
     def z(self) -> float:
         """Distance from waist."""
         return self.q.real
-    
+
     @property
     def z_R(self) -> float:
         """Rayleigh range."""
         return self.q.imag
-    
+
     @property
     def w0(self) -> float:
         """Beam waist radius."""
         return sqrt(self.wavelength * self.z_R / pi)
-    
+
     @property
     def w(self) -> float:
         """Beam radius at current position."""
-        return self.w0 * sqrt(1 + (self.z / self.z_R)**2)
-    
+        return self.w0 * sqrt(1 + (self.z / self.z_R) ** 2)
+
     @property
     def R(self) -> float:
         """Radius of curvature."""
         if abs(self.z) < 1e-15:
-            return float('inf')
-        return self.z * (1 + (self.z_R / self.z)**2)
-    
+            return float("inf")
+        return self.z * (1 + (self.z_R / self.z) ** 2)
+
     @property
     def divergence(self) -> float:
         """Half-angle divergence."""
         return self.wavelength / (pi * self.w0)
-    
+
     @property
     def gouy_phase(self) -> float:
         """Gouy phase."""
         return np.arctan2(self.z, self.z_R)
-    
+
     @classmethod
-    def from_waist(cls, w0: float, wavelength: float = 550e-9, z: float = 0) -> 'BeamParameter':
+    def from_waist(
+        cls, w0: float, wavelength: float = 550e-9, z: float = 0
+    ) -> "BeamParameter":
         """Create beam parameter from waist size."""
         z_R = pi * w0**2 / wavelength
         q = complex(z, z_R)
         return cls(q=q, wavelength=wavelength)
-    
+
     @classmethod
-    def from_beam_radius(cls, w: float, R: float, wavelength: float = 550e-9) -> 'BeamParameter':
+    def from_beam_radius(
+        cls, w: float, R: float, wavelength: float = 550e-9
+    ) -> "BeamParameter":
         """Create beam parameter from beam radius and curvature."""
         # 1/q = 1/R - i*lambda/(pi*w^2)
-        inv_q = 1/R - 1j * wavelength / (pi * w**2)
+        inv_q = 1 / R - 1j * wavelength / (pi * w**2)
         q = 1 / inv_q
         return cls(q=q, wavelength=wavelength)
 
@@ -84,91 +89,95 @@ class BeamParameter:
 @dataclass
 class GaussianBeam:
     """Complete Gaussian beam description."""
+
     w0: float  # Beam waist radius (m)
     wavelength: float = 550e-9  # Wavelength (m)
     M2: float = 1.0  # Beam quality factor
     position: float = 0.0  # Waist position (m)
     power: float = 1.0  # Beam power (W)
-    
+
     def __post_init__(self):
         self.z_R = pi * self.w0**2 / (self.wavelength * self.M2)
-    
+
     def beam_radius(self, z: float) -> float:
         """Calculate beam radius at position z."""
         dz = z - self.position
-        return self.w0 * sqrt(1 + (dz / self.z_R)**2)
-    
+        return self.w0 * sqrt(1 + (dz / self.z_R) ** 2)
+
     def curvature(self, z: float) -> float:
         """Calculate radius of curvature at position z."""
         dz = z - self.position
         if abs(dz) < 1e-15:
-            return float('inf')
-        return dz * (1 + (self.z_R / dz)**2)
-    
+            return float("inf")
+        return dz * (1 + (self.z_R / dz) ** 2)
+
     def divergence(self) -> float:
         """Calculate half-angle divergence."""
         return self.M2 * self.wavelength / (pi * self.w0)
-    
+
     def intensity(self, z: float, r: float) -> float:
         """Calculate intensity at (z, r)."""
         w = self.beam_radius(z)
         I0 = 2 * self.power / (pi * w**2)
         return I0 * exp(-2 * r**2 / w**2)
-    
-    def copy(self) -> 'GaussianBeam':
+
+    def copy(self) -> "GaussianBeam":
         """Create a copy of this beam."""
         return GaussianBeam(
             w0=self.w0,
             wavelength=self.wavelength,
             M2=self.M2,
             position=self.position,
-            power=self.power
+            power=self.power,
         )
 
 
 @dataclass
 class ABCDMatrix:
     """ABCD ray transfer matrix."""
+
     A: float = 1.0
     B: float = 0.0
     C: float = 0.0
     D: float = 1.0
-    
-    def __matmul__(self, other: 'ABCDMatrix') -> 'ABCDMatrix':
+
+    def __matmul__(self, other: "ABCDMatrix") -> "ABCDMatrix":
         """Matrix multiplication."""
         return ABCDMatrix(
             A=self.A * other.A + self.B * other.C,
             B=self.A * other.B + self.B * other.D,
             C=self.C * other.A + self.D * other.C,
-            D=self.C * other.B + self.D * other.D
+            D=self.C * other.B + self.D * other.D,
         )
-    
+
     def transform_q(self, q: complex) -> complex:
         """Transform beam parameter through this matrix."""
         return (self.A * q + self.B) / (self.C * q + self.D)
-    
+
     @classmethod
-    def free_space(cls, d: float) -> 'ABCDMatrix':
+    def free_space(cls, d: float) -> "ABCDMatrix":
         """Free space propagation matrix."""
         return cls(A=1, B=d, C=0, D=1)
-    
+
     @classmethod
-    def thin_lens(cls, f: float) -> 'ABCDMatrix':
+    def thin_lens(cls, f: float) -> "ABCDMatrix":
         """Thin lens matrix."""
-        return cls(A=1, B=0, C=-1/f, D=1)
-    
+        return cls(A=1, B=0, C=-1 / f, D=1)
+
     @classmethod
-    def flat_interface(cls, n1: float = 1.0, n2: float = 1.5) -> 'ABCDMatrix':
+    def flat_interface(cls, n1: float = 1.0, n2: float = 1.5) -> "ABCDMatrix":
         """Flat refractive interface."""
-        return cls(A=1, B=0, C=0, D=n1/n2)
-    
+        return cls(A=1, B=0, C=0, D=n1 / n2)
+
     @classmethod
-    def curved_interface(cls, R: float, n1: float = 1.0, n2: float = 1.5) -> 'ABCDMatrix':
+    def curved_interface(
+        cls, R: float, n1: float = 1.0, n2: float = 1.5
+    ) -> "ABCDMatrix":
         """Curved refractive interface."""
-        return cls(A=1, B=0, C=(n1-n2)/(n2*R), D=n1/n2)
-    
+        return cls(A=1, B=0, C=(n1 - n2) / (n2 * R), D=n1 / n2)
+
     @classmethod
-    def thick_lens(cls, R1: float, R2: float, t: float, n: float) -> 'ABCDMatrix':
+    def thick_lens(cls, R1: float, R2: float, t: float, n: float) -> "ABCDMatrix":
         """Thick lens matrix."""
         M1 = cls.curved_interface(R1, 1.0, n)
         M2 = cls.free_space(t)
@@ -195,11 +204,18 @@ def _beam_from_q(q: complex, z_plane: float, beam: GaussianBeam) -> GaussianBeam
     if z_r <= 0:
         raise ValueError("Invalid beam parameter (non-positive Rayleigh range)")
     w0 = sqrt(beam.M2 * beam.wavelength * z_r / pi)
-    return GaussianBeam(w0=w0, wavelength=beam.wavelength, M2=beam.M2,
-                        position=z_plane - q.real, power=beam.power)
+    return GaussianBeam(
+        w0=w0,
+        wavelength=beam.wavelength,
+        M2=beam.M2,
+        position=z_plane - q.real,
+        power=beam.power,
+    )
 
 
-def lens_transform(beam: GaussianBeam, f: float, lens_position: float = 0.0) -> GaussianBeam:
+def lens_transform(
+    beam: GaussianBeam, f: float, lens_position: float = 0.0
+) -> GaussianBeam:
     """
     Transform a beam by a thin lens of focal length f located at
     ``lens_position``: q' = q / (1 - q / f) at the lens.
@@ -209,7 +225,9 @@ def lens_transform(beam: GaussianBeam, f: float, lens_position: float = 0.0) -> 
     return _beam_from_q(q_new, lens_position, beam)
 
 
-def propagate_beam(beam: GaussianBeam, elements: list, start: float = 0.0) -> GaussianBeam:
+def propagate_beam(
+    beam: GaussianBeam, elements: list, start: float = 0.0
+) -> GaussianBeam:
     """
     Propagate a beam through a sequence of elements, starting at the plane
     z = ``start``:
@@ -234,8 +252,11 @@ def propagate_beam(beam: GaussianBeam, elements: list, start: float = 0.0) -> Ga
         elif elem_type == "interface":
             n1, n2, R = params
             # q / n is invariant in form: transform the reduced parameter
-            M = (ABCDMatrix.flat_interface(n1, n2) if not np.isfinite(R) or R == 0
-                 else ABCDMatrix.curved_interface(R, n1, n2))
+            M = (
+                ABCDMatrix.flat_interface(n1, n2)
+                if not np.isfinite(R) or R == 0
+                else ABCDMatrix.curved_interface(R, n1, n2)
+            )
             q = M.transform_q(q)
             n = n2
         else:
@@ -244,12 +265,19 @@ def propagate_beam(beam: GaussianBeam, elements: list, start: float = 0.0) -> Ga
     if out is None:
         # in a medium: Rayleigh range z_R = pi w0^2 n / (M^2 lambda)
         w0 = sqrt(beam.M2 * beam.wavelength * q.imag / (pi * n))
-        out = GaussianBeam(w0=w0, wavelength=beam.wavelength / n, M2=beam.M2,
-                           position=z - q.real, power=beam.power)
+        out = GaussianBeam(
+            w0=w0,
+            wavelength=beam.wavelength / n,
+            M2=beam.M2,
+            position=z - q.real,
+            power=beam.power,
+        )
     return out
 
 
-def calculate_M2(beam_radii: list, positions: list, wavelength: float = 550e-9) -> float:
+def calculate_M2(
+    beam_radii: list, positions: list, wavelength: float = 550e-9
+) -> float:
     """
     M^2 from beam radii measured along z (ISO 11146 style hyperbolic fit).
 

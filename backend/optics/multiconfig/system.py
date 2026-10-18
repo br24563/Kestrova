@@ -9,11 +9,19 @@ from typing import Optional
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
-from ..models import OpticalSystem, ThinLens, ThickLens, Object, ImagePlane, AnalysisSettings
+from ..models import (
+    OpticalSystem,
+    ThinLens,
+    ThickLens,
+    Object,
+    ImagePlane,
+    AnalysisSettings,
+)
 
 
 class ConfigType(str, Enum):
     """Types of configurations."""
+
     ZOOM = "zoom"
     FOCUS = "focus"
     TEMPERATURE = "temperature"
@@ -24,13 +32,14 @@ class ConfigType(str, Enum):
 @dataclass
 class Configuration:
     """A single configuration state."""
+
     config_id: int
     config_type: ConfigType
     name: str = ""
 
     # Configuration parameters
     zoom_position: float = 0.0  # Zoom position (0-1)
-    focus_distance: float = float('inf')  # Object distance
+    focus_distance: float = float("inf")  # Object distance
     temperature: float = 20.0  # Celsius
     pressure: float = 101.325  # kPa
 
@@ -61,21 +70,28 @@ class Configuration:
           glass indices, and raise here.
         """
         from ..tolerance import set_parameter
+
         config_system = system
         for var_name, value in self.variables.items():
             config_system = set_parameter(config_system, var_name, value)
         if self.wavelength_weights:
             config_system = config_system.model_copy(
-                update={"wavelengths": [float(w) for w in self.wavelength_weights]})
+                update={"wavelengths": [float(w) for w in self.wavelength_weights]}
+            )
         if self.focus_distance != float("inf"):
             first = min(c.position for c in config_system.components)
-            obj = config_system.object.model_copy(update={"position": first - self.focus_distance})
+            obj = config_system.object.model_copy(
+                update={"position": first - self.focus_distance}
+            )
             config_system = config_system.model_copy(update={"object": obj})
         if self.config_type == ConfigType.TEMPERATURE and self.temperature != 20.0:
             if any(isinstance(c, ThickLens) for c in config_system.components):
-                raise ValueError("Thick-lens index changes with temperature need "
-                                 "optics.thermal.ThermalAnalyzer")
+                raise ValueError(
+                    "Thick-lens index changes with temperature need "
+                    "optics.thermal.ThermalAnalyzer"
+                )
             from ..thermal.analysis import thermal_system
+
             config_system, _ = thermal_system(config_system, self.temperature)
         return config_system
 
@@ -83,16 +99,19 @@ class Configuration:
 @dataclass
 class ZoomConfig(Configuration):
     """Zoom lens configuration."""
+
     config_type: ConfigType = ConfigType.ZOOM
     focal_length: Optional[float] = None  # nominal label (m); not applied
-    zoom_ratio: float = 1.0               # nominal label; not applied
+    zoom_ratio: float = 1.0  # nominal label; not applied
+
 
 @dataclass
 class FocusConfig(Configuration):
     """Focus configuration."""
+
     config_type: ConfigType = ConfigType.FOCUS
-    object_distance: float = float("inf")   # m from the first surface
-    focus_group_shift: float = 0.0          # label only; move groups via ``variables``
+    object_distance: float = float("inf")  # m from the first surface
+    focus_group_shift: float = 0.0  # label only; move groups via ``variables``
 
     def __post_init__(self):
         if self.object_distance != float("inf"):
@@ -102,6 +121,7 @@ class FocusConfig(Configuration):
 @dataclass
 class ThermalConfig(Configuration):
     """Thermal configuration."""
+
     config_type: ConfigType = ConfigType.TEMPERATURE
     temperature: float = 20.0  # Celsius
     housing_material: str = ""  # label only; mount expansion is not applied here
@@ -110,6 +130,7 @@ class ThermalConfig(Configuration):
 @dataclass
 class WavelengthConfig(Configuration):
     """Wavelength configuration."""
+
     config_type: ConfigType = ConfigType.WAVELENGTH
     wavelengths: list[float] = field(default_factory=list)
     weights: list[float] = field(default_factory=list)
@@ -118,6 +139,7 @@ class WavelengthConfig(Configuration):
 @dataclass
 class MultiConfigSystem:
     """Multi-configuration optical system."""
+
     base_system: OpticalSystem
     configurations: list[Configuration] = field(default_factory=list)
 
@@ -155,16 +177,22 @@ class MultiConfigSystem:
         for config in self.configurations:
             system = config.apply_to_system(self.base_system)
             analysis = analyze_system(system)
-            results.append({
-                'config_id': config.config_id,
-                'config_name': config.name,
-                'analysis': analysis
-            })
+            results.append(
+                {
+                    "config_id": config.config_id,
+                    "config_name": config.name,
+                    "analysis": analysis,
+                }
+            )
         return results
 
     def get_variable_range(self, param: str) -> tuple[float, float]:
         """Get range of a variable parameter across configs."""
-        values = [config.variables.get(param, 0) for config in self.configurations if param in config.variables]
+        values = [
+            config.variables.get(param, 0)
+            for config in self.configurations
+            if param in config.variables
+        ]
         if not values:
             return (0, 0)
         return (min(values), max(values))

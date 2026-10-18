@@ -11,14 +11,21 @@ The system is represented as an ordered list of optical components
 
 from typing import Optional, Union
 from .models import (
-    OpticalSystem, OpticalComponent, ThinLens, SphericalSurface, ThickLens,
-    ApertureStop, Object, ImagePlane, AnalysisSettings,
+    OpticalSystem,
+    OpticalComponent,
+    ThinLens,
+    SphericalSurface,
+    ThickLens,
+    ApertureStop,
+    Object,
+    ImagePlane,
+    AnalysisSettings,
 )
-
 
 # ---------------------------------------------------------------------------
 # Default System
 # ---------------------------------------------------------------------------
+
 
 def create_default_system() -> OpticalSystem:
     """
@@ -73,6 +80,7 @@ def create_default_system() -> OpticalSystem:
 # ---------------------------------------------------------------------------
 # Component Management
 # ---------------------------------------------------------------------------
+
 
 def get_lenses(system: OpticalSystem) -> list[Union[ThinLens, ThickLens]]:
     """
@@ -137,9 +145,7 @@ def get_component_by_id(
     return None
 
 
-def add_component(
-    system: OpticalSystem, component: OpticalComponent
-) -> OpticalSystem:
+def add_component(system: OpticalSystem, component: OpticalComponent) -> OpticalSystem:
     """
     Add a component to the system.
 
@@ -157,9 +163,7 @@ def add_component(
     return system.model_copy(update={"components": new_components})
 
 
-def remove_component(
-    system: OpticalSystem, component_id: str
-) -> OpticalSystem:
+def remove_component(system: OpticalSystem, component_id: str) -> OpticalSystem:
     """
     Remove a component from the system by ID.
 
@@ -250,6 +254,7 @@ def sort_components(system: OpticalSystem) -> OpticalSystem:
 # System Validation
 # ---------------------------------------------------------------------------
 
+
 def validate_system(system: OpticalSystem) -> list[str]:
     """
     Validate the optical system and return a list of warnings.
@@ -274,9 +279,7 @@ def validate_system(system: OpticalSystem) -> list[str]:
     for i in range(len(positions)):
         for j in range(i + 1, len(positions)):
             if abs(positions[i] - positions[j]) < 1e-9:
-                warnings.append(
-                    f"Components at position {positions[i]:.6f}m overlap."
-                )
+                warnings.append(f"Components at position {positions[i]:.6f}m overlap.")
 
     # Check object position
     lenses = get_lenses(system)
@@ -284,8 +287,7 @@ def validate_system(system: OpticalSystem) -> list[str]:
         first_lens = lenses[0]
         if system.object.position >= first_lens.position:
             warnings.append(
-                "Object is at or after the first lens; "
-                "image may be virtual."
+                "Object is at or after the first lens; " "image may be virtual."
             )
 
     # Check image plane position
@@ -293,34 +295,25 @@ def validate_system(system: OpticalSystem) -> list[str]:
         last_lens = lenses[-1]
         if system.image_plane.position <= last_lens.position:
             warnings.append(
-                "Image plane is at or before the last lens; "
-                "image may not form."
+                "Image plane is at or before the last lens; " "image may not form."
             )
 
     # Check for negative apertures
     for comp in system.components:
         if isinstance(comp, (ThinLens, ThickLens)):
             if comp.aperture_diameter <= 0:
-                warnings.append(
-                    f"Lens '{comp.id}' has non-positive aperture diameter."
-                )
+                warnings.append(f"Lens '{comp.id}' has non-positive aperture diameter.")
         elif isinstance(comp, ApertureStop):
             if comp.diameter <= 0:
-                warnings.append(
-                    f"Aperture '{comp.id}' has non-positive diameter."
-                )
+                warnings.append(f"Aperture '{comp.id}' has non-positive diameter.")
 
     # Check for zero focal lengths
     for comp in system.components:
         if isinstance(comp, ThinLens):
             if abs(comp.focal_length) < 1e-15:
-                warnings.append(
-                    f"Lens '{comp.id}' has zero focal length."
-                )
+                warnings.append(f"Lens '{comp.id}' has zero focal length.")
         elif isinstance(comp, ThickLens):
             if abs(comp.radius1) < 1e-15 and abs(comp.radius2) < 1e-15:
-                warnings.append(
-                    f"Lens '{comp.id}' has both radii zero (slab)."
-                )
+                warnings.append(f"Lens '{comp.id}' has both radii zero (slab).")
 
     return warnings

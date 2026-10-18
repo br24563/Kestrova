@@ -7,9 +7,7 @@ scattering, and detector collection.
 
 from typing import Optional
 import numpy as np
-from .system import (
-    NSCSystem, Ray, HitPoint, Vector3, Source, Detector, Object3D
-)
+from .system import NSCSystem, Ray, HitPoint, Vector3, Source, Detector, Object3D
 from .scatter import ScatterModel, NoScatter
 
 
@@ -57,8 +55,11 @@ class NSCTracer:
                 nearest_obj = obj
 
         # A detector closer than the nearest object absorbs the ray.
-        det_hits = [(t, d) for d in self.system.detectors
-                    if (t := d.hit_distance(ray)) is not None]
+        det_hits = [
+            (t, d)
+            for d in self.system.detectors
+            if (t := d.hit_distance(ray)) is not None
+        ]
         if det_hits:
             t_det, det = min(det_hits, key=lambda x: x[0])
             if nearest_hit is None or t_det < nearest_hit.distance:
@@ -95,7 +96,7 @@ class NSCTracer:
         reflected = Vector3(
             incident.x - 2 * dot * normal.x,
             incident.y - 2 * dot * normal.y,
-            incident.z - 2 * dot * normal.z
+            incident.z - 2 * dot * normal.z,
         ).normalized()
 
         # Create reflected ray
@@ -105,7 +106,7 @@ class NSCTracer:
             intensity=ray.intensity * obj.reflectivity,
             wavelength=ray.wavelength,
             order=ray.order + 1,
-            path_length=ray.path_length + hit.distance
+            path_length=ray.path_length + hit.distance,
         )
 
         # Continue tracing
@@ -113,7 +114,9 @@ class NSCTracer:
 
     def _process_scatter(self, ray: Ray, hit: HitPoint, obj: Object3D, depth: int):
         """Process scattering from a surface."""
-        model = self.scatter_models.get(obj.scatter_model) if obj.scatter_model else None
+        model = (
+            self.scatter_models.get(obj.scatter_model) if obj.scatter_model else None
+        )
         if model is None:
             return
 
@@ -137,7 +140,7 @@ class NSCTracer:
             normal = Vector3(-normal.x, -normal.y, -normal.z)
 
         cos_i = -ray.direction.dot(normal)
-        sin_t2 = (n1 / n2)**2 * (1 - cos_i**2)
+        sin_t2 = (n1 / n2) ** 2 * (1 - cos_i**2)
 
         # Total internal reflection
         if sin_t2 > 1.0:
@@ -147,8 +150,8 @@ class NSCTracer:
         cos_t = np.sqrt(1 - sin_t2)
 
         # Fresnel equations
-        rs = ((n1 * cos_i - n2 * cos_t) / (n1 * cos_i + n2 * cos_t))**2
-        rp = ((n1 * cos_t - n2 * cos_i) / (n1 * cos_t + n2 * cos_i))**2
+        rs = ((n1 * cos_i - n2 * cos_t) / (n1 * cos_i + n2 * cos_t)) ** 2
+        rp = ((n1 * cos_t - n2 * cos_i) / (n1 * cos_t + n2 * cos_i)) ** 2
         reflectance = (rs + rp) / 2
         transmittance = 1 - reflectance
 
@@ -158,7 +161,7 @@ class NSCTracer:
             reflected = Vector3(
                 ray.direction.x - 2 * dot * normal.x,
                 ray.direction.y - 2 * dot * normal.y,
-                ray.direction.z - 2 * dot * normal.z
+                ray.direction.z - 2 * dot * normal.z,
             ).normalized()
 
             reflected_ray = Ray(
@@ -167,7 +170,7 @@ class NSCTracer:
                 intensity=ray.intensity * reflectance * (1 - obj.absorption),
                 wavelength=ray.wavelength,
                 order=ray.order + 1,
-                path_length=ray.path_length + hit.distance
+                path_length=ray.path_length + hit.distance,
             )
             self._trace_ray(reflected_ray, depth + 1)
 
@@ -178,7 +181,7 @@ class NSCTracer:
             transmitted = Vector3(
                 ratio * ray.direction.x + k * normal.x,
                 ratio * ray.direction.y + k * normal.y,
-                ratio * ray.direction.z + k * normal.z
+                ratio * ray.direction.z + k * normal.z,
             ).normalized()
 
             transmitted_ray = Ray(
@@ -187,7 +190,7 @@ class NSCTracer:
                 intensity=ray.intensity * transmittance * (1 - obj.absorption),
                 wavelength=ray.wavelength,
                 order=ray.order,
-                path_length=ray.path_length + hit.distance
+                path_length=ray.path_length + hit.distance,
             )
             self._trace_ray(transmitted_ray, depth + 1)
 
@@ -197,18 +200,24 @@ class NSCTracer:
         total_power = 0.0
 
         for i, detector in enumerate(self.system.detectors):
-            detectors.append({
-                'id': i,
-                'name': detector.name,
-                'num_rays_hit': detector.num_rays_hit,
-                'total_power': detector.total_power,
-                'peak_irradiance': float(np.max(detector.irradiance)) if detector.irradiance.size > 0 else 0,
-                'irradiance_map': detector.irradiance.tolist()
-            })
+            detectors.append(
+                {
+                    "id": i,
+                    "name": detector.name,
+                    "num_rays_hit": detector.num_rays_hit,
+                    "total_power": detector.total_power,
+                    "peak_irradiance": (
+                        float(np.max(detector.irradiance))
+                        if detector.irradiance.size > 0
+                        else 0
+                    ),
+                    "irradiance_map": detector.irradiance.tolist(),
+                }
+            )
             total_power += detector.total_power
 
         return {
-            'detectors': detectors,
-            'total_rays_traced': 0,
-            'total_power_collected': total_power,
+            "detectors": detectors,
+            "total_rays_traced": 0,
+            "total_power_collected": total_power,
         }

@@ -65,30 +65,37 @@ from typing import Optional
 import numpy as np
 
 from .models import (
-    OpticalSystem, Ray, ThinLens, ThickLens, SphericalSurface, Mirror,
+    OpticalSystem,
+    Ray,
+    ThinLens,
+    ThickLens,
+    SphericalSurface,
+    Mirror,
     ApertureStop,
 )
 from .materials import refractive_index
 from .real_rays import (
-    _sphere_intersection, _snell_refract, trace_real_ray,
+    _sphere_intersection,
+    _snell_refract,
+    trace_real_ray,
     real_intercept_at_plane,
 )
-
 
 # Index of the medium filling the spaces between elements.
 N_AIR = 1.0
 
 # Nominal edge thickness assumed when deriving a thin lens centre thickness.
-DEFAULT_EDGE_THICKNESS = 1.0e-3   # 1 mm
+DEFAULT_EDGE_THICKNESS = 1.0e-3  # 1 mm
 
 # Air gap left between elements placed in contact (a thin-lens doublet), so
 # the ray never meets two surfaces at the same point.
-CONTACT_GAP = 1.0e-6   # 1 um
+CONTACT_GAP = 1.0e-6  # 1 um
 
 
 # =============================================================================
 # Fresnel reflectance
 # =============================================================================
+
 
 def normal_incidence_reflectance(n1: float, n2: float) -> float:
     """Fresnel power reflectance at normal incidence, R = ((n1-n2)/(n1+n2))^2."""
@@ -97,8 +104,9 @@ def normal_incidence_reflectance(n1: float, n2: float) -> float:
     return ((n1 - n2) / (n1 + n2)) ** 2
 
 
-def fresnel_reflectance(n1: float, n2: float, theta_i: float = 0.0,
-                        polarization: str = "avg") -> float:
+def fresnel_reflectance(
+    n1: float, n2: float, theta_i: float = 0.0, polarization: str = "avg"
+) -> float:
     """
     Fresnel power reflectance at a dielectric interface.
 
@@ -135,15 +143,17 @@ def fresnel_reflectance(n1: float, n2: float, theta_i: float = 0.0,
 # Surface chain
 # =============================================================================
 
+
 @dataclass
 class GhostSurface:
     """One refracting or reflecting surface of the flattened system."""
+
     index: int
     z: float
-    radius: float          # signed radius of curvature (0 = plane)
+    radius: float  # signed radius of curvature (0 = plane)
     n_left: float
     n_right: float
-    label: str             # e.g. "L1.front"
+    label: str  # e.g. "L1.front"
     reflective: bool = False
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
@@ -151,8 +161,9 @@ class GhostSurface:
         return f"[{self.index}] {self.label} z={self.z * 1e3:.3f}mm R={self.radius * 1e3:.3f}mm {kind}"
 
 
-def _lens_centre_thickness(radius: float, semi_aperture: float,
-                           edge_thickness: float = DEFAULT_EDGE_THICKNESS) -> float:
+def _lens_centre_thickness(
+    radius: float, semi_aperture: float, edge_thickness: float = DEFAULT_EDGE_THICKNESS
+) -> float:
     """
     Estimate a biconvex lens centre thickness from its surface sagitta.
 
@@ -171,8 +182,9 @@ def _lens_centre_thickness(radius: float, semi_aperture: float,
     return 2.0 * sag + edge_thickness
 
 
-def _thin_lens_surfaces(comp: ThinLens, wavelength: float,
-                        edge_thickness: float) -> list[GhostSurface]:
+def _thin_lens_surfaces(
+    comp: ThinLens, wavelength: float, edge_thickness: float
+) -> list[GhostSurface]:
     """Two biconvex surfaces for a ThinLens (see module docstring)."""
     n = refractive_index(comp.material, wavelength)
     f = comp.focal_length
@@ -182,10 +194,22 @@ def _thin_lens_surfaces(comp: ThinLens, wavelength: float,
     semi = max(0.0, comp.aperture_diameter / 2.0)
     thickness = _lens_centre_thickness(radius, semi, edge_thickness)
     return [
-        GhostSurface(index=0, z=comp.position, radius=radius,
-                     n_left=N_AIR, n_right=n, label=f"{comp.id}.front"),
-        GhostSurface(index=0, z=comp.position + thickness, radius=-radius,
-                     n_left=n, n_right=N_AIR, label=f"{comp.id}.back"),
+        GhostSurface(
+            index=0,
+            z=comp.position,
+            radius=radius,
+            n_left=N_AIR,
+            n_right=n,
+            label=f"{comp.id}.front",
+        ),
+        GhostSurface(
+            index=0,
+            z=comp.position + thickness,
+            radius=-radius,
+            n_left=n,
+            n_right=N_AIR,
+            label=f"{comp.id}.back",
+        ),
     ]
 
 
@@ -193,17 +217,30 @@ def _thick_lens_surfaces(comp: ThickLens, wavelength: float) -> list[GhostSurfac
     """Two exact surfaces separated by the real glass thickness."""
     n = refractive_index(comp.material, wavelength)
     return [
-        GhostSurface(index=0, z=comp.position, radius=comp.radius1,
-                     n_left=N_AIR, n_right=n, label=f"{comp.id}.front"),
-        GhostSurface(index=0, z=comp.position + comp.thickness, radius=comp.radius2,
-                     n_left=n, n_right=N_AIR, label=f"{comp.id}.back"),
+        GhostSurface(
+            index=0,
+            z=comp.position,
+            radius=comp.radius1,
+            n_left=N_AIR,
+            n_right=n,
+            label=f"{comp.id}.front",
+        ),
+        GhostSurface(
+            index=0,
+            z=comp.position + comp.thickness,
+            radius=comp.radius2,
+            n_left=n,
+            n_right=N_AIR,
+            label=f"{comp.id}.back",
+        ),
     ]
 
 
-def build_surface_chain(system: OpticalSystem,
-                        wavelength: Optional[float] = None,
-                        edge_thickness: float = DEFAULT_EDGE_THICKNESS,
-                        ) -> list[GhostSurface]:
+def build_surface_chain(
+    system: OpticalSystem,
+    wavelength: Optional[float] = None,
+    edge_thickness: float = DEFAULT_EDGE_THICKNESS,
+) -> list[GhostSurface]:
     """
     Flatten a system into an ordered list of refracting/reflecting surfaces.
 
@@ -227,17 +264,29 @@ def build_surface_chain(system: OpticalSystem,
         elif isinstance(comp, ThickLens):
             group = _thick_lens_surfaces(comp, wavelength)
         elif isinstance(comp, Mirror):
-            group = [GhostSurface(
-                index=0, z=comp.position, radius=getattr(comp, "radius", 0.0) or 0.0,
-                n_left=N_AIR, n_right=N_AIR, label=f"{comp.id}.mirror",
-                reflective=True,
-            )]
+            group = [
+                GhostSurface(
+                    index=0,
+                    z=comp.position,
+                    radius=getattr(comp, "radius", 0.0) or 0.0,
+                    n_left=N_AIR,
+                    n_right=N_AIR,
+                    label=f"{comp.id}.mirror",
+                    reflective=True,
+                )
+            ]
         elif isinstance(comp, SphericalSurface):
             n = refractive_index(comp.material, wavelength) if comp.material else N_AIR
-            group = [GhostSurface(
-                index=0, z=comp.position, radius=comp.radius,
-                n_left=N_AIR, n_right=n, label=comp.id,
-            )]
+            group = [
+                GhostSurface(
+                    index=0,
+                    z=comp.position,
+                    radius=comp.radius,
+                    n_left=N_AIR,
+                    n_right=n,
+                    label=comp.id,
+                )
+            ]
         else:
             # ApertureStop and non-refracting components are not surfaces.
             continue
@@ -271,8 +320,9 @@ def _signed_sag(radius: float, h: float) -> float:
     return radius - math.copysign(math.sqrt(radius * radius - h * h), radius)
 
 
-def _contact_shift(prev: GhostSurface, nxt: GhostSurface, semi: float,
-                   samples: int = 9) -> float:
+def _contact_shift(
+    prev: GhostSurface, nxt: GhostSurface, semi: float, samples: int = 9
+) -> float:
     """
     Axial shift that keeps surface ``nxt`` at least ``CONTACT_GAP`` behind
     ``prev`` everywhere within the semi-aperture ``semi`` (0 when they
@@ -280,7 +330,9 @@ def _contact_shift(prev: GhostSurface, nxt: GhostSurface, semi: float,
     """
     shift = 0.0
     for h in np.linspace(0.0, semi, samples) if semi > 0 else [0.0]:
-        gap = (nxt.z + _signed_sag(nxt.radius, h)) - (prev.z + _signed_sag(prev.radius, h))
+        gap = (nxt.z + _signed_sag(nxt.radius, h)) - (
+            prev.z + _signed_sag(prev.radius, h)
+        )
         shift = max(shift, CONTACT_GAP - gap)
     return shift
 
@@ -288,6 +340,7 @@ def _contact_shift(prev: GhostSurface, nxt: GhostSurface, semi: float,
 # =============================================================================
 # Bidirectional surface interaction
 # =============================================================================
+
 
 def _intersect_surface(z: float, y: float, dz: float, dy: float, surf: GhostSurface):
     """
@@ -316,11 +369,19 @@ def _intersect_surface(z: float, y: float, dz: float, dy: float, surf: GhostSurf
     return hz, hy, nx / norm, ny / norm
 
 
-def _interact(z: float, y: float, dz: float, dy: float, surf: GhostSurface,
-              action: str, forward: bool, wavelength: float,
-              coating_reflectance: Optional[float] = None,
-              mirror_reflectance: float = 0.95,
-              polarization: str = "avg"):
+def _interact(
+    z: float,
+    y: float,
+    dz: float,
+    dy: float,
+    surf: GhostSurface,
+    action: str,
+    forward: bool,
+    wavelength: float,
+    coating_reflectance: Optional[float] = None,
+    mirror_reflectance: float = 0.95,
+    polarization: str = "avg",
+):
     """
     Propagate a ray to one surface and apply either refraction or reflection.
 
@@ -392,9 +453,11 @@ def _interact(z: float, y: float, dz: float, dy: float, surf: GhostSurface,
 # Ghost path tracing
 # =============================================================================
 
+
 @dataclass
 class GhostResult:
     """One double-reflection ghost path and its image-plane consequences."""
+
     first_surface: int
     second_surface: int
     first_label: str
@@ -410,16 +473,16 @@ class GhostResult:
     reflectance_product: float = 0.0
 
     # Geometry
-    ghost_image_height: float = 0.0      # m, at the image plane
-    primary_image_height: float = 0.0    # m, chief ray at the image plane
-    displacement: float = 0.0            # m, ghost minus primary
-    ghost_focus_z: float = 0.0           # m, axial ghost focus
-    ghost_focus_offset: float = 0.0      # m, focus offset from image plane
-    ghost_spot_rms: float = 0.0          # m, RMS spot at the ghost focus
+    ghost_image_height: float = 0.0  # m, at the image plane
+    primary_image_height: float = 0.0  # m, chief ray at the image plane
+    displacement: float = 0.0  # m, ghost minus primary
+    ghost_focus_z: float = 0.0  # m, axial ghost focus
+    ghost_focus_offset: float = 0.0  # m, focus offset from image plane
+    ghost_spot_rms: float = 0.0  # m, RMS spot at the ghost focus
     ghost_spot_rms_at_image: float = 0.0  # m, RMS spot at the image plane
-    focus_clipped: bool = False          # focus fell on the scan boundary
-    num_rays: int = 0                    # pupil rays that completed the path
-    num_rays_attempted: int = 0          # pupil rays tried
+    focus_clipped: bool = False  # focus fell on the scan boundary
+    num_rays: int = 0  # pupil rays that completed the path
+    num_rays_attempted: int = 0  # pupil rays tried
     path: list = field(default_factory=list)
 
     @property
@@ -462,11 +525,16 @@ class GhostResult:
         }
 
 
-def trace_ghost_path(surfaces: list, ray: Ray, first: int, second: int,
-                     image_z: float,
-                     coating_reflectance: Optional[float] = None,
-                     mirror_reflectance: float = 0.95,
-                     polarization: str = "avg"):
+def trace_ghost_path(
+    surfaces: list,
+    ray: Ray,
+    first: int,
+    second: int,
+    image_z: float,
+    coating_reflectance: Optional[float] = None,
+    mirror_reflectance: float = 0.95,
+    polarization: str = "avg",
+):
     """
     Trace one double-reflection ghost path.
 
@@ -505,9 +573,19 @@ def trace_ghost_path(surfaces: list, ray: Ray, first: int, second: int,
 
     def _step(index, action, forward):
         nonlocal z, y, dz, dy, transmission, r_first, r_second
-        res = _interact(z, y, dz, dy, surfaces[index], action, forward,
-                        ray.wavelength, coating_reflectance,
-                        mirror_reflectance, polarization)
+        res = _interact(
+            z,
+            y,
+            dz,
+            dy,
+            surfaces[index],
+            action,
+            forward,
+            ray.wavelength,
+            coating_reflectance,
+            mirror_reflectance,
+            polarization,
+        )
         if res is None:
             return surfaces[index].label
         z, y, dz, dy, factor = res
@@ -553,16 +631,19 @@ def trace_ghost_path(surfaces: list, ray: Ray, first: int, second: int,
 # System-level ghost analysis
 # =============================================================================
 
+
 def _pupil(system: OpticalSystem):
     """(entrance-pupil z, entrance-pupil radius, object-space field slope)
     from the paraxial first-order solution."""
     from . import raytrace as rt
+
     fo = rt.first_order(system)
     return fo.entrance_pupil_z, fo.entrance_pupil_semi_diameter, fo
 
 
-def _ray_through_pupil(system: OpticalSystem, field_fraction: float, p: float,
-                       kind: str) -> Ray:
+def _ray_through_pupil(
+    system: OpticalSystem, field_fraction: float, p: float, kind: str
+) -> Ray:
     ep_z, ep_r, fo = _pupil(system)
     wl = system.analysis_settings.wavelength
     if fo.object_infinite:
@@ -573,7 +654,9 @@ def _ray_through_pupil(system: OpticalSystem, field_fraction: float, p: float,
     obj_h = system.object.height * field_fraction
     d = ep_z - system.object.position
     theta = math.atan((p * ep_r - obj_h) / d) if abs(d) > 1e-15 else 0.0
-    return Ray(y=obj_h, theta=theta, z=system.object.position, wavelength=wl, ray_type=kind)
+    return Ray(
+        y=obj_h, theta=theta, z=system.object.position, wavelength=wl, ray_type=kind
+    )
 
 
 def chief_ray(system: OpticalSystem, field_fraction: float = 1.0) -> Ray:
@@ -581,15 +664,18 @@ def chief_ray(system: OpticalSystem, field_fraction: float = 1.0) -> Ray:
     return _ray_through_pupil(system, field_fraction, 0.0, "chief")
 
 
-def pupil_fan(system: OpticalSystem, field_fraction: float = 1.0,
-              num_rays: int = 5) -> list:
+def pupil_fan(
+    system: OpticalSystem, field_fraction: float = 1.0, num_rays: int = 5
+) -> list:
     """
     Meridional rays sampling the paraxial entrance pupil from -1 to +1.
     A single ray returns the chief ray.
     """
     n = max(1, int(num_rays))
     fractions = [0.0] if n == 1 else np.linspace(-1.0, 1.0, n)
-    return [_ray_through_pupil(system, field_fraction, float(p), "fill") for p in fractions]
+    return [
+        _ray_through_pupil(system, field_fraction, float(p), "fill") for p in fractions
+    ]
 
 
 def _trace_primary(surfaces: list, ray: Ray, image_z: float) -> Optional[float]:
@@ -613,15 +699,17 @@ def primary_image_height(system: OpticalSystem, field_fraction: float = 1.0) -> 
     reference for ghost displacement.
     """
     surfaces = build_surface_chain(system)
-    h = _trace_primary(surfaces, chief_ray(system, field_fraction),
-                       system.image_plane.position)
+    h = _trace_primary(
+        surfaces, chief_ray(system, field_fraction), system.image_plane.position
+    )
     if h is None:
         raise ValueError("The chief ray does not reach the image plane")
     return float(h)
 
 
-def _ghost_focus(paths: list, image_z: float,
-                 scan_mm: Optional[float] = None, points: int = 81):
+def _ghost_focus(
+    paths: list, image_z: float, scan_mm: Optional[float] = None, points: int = 81
+):
     """
     Find the axial ghost focus by minimising the RMS spot over z.
 
@@ -682,18 +770,19 @@ def _ghost_focus(paths: list, image_z: float,
     return best_z, best_rms, rms_image, clipped
 
 
-def analyze_ghosts(system: OpticalSystem,
-                   field_fraction: float = 1.0,
-                   num_rays: int = 5,
-                   min_relative_irradiance: float = 1.0e-6,
-                   coating_reflectance: Optional[float] = None,
-                   mirror_reflectance: float = 0.95,
-                   polarization: str = "avg",
-                   focus_scan_mm: Optional[float] = None,
-                   focus_points: int = 41,
-                   surface_pairs: Optional[list] = None,
-                   include_blocked: bool = False,
-                   ) -> list:
+def analyze_ghosts(
+    system: OpticalSystem,
+    field_fraction: float = 1.0,
+    num_rays: int = 5,
+    min_relative_irradiance: float = 1.0e-6,
+    coating_reflectance: Optional[float] = None,
+    mirror_reflectance: float = 0.95,
+    polarization: str = "avg",
+    focus_scan_mm: Optional[float] = None,
+    focus_points: int = 41,
+    surface_pairs: Optional[list] = None,
+    include_blocked: bool = False,
+) -> list:
     """
     Trace every double-reflection ghost of a system with real ray paths.
 
@@ -743,7 +832,11 @@ def analyze_ghosts(system: OpticalSystem,
         blocked_at = ""
         for ray in rays:
             path, rf, rs, tr, fail = trace_ghost_path(
-                surfaces, ray, first, second, image_z,
+                surfaces,
+                ray,
+                first,
+                second,
+                image_z,
                 coating_reflectance=coating_reflectance,
                 mirror_reflectance=mirror_reflectance,
                 polarization=polarization,
@@ -757,24 +850,31 @@ def analyze_ghosts(system: OpticalSystem,
         if not paths:
             if not include_blocked:
                 continue
-            results.append(GhostResult(
-                first_surface=first, second_surface=second,
-                first_label=surfaces[first].label,
-                second_label=surfaces[second].label,
-                wavelength=system.analysis_settings.wavelength,
-                blocked=True, blocked_at=blocked_at,
-                primary_image_height=primary_h,
-                num_rays=0, num_rays_attempted=len(rays),
-            ))
+            results.append(
+                GhostResult(
+                    first_surface=first,
+                    second_surface=second,
+                    first_label=surfaces[first].label,
+                    second_label=surfaces[second].label,
+                    wavelength=system.analysis_settings.wavelength,
+                    blocked=True,
+                    blocked_at=blocked_at,
+                    primary_image_height=primary_h,
+                    num_rays=0,
+                    num_rays_attempted=len(rays),
+                )
+            )
             continue
 
         heights = [p[-1][1] for p in paths]
         ghost_h = float(np.mean(heights))
         focus_z, rms_focus, rms_image, focus_clipped = _ghost_focus(
-            paths, image_z, focus_scan_mm, focus_points)
+            paths, image_z, focus_scan_mm, focus_points
+        )
 
         result = GhostResult(
-            first_surface=first, second_surface=second,
+            first_surface=first,
+            second_surface=second,
             first_label=surfaces[first].label,
             second_label=surfaces[second].label,
             wavelength=system.analysis_settings.wavelength,
@@ -818,7 +918,10 @@ def ghost_analysis(system: OpticalSystem, **kwargs) -> dict:
         per_field[name] = [g.as_dict() for g in ghosts]
         if ghosts:
             candidate = ghosts[0]
-            if worst is None or candidate.relative_irradiance > worst[1].relative_irradiance:
+            if (
+                worst is None
+                or candidate.relative_irradiance > worst[1].relative_irradiance
+            ):
                 worst = (name, candidate)
 
     surfaces = build_surface_chain(system)
@@ -826,9 +929,12 @@ def ghost_analysis(system: OpticalSystem, **kwargs) -> dict:
         "num_surfaces": len(surfaces),
         "surfaces": [
             {
-                "index": s.index, "label": s.label,
-                "z_mm": s.z * 1e3, "radius_mm": s.radius * 1e3,
-                "n_left": s.n_left, "n_right": s.n_right,
+                "index": s.index,
+                "label": s.label,
+                "z_mm": s.z * 1e3,
+                "radius_mm": s.radius * 1e3,
+                "n_left": s.n_left,
+                "n_right": s.n_right,
                 "reflective": s.reflective,
             }
             for s in surfaces

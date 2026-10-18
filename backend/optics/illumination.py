@@ -29,17 +29,18 @@ from .models import OpticalSystem, ImagePlane
 from . import raytrace as rt
 from . import pupil as pp
 
-
 # =============================================================================
 # Vignetting
 # =============================================================================
 
+
 @dataclass
 class VignettingResult:
     """Vignetting at one field point."""
+
     field_fraction: float
-    field_angle: float              # radians, chief ray at the image
-    throughput: float               # fraction of the stop area whose rays reach the image
+    field_angle: float  # radians, chief ray at the image
+    throughput: float  # fraction of the stop area whose rays reach the image
     pupil_samples: int
     passing_samples: int
     clipped_by: dict = field(default_factory=dict)
@@ -68,8 +69,9 @@ class VignettingResult:
 
 def chief_ray_image_angle(system: OpticalSystem, field_fraction: float) -> float:
     """Angle between the real chief ray and the image-plane normal (radians)."""
-    b, seq, _ = rt.trace_field_rays(system, 0.0, field_fraction, np.array([0.0]),
-                                    np.array([0.0]), clip=False)
+    b, seq, _ = rt.trace_field_rays(
+        system, 0.0, field_fraction, np.array([0.0]), np.array([0.0]), clip=False
+    )
     if not b.valid[0]:
         raise ValueError("Chief ray cannot be traced at this field")
     axis = seq.image_rotation[:, 2]
@@ -93,8 +95,9 @@ def _blocking_surface(seq, b) -> list:
     return out
 
 
-def vignetting_at_field(system: OpticalSystem, field_fraction: float = 0.0,
-                        num_rays: int = 21) -> VignettingResult:
+def vignetting_at_field(
+    system: OpticalSystem, field_fraction: float = 0.0, num_rays: int = 21
+) -> VignettingResult:
     """Fraction of a uniform grid over the stop whose rays reach the image."""
     seq = rt.build_sequence(system)
     fo = rt.first_order(system, seq=seq)
@@ -102,8 +105,16 @@ def vignetting_at_field(system: OpticalSystem, field_fraction: float = 0.0,
     b, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, px, py, seq=seq, fo=fo)
     clipped: dict[str, int] = {}
     if not b.valid.all():
-        bb, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, px[~b.valid], py[~b.valid],
-                                       seq=seq, fo=fo, clip=False)
+        bb, _, _ = rt.trace_field_rays(
+            system,
+            0.0,
+            field_fraction,
+            px[~b.valid],
+            py[~b.valid],
+            seq=seq,
+            fo=fo,
+            clip=False,
+        )
         for lab in _blocking_surface(seq, bb):
             key = lab or "failed trace"
             clipped[key] = clipped.get(key, 0) + 1
@@ -113,15 +124,20 @@ def vignetting_at_field(system: OpticalSystem, field_fraction: float = 0.0,
         field_fraction=field_fraction,
         field_angle=chief_ray_image_angle(system, field_fraction),
         throughput=passing / n if n else 1.0,
-        pupil_samples=n, passing_samples=passing, clipped_by=clipped,
+        pupil_samples=n,
+        passing_samples=passing,
+        clipped_by=clipped,
     )
 
 
-def vignetting_analysis(system: OpticalSystem, num_fields: int = 11,
-                        num_rays: int = 21) -> dict:
+def vignetting_analysis(
+    system: OpticalSystem, num_fields: int = 11, num_rays: int = 21
+) -> dict:
     """Vignetting across the field and the worst case."""
-    results = [vignetting_at_field(system, float(f), num_rays)
-               for f in np.linspace(0.0, 1.0, num_fields)]
+    results = [
+        vignetting_at_field(system, float(f), num_rays)
+        for f in np.linspace(0.0, 1.0, num_fields)
+    ]
     worst = min(results, key=lambda r: r.throughput)
     return {
         "fields": [r.as_dict() for r in results],
@@ -138,12 +154,15 @@ def vignetting_analysis(system: OpticalSystem, num_fields: int = 11,
 # Relative illumination
 # =============================================================================
 
+
 def cos4_falloff(field_angle: float) -> float:
     """Thin-lens cos^4 obliquity law (reference only)."""
     return math.cos(field_angle) ** 4
 
 
-def projected_solid_angle(system: OpticalSystem, field_fraction: float, n: int = 31) -> float:
+def projected_solid_angle(
+    system: OpticalSystem, field_fraction: float, n: int = 31
+) -> float:
     """
     Projected solid angle (sr) of the real ray bundle converging on the image
     of a field point: the integral over the stop of the Jacobian of the
@@ -167,8 +186,9 @@ def projected_solid_angle(system: OpticalSystem, field_fraction: float, n: int =
     h = 1e-3
     px = np.concatenate([x + h, x - h, x, x])
     py = np.concatenate([y, y, y + h, y - h])
-    free, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, px, py,
-                                     seq=seq, fo=fo, clip=False)
+    free, _, _ = rt.trace_field_rays(
+        system, 0.0, field_fraction, px, py, seq=seq, fo=fo, clip=False
+    )
     real, _, _ = rt.trace_field_rays(system, 0.0, field_fraction, x, y, seq=seq, fo=fo)
     D = (free.directions @ seq.image_rotation).reshape(4, -1, 3)
     ok = real.valid & free.valid.reshape(4, -1).all(axis=0)
@@ -198,8 +218,9 @@ class RelativeIlluminationPoint:
         }
 
 
-def relative_illumination(system: OpticalSystem, num_fields: int = 11,
-                          num_rays: int = 31) -> dict:
+def relative_illumination(
+    system: OpticalSystem, num_fields: int = 11, num_rays: int = 31
+) -> dict:
     """Relative illumination across the field (exact projected solid angle)."""
     fields = np.linspace(0.0, 1.0, num_fields)
     omega0 = projected_solid_angle(system, 0.0, num_rays)
@@ -209,11 +230,16 @@ def relative_illumination(system: OpticalSystem, num_fields: int = 11,
     for f in fields:
         ang = chief_ray_image_angle(system, float(f))
         v = vignetting_at_field(system, float(f), min(num_rays, 21))
-        pts.append(RelativeIlluminationPoint(
-            field_fraction=float(f), field_angle=ang, cos4_factor=cos4_falloff(ang),
-            vignetting_factor=v.throughput,
-            relative_illumination=projected_solid_angle(system, float(f), num_rays) / omega0,
-        ))
+        pts.append(
+            RelativeIlluminationPoint(
+                field_fraction=float(f),
+                field_angle=ang,
+                cos4_factor=cos4_falloff(ang),
+                vignetting_factor=v.throughput,
+                relative_illumination=projected_solid_angle(system, float(f), num_rays)
+                / omega0,
+            )
+        )
     edge = pts[-1]
     return {
         "points": [p.as_dict() for p in pts],
@@ -231,6 +257,7 @@ def relative_illumination(system: OpticalSystem, num_fields: int = 11,
 # MTF field and focus maps
 # =============================================================================
 
+
 def _working_f_number(system) -> float:
     """Working F-number 1 / (2 NA') from the real image-space marginal ray."""
     return 1.0 / (2.0 * pp.image_space_na(system))
@@ -239,12 +266,19 @@ def _working_f_number(system) -> float:
 def _mtf_values(system, field_fraction, freqs_m, grid, defocus=0.0):
     g = pp.wavefront_grid(system, field_fraction, grid, defocus=defocus)
     m = pp.mtf(g)
-    return ([pp.mtf_at(m, f, "tangential") for f in freqs_m],
-            [pp.mtf_at(m, f, "sagittal") for f in freqs_m], g)
+    return (
+        [pp.mtf_at(m, f, "tangential") for f in freqs_m],
+        [pp.mtf_at(m, f, "sagittal") for f in freqs_m],
+        g,
+    )
 
 
-def mtf_field_map(system: OpticalSystem, frequencies: Optional[list] = None,
-                  num_fields: int = 11, num_rays: int = 32) -> dict:
+def mtf_field_map(
+    system: OpticalSystem,
+    frequencies: Optional[list] = None,
+    num_fields: int = 11,
+    num_rays: int = 32,
+) -> dict:
     """
     Diffraction MTF (tangential and sagittal) versus field and frequency.
 
@@ -273,9 +307,14 @@ def mtf_field_map(system: OpticalSystem, frequencies: Optional[list] = None,
     }
 
 
-def mtf_focus_map(system: OpticalSystem, frequencies: Optional[list] = None,
-                  defocus_range: tuple = (-50e-6, 50e-6), num_points: int = 21,
-                  field_fraction: float = 0.0, num_rays: int = 32) -> dict:
+def mtf_focus_map(
+    system: OpticalSystem,
+    frequencies: Optional[list] = None,
+    defocus_range: tuple = (-50e-6, 50e-6),
+    num_points: int = 21,
+    field_fraction: float = 0.0,
+    num_rays: int = 32,
+) -> dict:
     """
     Tangential diffraction MTF versus image-plane position and frequency.
     Best focus is judged at the highest frequency that keeps contrast
@@ -284,7 +323,10 @@ def mtf_focus_map(system: OpticalSystem, frequencies: Optional[list] = None,
     freqs_mm = [float(f) for f in (frequencies or [20.0, 40.0, 60.0, 80.0, 100.0])]
     freqs_m = [f * 1e3 for f in freqs_mm]
     positions = np.linspace(defocus_range[0], defocus_range[1], num_points)
-    rows = [_mtf_values(system, field_fraction, freqs_m, num_rays, float(d))[0] for d in positions]
+    rows = [
+        _mtf_values(system, field_fraction, freqs_m, num_rays, float(d))[0]
+        for d in positions
+    ]
     eval_index = 0
     for c in range(len(freqs_mm) - 1, -1, -1):
         if max(r[c] for r in rows) > 0.05:
@@ -310,8 +352,13 @@ def mtf_focus_map(system: OpticalSystem, frequencies: Optional[list] = None,
     }
 
 
-def illumination_summary(system: OpticalSystem, num_fields: int = 11, num_rays: int = 21,
-                         focus_points: int = 21, include_mtf: bool = True) -> dict:
+def illumination_summary(
+    system: OpticalSystem,
+    num_fields: int = 11,
+    num_rays: int = 21,
+    focus_points: int = 21,
+    include_mtf: bool = True,
+) -> dict:
     """
     Vignetting, relative illumination and (optionally) MTF maps. The
     "meets_50pct_rule" flag reports whether edge illumination is at least
