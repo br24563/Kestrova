@@ -61,8 +61,12 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
       c.type === "thin_lens" || c.type === "thick_lens" || c.type === "spherical_surface",
   );
 
-  const selectedComp = comps.find((c) => c.id === componentId);
+  // The selection can be stale after the system changes (e.g. a new preset).
+  const activeId = comps.some((c) => c.id === componentId) ? componentId : comps[0]?.id ?? "";
+  const selectedComp = comps.find((c) => c.id === activeId);
   const fields = selectedComp ? FIELDS_BY_TYPE[selectedComp.type] ?? ["position"] : ["position"];
+  const activeField = fields.includes(field) ? field : fields[0];
+  const activeSweepField = fields.includes(sweepField) ? sweepField : fields[0];
 
   const handleComponentChange = (id: string) => {
     setComponentId(id);
@@ -78,7 +82,7 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
     // Default bounds if not provided
     let lo = parseFloat(minVal);
     let hi = parseFloat(maxVal);
-    const current = selectedComp ? Number(selectedComp[field as keyof EditableComponent]) : 0.01;
+    const current = selectedComp ? Number(selectedComp[activeField as keyof EditableComponent]) : 0.01;
     if (isNaN(lo)) lo = current * 0.01;
     if (isNaN(hi)) hi = current * 2;
 
@@ -91,7 +95,7 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
         system,
         objective,
         target: objective !== "rms_spot" && target !== "" ? parseFloat(target) : undefined,
-        params: [{ component_id: componentId, field }],
+        params: [{ component_id: activeId, field: activeField }],
         bounds: [[lo, hi]],
       });
       setResult(res);
@@ -123,7 +127,7 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
     try {
       const res = await runSweep({
         system,
-        param: { component_id: componentId, field: sweepField },
+        param: { component_id: activeId, field: activeSweepField },
         values,
       });
       setSweepResults(res);
@@ -147,7 +151,7 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
             <div>
               <label className="block text-xs text-gray-600 mb-1">Component</label>
               <select
-                value={componentId}
+                value={activeId}
                 onChange={(e) => handleComponentChange(e.target.value)}
                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
               >
@@ -159,7 +163,7 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
             <div>
               <label className="block text-xs text-gray-600 mb-1">Field</label>
               <select
-                value={field}
+                value={activeField}
                 onChange={(e) => setField(e.target.value)}
                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
               >
@@ -262,7 +266,7 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Field</label>
                 <select
-                  value={sweepField}
+                  value={activeSweepField}
                   onChange={(e) => setSweepField(e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 >
@@ -317,7 +321,7 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
                 <table className="w-full text-left">
                   <thead>
                     <tr className="text-gray-500">
-                      <th className="py-0.5 pr-2">{sweepField} ({displayUnit})</th>
+                      <th className="py-0.5 pr-2">{activeSweepField} ({displayUnit})</th>
                       <th className="py-0.5 pr-2">EFL ({displayUnit})</th>
                       <th className="py-0.5 pr-2">Mag</th>
                       <th className="py-0.5">RMS ({displayUnit})</th>

@@ -534,6 +534,14 @@ def high_yield_optimize(
     """
     if config is None:
         config = OptimizationConfig()
+    if len(params) != len(bounds):
+        raise ValueError("params and bounds must have the same length.")
+    # Validate parameters up front: errors inside differential_evolution are
+    # re-wrapped by SciPy into an unhelpful RuntimeError.
+    for spec, (lo, hi) in zip(params, bounds):
+        if not lo < hi:
+            raise ValueError(f"Empty bounds [{lo}, {hi}] for {spec}")
+        update_component(system, spec["component_id"], **{spec["field"]: 0.5 * (lo + hi)})
 
     def yield_aware_objective(x: np.ndarray) -> float:
         """Objective that penalizes low yield."""

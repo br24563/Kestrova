@@ -79,12 +79,30 @@ export interface AIProviderInfo {
 const API_BASE = "/api";
 
 /**
+ * The reason a request failed: the backend's `detail` message when it sent
+ * one (e.g. "Image space is afocal ..."), otherwise the HTTP status text.
+ */
+async function errorDetail(response: Response): Promise<string> {
+  try {
+    const body = await response.clone().json();
+    if (body && typeof body.detail === "string") {
+      return Array.isArray(body.errors) && body.errors.length
+        ? `${body.detail}: ${body.errors.join("; ")}`
+        : body.detail;
+    }
+  } catch {
+    // not JSON; fall through
+  }
+  return response.statusText;
+}
+
+/**
  * Fetch the default two-lens optical system from the backend.
  */
 export async function getDefaultSystem(): Promise<SystemResponse> {
   const response = await fetch(`${API_BASE}/system/default`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch default system: ${response.statusText}`);
+    throw new Error(`Failed to fetch default system: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -113,7 +131,7 @@ export async function traceRays(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to trace rays: ${response.statusText}`);
+    throw new Error(`Failed to trace rays: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -142,7 +160,7 @@ export async function analyzeSystem(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to analyze system: ${response.statusText}`);
+    throw new Error(`Failed to analyze system: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -163,7 +181,7 @@ export async function validateSystem(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to validate system: ${response.statusText}`);
+    throw new Error(`Failed to validate system: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -174,7 +192,7 @@ export async function validateSystem(
 export async function listSystems(): Promise<SystemMetadata[]> {
   const response = await fetch(`${API_BASE}/systems`);
   if (!response.ok) {
-    throw new Error(`Failed to list systems: ${response.statusText}`);
+    throw new Error(`Failed to list systems: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -192,7 +210,7 @@ export async function saveSystem(
     body: JSON.stringify({ name, system }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to save system: ${response.statusText}`);
+    throw new Error(`Failed to save system: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -203,7 +221,7 @@ export async function saveSystem(
 export async function loadSystem(id: number): Promise<SavedSystemResponse> {
   const response = await fetch(`${API_BASE}/systems/${id}`);
   if (!response.ok) {
-    throw new Error(`Failed to load system: ${response.statusText}`);
+    throw new Error(`Failed to load system: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -216,7 +234,7 @@ export async function deleteSystem(id: number): Promise<void> {
     method: "DELETE",
   });
   if (!response.ok) {
-    throw new Error(`Failed to delete system: ${response.statusText}`);
+    throw new Error(`Failed to delete system: ${await errorDetail(response)}`);
   }
 }
 
@@ -235,7 +253,7 @@ export async function optimizeSystem(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to optimize: ${response.statusText}`);
+    throw new Error(`Failed to optimize: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -253,7 +271,7 @@ export async function runSweep(request: SweepRequest): Promise<SweepPoint[]> {
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to run sweep: ${response.statusText}`);
+    throw new Error(`Failed to run sweep: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -275,7 +293,7 @@ export async function analyzeAberration(
     body: JSON.stringify({ system, wavelengths }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze aberration: ${response.statusText}`);
+    throw new Error(`Failed to analyze aberration: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -288,7 +306,7 @@ export async function analyzeAberration(
 export async function getAIProvider(): Promise<AIProviderInfo> {
   const response = await fetch(`${API_BASE}/ai/provider`);
   if (!response.ok) {
-    throw new Error(`Failed to get AI provider: ${response.statusText}`);
+    throw new Error(`Failed to get AI provider: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -310,7 +328,7 @@ export async function interpretPrompt(
     body: JSON.stringify({ system, prompt }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to interpret prompt: ${response.statusText}`);
+    throw new Error(`Failed to interpret prompt: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -332,7 +350,7 @@ export async function executeAICommand(
     body: JSON.stringify({ system, command }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to execute AI command: ${response.statusText}`);
+    throw new Error(`Failed to execute AI command: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -353,7 +371,7 @@ export async function analyzeDiffraction(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze diffraction: ${response.statusText}`);
+    throw new Error(`Failed to analyze diffraction: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -374,7 +392,7 @@ export async function analyzeSeidel(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze Seidel aberrations: ${response.statusText}`);
+    throw new Error(`Failed to analyze Seidel aberrations: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -394,7 +412,7 @@ export async function runToleranceAnalysis(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to run tolerance analysis: ${response.statusText}`);
+    throw new Error(`Failed to run tolerance analysis: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -414,7 +432,7 @@ export async function compareSystems(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to compare systems: ${response.statusText}`);
+    throw new Error(`Failed to compare systems: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -443,7 +461,7 @@ export interface PresetResponse {
 export async function getPresets(): Promise<PresetInfo[]> {
   const response = await fetch(`${API_BASE}/presets`);
   if (!response.ok) {
-    throw new Error(`Failed to get presets: ${response.statusText}`);
+    throw new Error(`Failed to get presets: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -457,7 +475,7 @@ export async function getPresets(): Promise<PresetInfo[]> {
 export async function getPreset(presetId: string): Promise<PresetResponse> {
   const response = await fetch(`${API_BASE}/presets/${presetId}`);
   if (!response.ok) {
-    throw new Error(`Failed to get preset: ${response.statusText}`);
+    throw new Error(`Failed to get preset: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -474,7 +492,7 @@ export async function healthCheck(): Promise<{
 }> {
   const response = await fetch(`${API_BASE}/health`);
   if (!response.ok) {
-    throw new Error(`Health check failed: ${response.statusText}`);
+    throw new Error(`Health check failed: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -502,7 +520,7 @@ export async function analyzeGhosts(
     body: JSON.stringify({ system, n_reflections: nReflections, threshold }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze ghosts: ${response.statusText}`);
+    throw new Error(`Failed to analyze ghosts: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -536,7 +554,7 @@ export async function analyzeStrayLight(
     }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze stray light: ${response.statusText}`);
+    throw new Error(`Failed to analyze stray light: ${await errorDetail(response)}`);
   }
   return response.json();
 }
@@ -556,7 +574,7 @@ export async function computePST(
     body: JSON.stringify({ system, angles }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to compute PST: ${response.statusText}`);
+    throw new Error(`Failed to compute PST: ${await errorDetail(response)}`);
   }
   return response.json();
 }

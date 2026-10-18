@@ -783,7 +783,9 @@ async def ai_interpret(request: AIInterpretRequest):
             model=os.environ.get("OLLAMA_MODEL", "llama3.2"),
             ollama_url=os.environ.get("OLLAMA_URL", "http://localhost:11434"),
         )
-        commands = provider.interpret(request.prompt)
+        commands = provider.interpret(
+            request.prompt,
+            {"component_ids": [c.id for c in request.system.components]})
         return AIInterpretResponse(
             commands=commands,
             message=f"Interpreted {len(commands)} command(s).",
@@ -1430,9 +1432,9 @@ async def ai_explain(request: ExplainRequest):
             from ai.explanations import diagnose_system
             diagnosis = diagnose_system(request.system)
             response = CopilotResponse(
-                answer=" ".join(diagnosis["findings"][0].get('message', '') for _ in diagnosis["findings"]),
+                answer=" ".join(f["message"] for f in diagnosis["findings"]) or diagnosis["summary"],
                 citations=[f"Finding: {f['message']}" for f in diagnosis["findings"]],
-                confidence=0.8,
+                confidence=1.0,
                 suggested_actions=[f"Suggestion: {f['suggestion']}" for f in diagnosis["findings"]],
                 verified=True,
             )
@@ -1442,7 +1444,7 @@ async def ai_explain(request: ExplainRequest):
             response = CopilotResponse(
                 answer=" ".join(explanation["parts"]),
                 citations=[f"Metric: {k}={v}" for k, v in explanation.get("metrics", {}).items()],
-                confidence=0.75,
+                confidence=1.0,
                 suggested_actions=["Ask about specific aberrations", "Ask about optimization suggestions"],
                 verified=True,
             )
@@ -1808,28 +1810,28 @@ async def cad_import(file: UploadFile = File(...)):
         Mesh data and statistics.
     """
     from optics.nsc.cad import import_cad_file
+    from pathlib import Path
     import tempfile
 
     try:
-        # Save uploaded file to temp location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
-
-        # Import the file
-        mesh = import_cad_file(tmp_path)
-
-        # Clean up
-        os.unlink(tmp_path)
+        # Save the upload to a closed temp file (Windows cannot reopen an
+        # open NamedTemporaryFile), import it, and always remove it.
+        fd, tmp_path = tempfile.mkstemp(suffix=Path(file.filename or "").suffix)
+        try:
+            with os.fdopen(fd, "wb") as tmp:
+                tmp.write(await file.read())
+            mesh = import_cad_file(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
         return {
             "success": True,
             "filename": file.filename,
             "mesh": {
-                "name": mesh.name,
+                "name": Path(file.filename or "mesh").stem,
                 "num_triangles": mesh.num_triangles,
-                "num_vertices": mesh.num_vertices,
+                "num_vertices": len({(v.x, v.y, v.z) for t in mesh.triangles
+                                     for v in (t.v0, t.v1, t.v2)}),
                 "bbox_min": [mesh.bbox_min.x, mesh.bbox_min.y, mesh.bbox_min.z] if mesh.bbox_min else None,
                 "bbox_max": [mesh.bbox_max.x, mesh.bbox_max.y, mesh.bbox_max.z] if mesh.bbox_max else None,
             }

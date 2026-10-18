@@ -98,6 +98,31 @@ class RuleBasedParser:
 
     def parse(self, prompt: str, context: Optional[dict] = None) -> list[AICommand]:
         """
+        Parse a prompt into commands, keeping component ids as written.
+
+        Matching is case-insensitive, so ids come out of the matcher in
+        lower case; they are mapped back to the system's own id (from
+        ``context["component_ids"]``) or to their spelling in the prompt.
+        """
+        commands = self._parse(prompt, context)
+        known = {i.lower(): i for i in (context or {}).get("component_ids", [])}
+
+        def restore(cid: str) -> str:
+            if cid.lower() in known:
+                return known[cid.lower()]
+            m = re.search(re.escape(cid), prompt, re.IGNORECASE)
+            return m.group(0) if m else cid
+
+        for cmd in commands:
+            if getattr(cmd, "component_id", None):
+                cmd.component_id = restore(cmd.component_id)
+            for spec in getattr(cmd, "params", None) or []:
+                if isinstance(spec, dict) and spec.get("component_id"):
+                    spec["component_id"] = restore(spec["component_id"])
+        return commands
+
+    def _parse(self, prompt: str, context: Optional[dict] = None) -> list[AICommand]:
+        """
         Parse a prompt into a list of AICommand objects.
 
         Args:

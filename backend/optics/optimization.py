@@ -304,6 +304,12 @@ def optimize_system(
     """
     if len(params) != len(bounds):
         raise ValueError("params and bounds must have the same length.")
+    # Check every parameter against the system before optimizing: an error
+    # raised inside differential_evolution is re-wrapped as a RuntimeError.
+    for spec, (lo, hi) in zip(params, bounds):
+        if not lo < hi:
+            raise ValueError(f"Empty bounds [{lo}, {hi}] for {spec}")
+        _set_parameter(system, spec, 0.5 * (lo + hi))
 
     constraints = constraints or []
 
