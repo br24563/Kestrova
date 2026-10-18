@@ -5,6 +5,7 @@ These tests verify the lensmaker's equation and thick lens ray tracing.
 """
 
 import pytest
+from optics.materials import refractive_index
 from optics.models import (
     OpticalSystem, ThickLens, Object, ImagePlane, AnalysisSettings,
 )
@@ -115,7 +116,8 @@ class TestThickLensTracing:
         """The EFL of a thick lens should match the lensmaker's equation."""
         system = make_thick_lens_system()
         f_eff = effective_focal_length(system)
-        expected = lensmaker_focal_length(0.1, -0.1, 0.01, 1.5168)
+        n = refractive_index("N-BK7", system.analysis_settings.wavelength)
+        expected = lensmaker_focal_length(0.1, -0.1, 0.01, n)
         assert f_eff == pytest.approx(expected, rel=1e-6)
 
     def test_thick_lens_paraxial_image_position(self):

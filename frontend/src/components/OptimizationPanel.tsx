@@ -18,7 +18,7 @@ import type {
   LengthUnit,
   SweepPoint,
 } from "../types";
-import { fromMeters } from "../types";
+import { fmtLen, fmtNum, fromMeters } from "../types";
 import { optimizeSystem, runSweep } from "../api";
 
 interface OptimizationPanelProps {
@@ -327,8 +327,8 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
                     {sweepResults.map((p, i) => (
                       <tr key={i} className="border-t border-gray-200">
                         <td className="py-0.5 pr-2">{fromMeters(p.value, displayUnit).toFixed(3)}</td>
-                        <td className="py-0.5 pr-2">{fromMeters(p.analysis.effective_focal_length, displayUnit).toFixed(3)}</td>
-                        <td className="py-0.5 pr-2">{p.analysis.magnification.toFixed(3)}</td>
+                        <td className="py-0.5 pr-2">{fmtLen(p.analysis.effective_focal_length, displayUnit, 3)}</td>
+                        <td className="py-0.5 pr-2">{fmtNum(p.analysis.magnification, 3)}</td>
                         <td className="py-0.5">{fromMeters(p.analysis.rms_spot_radius, displayUnit).toFixed(3)}</td>
                       </tr>
                     ))}

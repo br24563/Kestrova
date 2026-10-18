@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=AI Optical Design Engineer
+Comment=Professional Optical Design Software
+Exec=/opt/ai-optical-design-engineer/AppRun
+Icon=ai-optical-design-engineer
+Terminal=false
+Type=Application
+Categories=Science;Engineering;Physics;
+Keywords=optics;lens;design;engineering;
+StartupNotify=true

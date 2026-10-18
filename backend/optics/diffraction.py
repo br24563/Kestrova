@@ -1,396 +1,256 @@
 """
-Diffraction analysis (Fraunhofer, diffraction-limited performance).
+Diffraction analysis: Airy pattern, PSF, encircled energy, MTF/OTF.
 
-This module computes diffraction-based performance metrics for an optical
-system using the standard formulas for a circular aperture:
+Two kinds of result are provided:
 
-    - Airy disk radius
-    - Point Spread Function (PSF)  - Fraunhofer diffraction pattern
-    - Encircled energy fraction
-    - Modulation Transfer Function (MTF)
-    - Optical Transfer Function (OTF)
-    - Diffraction-limited assessment
+- **Diffraction limit** of a circular pupil of image-space numerical
+  aperture NA (Born & Wolf, *Principles of Optics*, sec. 8.5; Goodman,
+  *Introduction to Fourier Optics*, sec. 6.3):
 
-All formulas follow the classical Fourier-optics results for a
-diffraction-limited circular aperture (Born & Wolf, Hecht "Optics"):
+      PSF:  I(r) = [2 J1(x)/x]^2,      x = 2 pi NA r / lambda
+      EE:   E(r) = 1 - J0(x)^2 - J1(x)^2
+      MTF:  (2/pi)(acos u - u sqrt(1 - u^2)),  u = nu / nu_c,  nu_c = 2 NA / lambda
+      Airy radius (first zero) = 0.61 lambda / NA = 1.22 lambda N_w
 
-    PSF:      I(r) = | 2 J1(x) / x |^2,   x = (2 pi / lambda) NA r
-    Energy:   E(x) = 1 - J0(x)^2 - J1(x)^2
-    MTF:      u = f / f_c,  f_c = 1 / (lambda F)
-              MTF(u) = 2/pi ( arccos(u) - u sqrt(1 - u^2) ), u in [0,1]
-    OTF:      equals the MTF for an aberration-free system (zero phase).
-    Airy:     r_airy = 1.22 lambda F  =  0.61 lambda / NA
+  with N_w = 1/(2 NA) the working F-number.
 
-A system is reported diffraction-limited (educational criterion) when its
-RMS spot radius at the image plane is no larger than the Airy disk
-first-minimum radius.
+- **The system's actual PSF and MTF**, computed from the real-ray wavefront
+  by FFT (:mod:`optics.pupil`), including aberrations and vignetting.
 
-All values are in SI base units (meters, radians).
+A system is reported diffraction-limited when its Strehl ratio is at
+least 0.8 (the Marechal criterion, RMS wavefront error <= lambda/14).
+
+All lengths are in meters; frequencies in cycles per meter.
 """
 
 import math
 from typing import Optional
 
 import numpy as np
-from scipy.special import j1, j0
+from scipy.special import j0, j1
 
 from .models import OpticalSystem
-from .analysis import analyze_system
+from . import pupil as pp
 
-# Defaults used when a system has no usable aperture / F-number.
-_DEFAULT_F_NUMBER = 10.0
-_DEFAULT_NA = 0.05
-
-# Wavelength used when the analysis settings do not supply one.
-_DEFAULT_WAVELENGTH = 550e-9
+MARECHAL_STREHL = 0.8
 
 
-def _get_wavelength(wavelength: Optional[float]) -> float:
-    """Return the wavelength (meters) to use, defaulting to 550 nm."""
+# ---------------------------------------------------------------------------
+# Inputs
+# ---------------------------------------------------------------------------
+
+def _wavelength(system: Optional[OpticalSystem], wavelength: Optional[float]) -> float:
     if wavelength is not None and wavelength > 0:
         return float(wavelength)
-    return _DEFAULT_WAVELENGTH
-
-
-def _valid_f_number(f_number: Optional[float]) -> bool:
-    return f_number is not None and math.isfinite(f_number) and f_number > 0
-
-
-def _valid_na(na: Optional[float]) -> bool:
-    return na is not None and math.isfinite(na) and na > 0
-
-
-def _system_aperture(system: OpticalSystem, wavelength: Optional[float]) -> tuple[float, float, float]:
-    """
-    Extract (na, f_number, wavelength) from an analyzed system.
-
-    Falls back to sensible defaults when a system yields zero/infinite
-    values (e.g. a system with no lenses).
-    """
-    analysis = analyze_system(system)
-    na = analysis.numerical_aperture if _valid_na(analysis.numerical_aperture) else _DEFAULT_NA
-    f_number = analysis.f_number if _valid_f_number(analysis.f_number) else _DEFAULT_F_NUMBER
-    wl = _get_wavelength(system.analysis_settings.wavelength if not wavelength else wavelength)
-    return na, f_number, wl
-
-
-# ---------------------------------------------------------------------------
-# Airy disk
-# ---------------------------------------------------------------------------
-
-def airy_disk_radius(
-    system: Optional[OpticalSystem] = None,
-    na: Optional[float] = None,
-    f_number: Optional[float] = None,
-    wavelength: Optional[float] = None,
-) -> float:
-    """
-    Radius of the first dark ring of the Airy disk (meters).
-
-    For a circular aperture the first zero of the diffraction pattern is
-    at r = 1.22 * lambda * F  (equivalently 0.61 * lambda / NA). When a
-    system is supplied its effective F-number and NA are used; explicit
-    values can be supplied instead.
-
-    Args:
-        system: Optional optical system.
-        na: Optional numerical aperture (dimensionless).
-        f_number: Optional F-number (dimensionless).
-        wavelength: Optional wavelength (meters).
-
-    Returns:
-        Airy disk radius (meters).
-    """
     if system is not None:
-        na, f_number, wl = _system_aperture(system, wavelength)
-    else:
-        wl = _get_wavelength(wavelength)
-
-    if _valid_na(na):
-        return 0.61 * wl / na
-    f = _get_f_or_default(f_number)
-    return 1.22 * wl * f
+        return system.analysis_settings.wavelength
+    raise ValueError("A wavelength is required")
 
 
-def _get_f_or_default(f_number: Optional[float]) -> float:
-    """Return the F-number, falling back to the default."""
-    return f_number if _valid_f_number(f_number) else _DEFAULT_F_NUMBER
+def _na(system: Optional[OpticalSystem], na: Optional[float], f_number: Optional[float],
+        wavelength: float) -> float:
+    """Image-space NA from an explicit value, a working F-number, or the system."""
+    if na is not None:
+        if not (math.isfinite(na) and na > 0):
+            raise ValueError("NA must be positive")
+        return float(na)
+    if f_number is not None:
+        if not (math.isfinite(f_number) and f_number > 0):
+            raise ValueError("F-number must be positive")
+        return 1.0 / (2.0 * f_number)
+    if system is None:
+        raise ValueError("Give a system, an NA or a working F-number")
+    value = pp.image_space_na(system, wavelength)
+    if not value > 0:
+        raise ValueError("The system has no finite image-space aperture")
+    return value
 
 
 # ---------------------------------------------------------------------------
-# PSF (Fraunhofer diffraction pattern)
+# Diffraction-limit formulas
 # ---------------------------------------------------------------------------
 
-def psf(
-    system: Optional[OpticalSystem] = None,
-    na: Optional[float] = None,
-    wavelength: Optional[float] = None,
-    max_radius: Optional[float] = None,
-    num_points: int = 256,
-) -> dict:
-    """
-    Compute the normalized Fraunhofer PSF for a circular aperture.
+def airy_disk_radius(system: Optional[OpticalSystem] = None, na: Optional[float] = None,
+                     f_number: Optional[float] = None,
+                     wavelength: Optional[float] = None) -> float:
+    """Radius of the first dark ring, 0.61 lambda / NA (meters)."""
+    wl = _wavelength(system, wavelength)
+    return 0.61 * wl / _na(system, na, f_number, wl)
 
-    The PSF is the normalized intensity  I(r) / I(0):
 
-        I(r) = | 2 J1(x) / x |^2 ,   x = (2 pi / lambda) * NA * r
-
-    This is the ideal (diffraction-limited) PSF; it ignores aberrations.
-
-    Args:
-        system: Optional optical system (uses its NA and wavelength).
-        na: Optional numerical aperture (dimensionless).
-        wavelength: Optional wavelength (meters).
-        max_radius: Optional maximum image radius (meters). Defaults to
-            4 * Airy disk radius.
-        num_points: Number of radial samples.
-
-    Returns:
-        Dict with keys "r" (radial coordinates, meters) and "intensity"
-        (normalized, peak = 1 at r = 0).
-    """
-    if system is not None:
-        na, _, wl = _system_aperture(system, wavelength)
-    else:
-        na = _get_na_or_default(na)
-        wl = _get_wavelength(wavelength)
-
-    na_val = _get_na_or_default(na)
-
+def psf(system: Optional[OpticalSystem] = None, na: Optional[float] = None,
+        wavelength: Optional[float] = None, max_radius: Optional[float] = None,
+        num_points: int = 256, f_number: Optional[float] = None) -> dict:
+    """Diffraction-limited (Airy) PSF, normalised to 1 at r = 0."""
+    wl = _wavelength(system, wavelength)
+    a = _na(system, na, f_number, wl)
     if max_radius is None:
-        max_radius = 4.0 * airy_disk_radius(na=na_val, wavelength=wl)
-
+        max_radius = 4.0 * 0.61 * wl / a
     r = np.linspace(0.0, max_radius, num_points)
-    x = 2.0 * math.pi / wl * na_val * r
-
+    x = 2.0 * math.pi * a * r / wl
     intensity = np.ones_like(x)
-    mask = x > 1e-12
-    intensity[mask] = (2.0 * j1(x[mask]) / x[mask]) ** 2
-
+    m = x > 1e-12
+    intensity[m] = (2.0 * j1(x[m]) / x[m]) ** 2
     return {"r": r, "intensity": intensity}
 
 
-def _get_na_or_default(na: Optional[float]) -> float:
-    """Return the NA, falling back to the default."""
-    return na if _valid_na(na) else _DEFAULT_NA
+def encircled_energy(system: Optional[OpticalSystem] = None, na: Optional[float] = None,
+                     wavelength: Optional[float] = None, radius: Optional[float] = None,
+                     max_radius: Optional[float] = None, num_points: int = 256,
+                     f_number: Optional[float] = None) -> dict:
+    """Diffraction-limited encircled energy, 1 - J0(x)^2 - J1(x)^2."""
+    wl = _wavelength(system, wavelength)
+    a = _na(system, na, f_number, wl)
 
-
-# ---------------------------------------------------------------------------
-# Encircled energy
-# ---------------------------------------------------------------------------
-
-def encircled_energy(
-    system: Optional[OpticalSystem] = None,
-    na: Optional[float] = None,
-    wavelength: Optional[float] = None,
-    radius: Optional[float] = None,
-    max_radius: Optional[float] = None,
-    num_points: int = 256,
-) -> dict:
-    """
-    Fraction of the image energy enclosed within a radius.
-
-    For a circular pupil:
-
-        E(x) = 1 - J0(x)^2 - J1(x)^2 ,   x = (2 pi / lambda) * NA * r
-
-    Args:
-        system: Optional optical system.
-        na: Optional numerical aperture.
-        wavelength: Optional wavelength (meters).
-        radius: Optional single radius (meters). If given, evaluates the
-            enclosed fraction at just that radius.
-        max_radius: Optional max radius for the curve (meters). Defaults
-            to 3 * Airy disk radius.
-        num_points: Number of samples for the curve.
-
-    Returns:
-        Dict with:
-            - "r": radial coordinates (meters)
-            - "energy": enclosed-energy fraction (0..1)
-    """
-    if system is not None:
-        na, _, wl = _system_aperture(system, wavelength)
-    else:
-        na = _get_na_or_default(na)
-        wl = _get_wavelength(wavelength)
-
-    na_val = _get_na_or_default(na)
-
-    def fraction(rr: float) -> float:
-        x = 2.0 * math.pi / wl * na_val * float(rr)
-        if x < 1e-12:
-            return 0.0
-        return max(0.0, 1.0 - j0(x) ** 2 - j1(x) ** 2)
+    def frac(rr):
+        x = 2.0 * math.pi * a * np.asarray(rr, dtype=float) / wl
+        return np.clip(1.0 - j0(x) ** 2 - j1(x) ** 2, 0.0, 1.0)
 
     if radius is not None:
-        return {"radius": float(radius), "energy": [fraction(radius)]}
-
+        return {"radius": float(radius), "energy": [float(frac(radius))]}
     if max_radius is None:
-        max_radius = 3.0 * airy_disk_radius(na=na_val, wavelength=wl)
-
+        max_radius = 3.0 * 0.61 * wl / a
     r = np.linspace(0.0, max_radius, num_points)
-    energy = np.array([fraction(rr) for rr in r])
-    return {"r": r, "energy": energy}
+    return {"r": r, "energy": frac(r)}
 
 
-# ---------------------------------------------------------------------------
-# MTF / OTF
-# ---------------------------------------------------------------------------
-
-def _cutoff_frequency(system: Optional[OpticalSystem], wavelength: Optional[float]) -> float:
-    """Spatial-frequency cutoff (cycles per meter in the image plane).
-
-    For an incoherent circular-aperture system:  f_c = 1 / (lambda * F).
-    """
-    if system is not None:
-        _, f_number, wl = _system_aperture(system, wavelength)
-        return 1.0 / (wl * f_number)
-    wl = _get_wavelength(wavelength)
-    return 1.0 / (wl * _DEFAULT_F_NUMBER)
-
-
-def mtf(
-    system: Optional[OpticalSystem] = None,
-    frequencies: Optional[np.ndarray] = None,
-    num_points: int = 128,
-    wavelength: Optional[float] = None,
-) -> dict:
-    """
-    Modulation Transfer Function (MTF) of the system.
-
-    The incoherent MTF of a diffraction-limited circular aperture is:
-
-        u = f / f_c,   f_c = 1 / (lambda * F)
-
-        MTF(u) = 2/pi ( arccos(u) - u * sqrt(1 - u^2) ),  u in [0, 1]
-
-    For u > 1 the MTF is zero (beyond cutoff).
-
-    Args:
-        system: Optional optical system (uses its F-number and wavelength).
-        frequencies: Optional array of spatial frequencies (cycles/m).
-        num_points: Number of samples between 0 and the cutoff.
-        wavelength: Optional wavelength (meters).
-
-    Returns:
-        Dict with "f" (cycles/m), "mtf" (0..1), and "f_c" (cutoff).
-    """
-    f_c = _cutoff_frequency(system, wavelength)
-
-    if frequencies is None:
-        frequencies = np.linspace(0.0, f_c, num_points)
-    else:
-        frequencies = np.asarray(frequencies, dtype=float)
-
-    u = frequencies / f_c
-    mtf_out = np.zeros_like(u, dtype=float)
+def mtf(system: Optional[OpticalSystem] = None, frequencies: Optional[np.ndarray] = None,
+        num_points: int = 128, wavelength: Optional[float] = None,
+        na: Optional[float] = None, f_number: Optional[float] = None) -> dict:
+    """Diffraction-limited MTF of a circular pupil (cycles/m)."""
+    wl = _wavelength(system, wavelength)
+    a = _na(system, na, f_number, wl)
+    f_c = 2.0 * a / wl
+    f = np.linspace(0.0, f_c, num_points) if frequencies is None else np.asarray(frequencies, float)
+    u = f / f_c
+    out = np.zeros_like(u)
     m = u < 1.0
-    uu = u[m]
-    mtf_out[m] = (2.0 / math.pi) * (
-        np.arccos(uu) - uu * np.sqrt(1.0 - uu * uu)
-    )
-    return {"f": frequencies, "mtf": mtf_out, "f_c": f_c}
+    out[m] = (2.0 / math.pi) * (np.arccos(u[m]) - u[m] * np.sqrt(1.0 - u[m] ** 2))
+    return {"f": f, "frequency": f, "mtf": out, "f_c": f_c}
 
 
-def otf(
-    system: Optional[OpticalSystem] = None,
-    frequencies: Optional[np.ndarray] = None,
-    num_points: int = 128,
-    wavelength: Optional[float] = None,
-) -> dict:
-    """
-    Optical Transfer Function (OTF) of the system.
-
-    For an aberration-free (diffraction-limited) system the OTF is real
-    and equals the MTF (zero phase).
-
-    Returns:
-        Dict with "f" (cycles/m), "otf" (complex array), "mtf" (modulus).
-    """
-    res = mtf(system, frequencies=frequencies, num_points=num_points,
-              wavelength=wavelength)
-    otf_val = res["mtf"].astype(complex)
-    return {"f": res["f"], "otf": otf_val, "mtf": res["mtf"], "f_c": res["f_c"]}
+def otf(system: Optional[OpticalSystem] = None, frequencies: Optional[np.ndarray] = None,
+        num_points: int = 128, wavelength: Optional[float] = None,
+        na: Optional[float] = None, f_number: Optional[float] = None) -> dict:
+    """Diffraction-limited OTF (real and equal to the MTF: zero phase)."""
+    res = mtf(system, frequencies, num_points, wavelength, na, f_number)
+    return {"f": res["f"], "otf": res["mtf"].astype(complex), "mtf": res["mtf"], "f_c": res["f_c"]}
 
 
 # ---------------------------------------------------------------------------
-# Diffraction-limited assessment
+# The system's actual (aberrated) diffraction performance
 # ---------------------------------------------------------------------------
 
-def diffraction_limited_check(system: OpticalSystem) -> dict:
+def _radial_profile(psf2d: np.ndarray, x: np.ndarray, num_points: int):
+    X, Y = np.meshgrid(x, x)
+    w = psf2d / psf2d.sum()
+    cx, cy = float((X * w).sum()), float((Y * w).sum())
+    R = np.hypot(X - cx, Y - cy)
+    rmax = 0.5 * (x[-1] - x[0]) * 0.9
+    edges = np.linspace(0.0, rmax, num_points + 1)
+    idx = np.digitize(R.ravel(), edges) - 1
+    sel = (idx >= 0) & (idx < num_points)
+    sums = np.bincount(idx[sel], weights=psf2d.ravel()[sel], minlength=num_points)
+    counts = np.bincount(idx[sel], minlength=num_points)
+    prof = np.where(counts > 0, sums / np.maximum(counts, 1), 0.0)
+    rc = 0.5 * (edges[:-1] + edges[1:])
+    enc = np.cumsum(np.bincount(idx[sel], weights=w.ravel()[sel], minlength=num_points))
+    return rc, prof, enc
+
+
+def system_diffraction(system: OpticalSystem, field_fraction: float = 0.0,
+                       grid: int = 64, wavelength: Optional[float] = None,
+                       num_points: int = 128) -> dict:
     """
-    Assess whether the system is diffraction-limited.
-
-    Educational criterion: the RMS spot radius at the image plane is no
-    larger than the Airy disk first-minimum radius.
-
-    Returns:
-        Dict with:
-            - "airy_disk_radius": Airy first-minimum radius (meters)
-            - "rms_spot_radius": measured RMS spot (meters)
-            - "is_diffraction_limited": bool
-            - "margin": airy_radius / max(rms_spot, small_eps)
+    Actual PSF, encircled energy and MTF of the system from its real-ray
+    wavefront at one field point.
     """
-    analysis = analyze_system(system)
-    rms = analysis.rms_spot_radius
-    airy = airy_disk_radius(system)
+    g = pp.wavefront_grid(system, field_fraction, grid, wavelength)
+    pres = pp.psf(g, pad=4)
+    r, prof, enc = _radial_profile(pres.intensity, pres.x, num_points)
+    mres = pp.mtf(g)
+    keep = mres.frequency <= mres.cutoff
+    return {
+        "field_fraction": field_fraction,
+        "wavelength": g.wavelength,
+        "na_image": g.na_image,
+        "strehl_ratio": pres.strehl,
+        "rms_wavefront": g.rms,
+        "peak_to_valley_wavefront": g.peak_to_valley,
+        "psf": {"r": r, "intensity": prof},
+        "encircled_energy": {"r": r, "energy": enc},
+        "mtf": {"frequency": mres.frequency[keep], "tangential": mres.tangential[keep],
+                "sagittal": mres.sagittal[keep], "cutoff": mres.cutoff},
+    }
 
-    margin = airy / rms if rms > 1e-15 else float("inf")
 
+def diffraction_limited_check(system: OpticalSystem, field_fraction: float = 0.0) -> dict:
+    """
+    Marechal test: diffraction-limited when Strehl >= 0.8.
+
+    Also reports the geometric RMS spot radius against the Airy radius for
+    reference (margin = Airy radius / RMS spot).
+    """
+    from .analysis import real_spot
+    g = pp.wavefront_grid(system, field_fraction, 64)
+    strehl = pp.strehl_ratio(g)
+    airy = 0.61 * g.wavelength / g.na_image
+    _, rms_spot, _, _, _ = real_spot(system, field_fraction)
     return {
         "airy_disk_radius": airy,
-        "rms_spot_radius": rms,
-        "is_diffraction_limited": rms <= airy,
-        "margin": margin,
+        "rms_spot_radius": rms_spot,
+        "strehl_ratio": strehl,
+        "rms_wavefront": g.rms,
+        "rms_wavefront_waves": g.rms / g.wavelength,
+        "criterion": "Strehl >= 0.8 (Marechal)",
+        "is_diffraction_limited": strehl >= MARECHAL_STREHL,
+        "margin": airy / rms_spot if rms_spot > 1e-15 else float("inf"),
     }
 
 
-# ---------------------------------------------------------------------------
-# Full diffraction analysis
-# ---------------------------------------------------------------------------
-
-def diffraction_analysis(
-    system: Optional[OpticalSystem] = None,
-    na: Optional[float] = None,
-    wavelength: Optional[float] = None,
-    frequencies: Optional[list] = None,
-    num_points: int = 128,
-) -> dict:
+def diffraction_analysis(system: Optional[OpticalSystem] = None, na: Optional[float] = None,
+                         wavelength: Optional[float] = None,
+                         frequencies: Optional[list] = None, num_points: int = 128,
+                         field_fraction: float = 0.0) -> dict:
     """
-    Run a complete diffraction analysis on the system.
-
-    Args:
-        system: The optical system.
-        na: Optional numerical aperture override.
-        wavelength: Optional wavelength override (meters).
-        frequencies: Optional list of spatial frequencies for MTF.
-        num_points: Number of samples for the PSF / energy curves.
-
-    Returns:
-        Dict combining the Airy radius, PSF, encircled energy, MTF, OTF,
-        and (when a system is supplied) the diffraction-limited check.
+    Diffraction analysis. With a system, the PSF, encircled energy and MTF
+    are the system's actual (aberrated) ones at ``field_fraction``, each
+    alongside the diffraction limit for the same NA. Without a system, only
+    the diffraction-limit curves for the given NA are returned.
     """
-    psf_data = psf(system, na=na, wavelength=wavelength, num_points=num_points)
-    ee_data = encircled_energy(
-        system, na=na, wavelength=wavelength, num_points=num_points
-    )
-    mtf_data = mtf(system, frequencies=frequencies, num_points=num_points,
-                   wavelength=wavelength)
-    otf_data = otf(system, frequencies=frequencies, num_points=num_points,
-                   wavelength=wavelength)
-
-    result = {
-        "psf": psf_data,
-        "encircled_energy": ee_data,
-        "mtf": mtf_data,
-        "otf": otf_data,
-        "airy_disk_radius": airy_disk_radius(
-            system, na=na, wavelength=wavelength
-        ),
+    if system is None:
+        wl = _wavelength(None, wavelength)
+        m = mtf(None, frequencies, num_points, wl, na)
+        return {
+            "psf": psf(None, na, wl, num_points=num_points),
+            "encircled_energy": encircled_energy(None, na, wl, num_points=num_points),
+            "mtf": {"frequency": m["f"], "mtf": m["mtf"], "cutoff": m["f_c"]},
+            "otf": otf(None, frequencies, num_points, wl, na),
+            "airy_disk_radius": airy_disk_radius(None, na, wavelength=wl),
+        }
+    wl = _wavelength(system, wavelength)
+    actual = system_diffraction(system, field_fraction, wavelength=wl, num_points=num_points)
+    a = actual["na_image"] if na is None else na
+    ideal_mtf = mtf(None, actual["mtf"]["frequency"], wavelength=wl, na=a)
+    return {
+        "psf": actual["psf"],
+        "encircled_energy": actual["encircled_energy"],
+        "mtf": {
+            "frequency": actual["mtf"]["frequency"],
+            "mtf": actual["mtf"]["tangential"],
+            "tangential": actual["mtf"]["tangential"],
+            "sagittal": actual["mtf"]["sagittal"],
+            "diffraction_limit": ideal_mtf["mtf"],
+            "cutoff": actual["mtf"]["cutoff"],
+        },
+        "diffraction_limit": {
+            "psf": psf(None, a, wl, num_points=num_points),
+            "encircled_energy": encircled_energy(None, a, wl, num_points=num_points),
+        },
+        "airy_disk_radius": 0.61 * wl / a,
+        "strehl_ratio": actual["strehl_ratio"],
+        "rms_wavefront": actual["rms_wavefront"],
+        "na_image": a,
+        "working_f_number": 1.0 / (2.0 * a),
+        "diffraction_limited": diffraction_limited_check(system, field_fraction),
     }
-
-    if system is not None:
-        result["diffraction_limited"] = diffraction_limited_check(system)
-
-    return result

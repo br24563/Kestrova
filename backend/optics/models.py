@@ -19,26 +19,16 @@ All angle values are in radians (SI base unit).
 All wavelength values are in meters.
 """
 
+import math
 from typing import Union, Literal, Annotated, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from .base import OpticalComponentBase
 
 
 # ---------------------------------------------------------------------------
 # Optical Components
 # ---------------------------------------------------------------------------
-
-class OpticalComponentBase(BaseModel):
-    """
-    Base model for all optical components.
-
-    Every component has a unique ID and a position along the optical axis
-    (z-axis, in meters). The position is measured from the origin, which
-    is typically the object position or the left edge of the optical bench.
-    """
-
-    id: str = Field(..., description="Unique identifier for this component")
-    position: float = Field(..., description="Position along optical axis (meters)")
-
 
 class ThinLens(OpticalComponentBase):
     """
@@ -58,6 +48,30 @@ class ThinLens(OpticalComponentBase):
     aperture_diameter: float = Field(..., description="Aperture diameter in meters")
     material: str = Field(default="N-BK7", description="Glass material name")
 
+    @field_validator('focal_length')
+    @classmethod
+    def validate_focal_length(cls, v):
+        if not isinstance(v, (int, float)):
+            raise ValueError("Focal length must be a number")
+        if math.isinf(v):
+            return float(v)  # Infinity is valid (flat surface)
+        if abs(v) < 1e-12:
+            raise ValueError("Focal length cannot be zero (or nearly zero)")
+        if abs(v) > 1e6:
+            raise ValueError("Focal length must be within reasonable bounds (|f| < 1000 km)")
+        return float(v)
+
+    @field_validator('aperture_diameter')
+    @classmethod
+    def validate_aperture(cls, v):
+        if not isinstance(v, (int, float)):
+            raise ValueError("Aperture diameter must be a number")
+        if v <= 0:
+            raise ValueError("Aperture diameter must be positive")
+        if v > 1e3:
+            raise ValueError("Aperture diameter must be within reasonable bounds (D < 10 m)")
+        return float(v)
+
 
 class SphericalSurface(OpticalComponentBase):
     """
@@ -73,9 +87,11 @@ class SphericalSurface(OpticalComponentBase):
     """
 
     type: Literal["spherical_surface"] = "spherical_surface"
-    radius: float = Field(..., description="Radius of curvature in meters")
+    radius: float = Field(..., description="Radius of curvature in meters (0 = flat)")
     thickness: float = Field(..., description="Thickness of the element in meters")
-    material: str = Field(default="N-BK7", description="Glass material name")
+    material: str = Field(default="N-BK7", description="Medium after the surface")
+    aperture_diameter: Optional[float] = Field(
+        default=None, description="Clear aperture in meters (None = unlimited)")
 
 
 class ThickLens(OpticalComponentBase):
@@ -112,19 +128,39 @@ class ApertureStop(OpticalComponentBase):
 
 class Mirror(OpticalComponentBase):
     """
-    A flat mirror.
+    A reflecting surface (flat, spherical or conic).
 
-    Included in the architecture for future use.
+    Light reverses its direction of travel along the axis at a mirror, so
+    a system containing mirrors is traced in the order the components are
+    listed, not sorted by position (see ``optics.raytrace``).
+
+    Sign convention: radius > 0 when the centre of curvature lies at larger
+    z than the vertex. A mirror met by light travelling in +z is concave
+    (converging) for radius < 0. radius = 0 means flat. conic = -1 is a
+    paraboloid.
     """
 
     type: Literal["mirror"] = "mirror"
     width: float = Field(..., description="Mirror width in meters")
+    radius: float = Field(default=0.0, description="Radius of curvature in meters (0 = flat)")
+    conic: float = Field(default=0.0, description="Conic constant (0 sphere, -1 paraboloid)")
+    aperture_diameter: Optional[float] = Field(
+        default=None, description="Clear aperture in meters (defaults to width)")
 
 
 # Discriminated union: allows the system to hold any component type
 # and automatically deserialize the correct type based on the "type" field.
+from .advanced_surfaces import (
+    AsphericSurface, OddAsphericSurface, QAsphericSurface,
+    ZernikeSurface, DiffractiveOpticalElement, ToricSurface,
+    CoordinateBreak,
+)
+
 OpticalComponent = Annotated[
-    Union[ThinLens, SphericalSurface, ThickLens, ApertureStop, Mirror],
+    Union[ThinLens, SphericalSurface, ThickLens, ApertureStop, Mirror,
+           AsphericSurface, OddAsphericSurface, QAsphericSurface,
+           ZernikeSurface, DiffractiveOpticalElement, ToricSurface,
+           CoordinateBreak],
     Field(discriminator="type"),
 ]
 
@@ -213,6 +249,27 @@ class OpticalSystem(BaseModel):
         default_factory=AnalysisSettings,
         description="Settings for ray tracing and analysis"
     )
+
+    @field_validator('wavelengths')
+    @classmethod
+    def validate_wavelengths(cls, v):
+        if not v:
+            raise ValueError("At least one wavelength must be specified")
+        for w in v:
+            if not isinstance(w, (int, float)):
+                raise ValueError("Wavelengths must be numbers")
+            if w <= 0:
+                raise ValueError("Wavelengths must be positive")
+            if w < 1e-10 or w > 1e-3:
+                raise ValueError("Wavelengths must be in reasonable range (1 nm to 1 mm)")
+        return v
+
+    @model_validator(mode='after')
+    def validate_unique_ids(self):
+        ids = [c.id for c in self.components]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Component IDs must be unique")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +392,7 @@ class AnalysisResult(BaseModel):
     )
     spot_points: list[list[float]] = Field(
         default_factory=list,
-        description="List of [y, z] spot positions at image plane (meters)"
+        description="Real-ray spot [x, y] positions in the image plane relative to the centroid (meters)"
     )
     is_image_real: bool = Field(
         ...,

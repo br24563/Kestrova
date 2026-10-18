@@ -1,171 +1,188 @@
 """
-Tests for the Seidel (third-order) monochromatic aberration analysis.
+Seidel (third-order) aberration tests against independent results.
 
-These tests verify that the five monochromatic aberrations are computed
-correctly for known optical systems using the exact real-ray tracer.
+References:
+- Spherical mirror, object at infinity: third-order longitudinal spherical
+  aberration h^2 / (4R) (e.g. W. J. Smith, Modern Optical Engineering).
+- Paraboloid, object at infinity: no spherical aberration at any order.
+- Petzval: image-surface sag -h'^2 / 2 * sum c (n' - n) / (n n') for an
+  image in air (Welford, Aberrations of Optical Systems, ch. 8).
+- Third-order values must approach exact real-ray values as the aperture
+  and field shrink, and scale as the third-order power laws.
+- An ideal (paraxial) lens images every conjugate without aberration.
 """
 
+import math
+
 import pytest
+
 from optics.models import (
-    OpticalSystem, ThinLens, ThickLens, Object, ImagePlane, AnalysisSettings,
+    OpticalSystem, ThinLens, ThickLens, Mirror, Object, ImagePlane, AnalysisSettings,
 )
+from optics.materials import refractive_index
+from optics.raytrace import first_order
 from optics.seidel import (
     spherical_aberration, coma, astigmatism_and_field_curvature,
     distortion, seidel_analysis,
 )
 
+WL = 550e-9
 
-def make_single_lens_system(
-    f: float = 0.050,
-    aperture: float = 0.025,
-    obj_pos: float = 0.0,
-    obj_height: float = 0.010,
-    lens_pos: float = 0.100,
-    image_pos: float = 0.200,
-) -> OpticalSystem:
-    """Create a simple single thin-lens system for testing."""
-    return OpticalSystem(
+
+def settings():
+    return AnalysisSettings(num_rays=11, ray_types=["chief", "marginal", "fill"],
+                            aperture_fraction=1.0, wavelength=WL)
+
+
+def focused(system):
+    z = first_order(system).image_z
+    return system.model_copy(update={"image_plane": ImagePlane(position=z)})
+
+
+def singlet(aperture=0.004, object_height=0.0005):
+    """Equiconvex N-BK7 singlet, R = +/-51.5 mm, 5 mm thick, near 1:1."""
+    return focused(OpticalSystem(
+        components=[ThickLens(id="L1", position=0.100, radius1=0.0515, radius2=-0.0515,
+                              thickness=0.005, aperture_diameter=aperture, material="N-BK7")],
+        wavelengths=[WL],
+        object=Object(position=0.0, height=object_height),
+        image_plane=ImagePlane(position=0.3),
+        analysis_settings=settings(),
+    ))
+
+
+def mirror(conic, radius=-1.0, diameter=0.1):
+    """Concave mirror at z = 0.5, object effectively at infinity."""
+    far = 1.0e6
+    return focused(OpticalSystem(
+        components=[Mirror(id="M1", position=0.5, angle=0.0, width=diameter,
+                           radius=radius, conic=conic)],
+        wavelengths=[WL],
+        object=Object(position=-far, height=far * math.tan(math.radians(0.25))),
+        image_plane=ImagePlane(position=0.0),
+        analysis_settings=settings(),
+    ))
+
+
+def ideal_relay():
+    return focused(OpticalSystem(
         components=[
-            ThinLens(
-                id="lens_1",
-                position=lens_pos,
-                focal_length=f,
-                aperture_diameter=aperture,
-                material="N-BK7",
-            ),
+            ThinLens(id="L1", position=0.100, focal_length=0.050, aperture_diameter=0.025),
+            ThinLens(id="L2", position=0.150, focal_length=0.050, aperture_diameter=0.025),
         ],
-        object=Object(position=obj_pos, height=obj_height),
-        image_plane=ImagePlane(position=image_pos),
-        analysis_settings=AnalysisSettings(num_rays=11),
-    )
-
-
-def make_thick_lens_system() -> OpticalSystem:
-    """Create a single thick lens system for testing."""
-    return OpticalSystem(
-        components=[
-            ThickLens(
-                id="lens_1",
-                position=0.100,
-                radius1=0.100,
-                radius2=-0.100,
-                thickness=0.010,
-                aperture_diameter=0.025,
-                material="N-BK7",
-            ),
-        ],
+        wavelengths=[WL],
         object=Object(position=0.0, height=0.010),
-        image_plane=ImagePlane(position=0.250),
-        analysis_settings=AnalysisSettings(num_rays=11),
-    )
+        image_plane=ImagePlane(position=0.175),
+        analysis_settings=settings(),
+    ))
 
 
 class TestSphericalAberration:
-    """Tests for spherical aberration."""
 
-    def test_single_lens_has_spherical_aberration(self):
-        """A single biconvex lens should have nonzero spherical aberration."""
-        system = make_single_lens_system()
-        result = spherical_aberration(system)
-        assert "longitudinal" in result
-        assert "transverse" in result
-        # A real lens has nonzero SA
-        assert abs(result["longitudinal"]) > 1e-6
-        assert abs(result["transverse"]) > 1e-6
+    def test_spherical_mirror_matches_h2_over_4r(self):
+        sa = spherical_aberration(mirror(conic=0.0))
+        assert abs(sa["longitudinal"]) == pytest.approx(0.05 ** 2 / (4 * 1.0), rel=1e-9)
 
-    def test_no_lens_returns_zero(self):
-        """A system with no lens should return zero SA."""
-        system = OpticalSystem(
-            components=[],
-            object=Object(position=0.0, height=0.010),
-            image_plane=ImagePlane(position=0.200),
-            analysis_settings=AnalysisSettings(num_rays=11),
-        )
-        result = spherical_aberration(system)
-        assert result["longitudinal"] == 0.0
-        assert result["transverse"] == 0.0
+    def test_paraboloid_has_none(self):
+        r = seidel_analysis(mirror(conic=-1.0))
+        assert abs(r["spherical_aberration"]["longitudinal"]) < 1e-15
+        assert abs(r["real"]["longitudinal_spherical"]) < 1e-12
+
+    def test_third_order_matches_real_rays_at_small_aperture(self):
+        r = seidel_analysis(singlet(aperture=0.002))
+        assert r["spherical_aberration"]["transverse"] == pytest.approx(
+            r["real"]["transverse_spherical"], rel=2e-3)
+
+    def test_transverse_spherical_scales_as_aperture_cubed(self):
+        small = spherical_aberration(singlet(aperture=0.002))["transverse"]
+        large = spherical_aberration(singlet(aperture=0.004))["transverse"]
+        assert large / small == pytest.approx(8.0, rel=1e-9)
+
+    def test_ideal_lenses_have_none(self):
+        sa = spherical_aberration(ideal_relay())
+        assert sa["longitudinal"] == 0.0
+        assert sa["transverse"] == 0.0
 
 
 class TestComa:
-    """Tests for coma."""
 
-    def test_off_axis_object_has_coma(self):
-        """An off-axis object should produce nonzero coma."""
-        system = make_single_lens_system(obj_height=0.010)
-        value = coma(system)
-        assert value != 0
+    def test_third_order_matches_real_rays_at_small_aperture_and_field(self):
+        r = seidel_analysis(singlet(aperture=0.002, object_height=0.0005))
+        assert r["coma"] == pytest.approx(r["real"]["tangential_coma"], rel=0.03)
 
-    def test_on_axis_object_zero_coma(self):
-        """An on-axis object should produce zero coma."""
-        system = make_single_lens_system(obj_height=0.0)
-        value = coma(system)
-        assert value == pytest.approx(0.0, abs=1e-9)
+    def test_coma_scales_with_aperture_squared_and_field(self):
+        base = coma(singlet(aperture=0.002, object_height=0.0005))
+        assert coma(singlet(aperture=0.004, object_height=0.0005)) / base == pytest.approx(4.0, rel=1e-9)
+        assert coma(singlet(aperture=0.002, object_height=0.001)) / base == pytest.approx(2.0, rel=1e-9)
+
+    def test_ideal_lenses_have_none(self):
+        assert coma(ideal_relay()) == 0.0
 
 
 class TestAstigmatismAndFieldCurvature:
-    """Tests for astigmatism and field curvature."""
 
-    def test_off_axis_has_astigmatism(self):
-        """An off-axis object should produce nonzero astigmatism."""
-        system = make_single_lens_system(obj_height=0.010)
-        result = astigmatism_and_field_curvature(system)
-        assert "astigmatism" in result
-        assert "field_curvature" in result
-        assert "tangential_focus" in result
-        assert "sagittal_focus" in result
-        assert result["astigmatism"] != 0
+    def test_petzval_matches_surface_curvature_sum(self):
+        system = singlet()
+        n = refractive_index("N-BK7", WL)
+        c = 1.0 / 0.0515
+        petzval_sum = c * (n - 1.0) / n + (-c) * (1.0 - n) / n
+        h_img = first_order(system).image_height
+        r = astigmatism_and_field_curvature(system)
+        assert r["petzval"] == pytest.approx(-h_img ** 2 * petzval_sum / 2.0, rel=1e-6)
 
-    def test_no_lens_returns_zero(self):
-        """A system with no lens should return zero astigmatism."""
-        system = OpticalSystem(
-            components=[],
-            object=Object(position=0.0, height=0.010),
-            image_plane=ImagePlane(position=0.200),
-            analysis_settings=AnalysisSettings(num_rays=11),
-        )
-        result = astigmatism_and_field_curvature(system)
-        assert result["astigmatism"] == 0.0
-        assert result["field_curvature"] == 0.0
+    def test_astigmatism_scales_with_field_squared(self):
+        a1 = astigmatism_and_field_curvature(singlet(object_height=0.0005))["astigmatism"]
+        a2 = astigmatism_and_field_curvature(singlet(object_height=0.001))["astigmatism"]
+        assert a2 / a1 == pytest.approx(4.0, rel=1e-9)
+
+    def test_ideal_lenses_have_no_astigmatism(self):
+        assert astigmatism_and_field_curvature(ideal_relay())["astigmatism"] == 0.0
 
 
 class TestDistortion:
-    """Tests for distortion."""
 
-    def test_off_axis_has_distortion(self):
-        """An off-axis object should produce nonzero distortion."""
-        system = make_single_lens_system(obj_height=0.010)
-        value = distortion(system)
-        assert value != 0
+    def test_fractional_distortion_scales_with_field_squared(self):
+        d1 = distortion(singlet(object_height=0.0005))
+        d2 = distortion(singlet(object_height=0.001))
+        assert d2 / d1 == pytest.approx(4.0, rel=1e-9)
 
-    def test_on_axis_zero_distortion(self):
-        """An on-axis object should produce zero distortion."""
-        system = make_single_lens_system(obj_height=0.0)
-        value = distortion(system)
-        assert value == pytest.approx(0.0, abs=1e-9)
+    def test_ideal_lenses_have_none(self):
+        assert distortion(ideal_relay()) == 0.0
 
 
 class TestSeidelAnalysis:
-    """Tests for the full Seidel analysis."""
 
-    def test_full_analysis_returns_all_fields(self):
-        """seidel_analysis should return all five aberrations."""
-        system = make_single_lens_system()
-        result = seidel_analysis(system)
+    def test_wavefront_coefficients_follow_the_sums(self):
+        r = seidel_analysis(singlet())
+        s = r["seidel_sums"]
+        w = r["wavefront_coefficients"]
+        assert w["W040"] == pytest.approx(s["S1"] / 8.0)
+        assert w["W131"] == pytest.approx(s["S2"] / 2.0)
+        assert w["W222"] == pytest.approx(s["S3"] / 2.0)
+        assert w["W220"] == pytest.approx((s["S3"] + s["S4"]) / 4.0)
+        assert w["W311"] == pytest.approx(s["S5"] / 2.0)
 
-        assert "spherical_aberration" in result
-        assert "coma" in result
-        assert "astigmatism" in result
-        assert "field_curvature" in result
-        assert "distortion" in result
-        assert "paraxial_image_position" in result
-        assert "paraxial_image_height" in result
+    def test_per_surface_contributions_add_up(self):
+        r = seidel_analysis(singlet())
+        for key in ("S1", "S2", "S3", "S4", "S5"):
+            total = sum(row[key] for row in r["per_surface"])
+            assert total == pytest.approx(r["seidel_sums"][key], rel=1e-12, abs=1e-30)
 
-    def test_thick_lens_analysis(self):
-        """Seidel analysis should work for thick lenses too."""
-        system = make_thick_lens_system()
-        result = seidel_analysis(system)
-        assert "spherical_aberration" in result
-        assert "coma" in result
-        assert "astigmatism" in result
-        assert "field_curvature" in result
-        assert "distortion" in result
+    def test_empty_system_is_rejected(self):
+        system = OpticalSystem(components=[], wavelengths=[WL],
+                               object=Object(position=0.0, height=0.001),
+                               image_plane=ImagePlane(position=0.1),
+                               analysis_settings=settings())
+        with pytest.raises(ValueError):
+            seidel_analysis(system)
+
+    def test_afocal_system_is_rejected(self):
+        far = 1.0e5
+        system = OpticalSystem(
+            components=[ThinLens(id="L1", position=far, focal_length=0.1, aperture_diameter=0.02),
+                        ThinLens(id="L2", position=far + 0.15, focal_length=0.05,
+                                 aperture_diameter=0.02)],
+            wavelengths=[WL], object=Object(position=0.0, height=1000.0),
+            image_plane=ImagePlane(position=far + 0.3), analysis_settings=settings())
+        with pytest.raises(ValueError):
+            seidel_analysis(system)

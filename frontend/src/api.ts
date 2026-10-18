@@ -18,6 +18,12 @@ import type {
   OptimizeResult,
   SweepRequest,
   SweepPoint,
+  DiffractionResult,
+  SeidelResult,
+  ToleranceResult,
+  ToleranceRequest,
+  ComparisonResult,
+  CompareRequest,
 } from "./types";
 
 // Persistence types
@@ -327,6 +333,230 @@ export async function executeAICommand(
   });
   if (!response.ok) {
     throw new Error(`Failed to execute AI command: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Run diffraction analysis (PSF, MTF, OTF, Airy disk) on an optical system.
+ *
+ * @param system - The optical system to analyze
+ * @returns Diffraction analysis results
+ */
+export async function analyzeDiffraction(
+  system: OpticalSystem,
+): Promise<DiffractionResult> {
+  const request: AnalyzeRequest = { system };
+  const response = await fetch(`${API_BASE}/analyze/diffraction`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to analyze diffraction: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Run Seidel (third-order) monochromatic aberration analysis.
+ *
+ * @param system - The optical system to analyze
+ * @returns Seidel aberration results
+ */
+export async function analyzeSeidel(
+  system: OpticalSystem,
+): Promise<SeidelResult> {
+  const request: AnalyzeRequest = { system };
+  const response = await fetch(`${API_BASE}/analyze/seidel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to analyze Seidel aberrations: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Run Monte-Carlo tolerance analysis on an optical system.
+ *
+ * @param request - The tolerance request with system and parameters
+ * @returns Tolerance analysis results
+ */
+export async function runToleranceAnalysis(
+  request: ToleranceRequest,
+): Promise<ToleranceResult> {
+  const response = await fetch(`${API_BASE}/tolerance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to run tolerance analysis: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Compare two optical systems side by side.
+ *
+ * @param request - The comparison request with two systems
+ * @returns Comparison results with metrics and advantage indicators
+ */
+export async function compareSystems(
+  request: CompareRequest,
+): Promise<ComparisonResult> {
+  const response = await fetch(`${API_BASE}/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to compare systems: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export interface PresetInfo {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+export interface PresetResponse {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  system: OpticalSystem;
+  warnings: string[];
+}
+
+/**
+ * Get a list of available preset optical systems.
+ *
+ * @returns List of preset metadata (id, name, description, category)
+ */
+export async function getPresets(): Promise<PresetInfo[]> {
+  const response = await fetch(`${API_BASE}/presets`);
+  if (!response.ok) {
+    throw new Error(`Failed to get presets: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Get a specific preset optical system by ID.
+ *
+ * @param presetId - The ID of the preset to load
+ * @returns The preset with full system data
+ */
+export async function getPreset(presetId: string): Promise<PresetResponse> {
+  const response = await fetch(`${API_BASE}/presets/${presetId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get preset: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Health check - verify the backend is running.
+ *
+ * @returns Health status and available features
+ */
+export async function healthCheck(): Promise<{
+  status: string;
+  version: string;
+  features: Record<string, boolean>;
+}> {
+  const response = await fetch(`${API_BASE}/health`);
+  if (!response.ok) {
+    throw new Error(`Health check failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export interface GhostAnalysisResult {
+  ghosts: Array<{
+    surfaces: number[];
+    reflection_count: number;
+    relative_intensity: number;
+    image_position_offset: number;
+    is_in_field: boolean;
+    description: string;
+  }>;
+  n_ghosts: number;
+}
+
+export async function analyzeGhosts(
+  system: OpticalSystem,
+  nReflections: number = 2,
+  threshold: number = 1e-4,
+): Promise<GhostAnalysisResult> {
+  const response = await fetch(`${API_BASE}/analyze/ghosts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system, n_reflections: nReflections, threshold }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to analyze ghosts: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export interface StrayLightResult {
+  paths: Array<{
+    path_id: number;
+    source_surface: number;
+    scatter_surface: number;
+    relative_intensity: number;
+    path_type: string;
+    description: string;
+  }>;
+  n_paths: number;
+}
+
+export async function analyzeStrayLight(
+  system: OpticalSystem,
+  sourceAngle: number = 30,
+  brdfModel: string = "lambertian",
+  diffuseFraction: number = 0.01,
+): Promise<StrayLightResult> {
+  const response = await fetch(`${API_BASE}/analyze/straylight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system,
+      source_angle: sourceAngle,
+      brdf_model: brdfModel,
+      diffuse_fraction: diffuseFraction,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to analyze stray light: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export interface PSTResult {
+  angles: number[];
+  pst_db: number[];
+}
+
+export async function computePST(
+  system: OpticalSystem,
+  angles: number[] = [5, 10, 15, 20, 25, 30, 35, 40, 45],
+): Promise<PSTResult> {
+  const response = await fetch(`${API_BASE}/analyze/pst`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system, angles }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to compute PST: ${response.statusText}`);
   }
   return response.json();
 }

@@ -1,9 +1,9 @@
 """
 Spherical refractive surface calculations.
 
-This module implements refraction at spherical surfaces using the
-paraxial approximation. It is included in the architecture for future
-use (Phase 2) but the MVP focuses on thin lenses.
+Closed-form paraxial relations for a single spherical refracting surface
+and the thick-lens (lensmaker's) equation. Full system tracing is in
+optics.raytrace.
 
 Sign convention (Cartesian):
     - Light travels from left to right.
@@ -64,9 +64,9 @@ def spherical_surface_image_distance(
         Image distance s' (meters). Positive if image is to the right.
 
     Examples:
-        >>> # Air to glass, R=100mm, object at 200mm
-        >>> spherical_surface_image_distance(0.1, 1.0, 1.5, 0.2)
-        0.3
+        >>> # Air to glass, R=100mm, object 400mm in front
+        >>> round(spherical_surface_image_distance(0.1, 1.0, 1.5, 0.4), 6)
+        0.6
     """
     if abs(radius) < 1e-15:
         # Flat surface: no refraction
@@ -128,8 +128,8 @@ def lensmaker_focal_length(
 
     Examples:
         >>> # Symmetric biconvex lens, R1=100mm, R2=-100mm, t=10mm, n=1.5
-        >>> lensmaker_focal_length(0.1, -0.1, 0.01, 1.5)
-        0.05263157894736842
+        >>> round(lensmaker_focal_length(0.1, -0.1, 0.01, 1.5), 6)
+        0.101695
     """
     if abs(radius1) < 1e-15 and abs(radius2) < 1e-15:
         raise ValueError("Both radii are zero: lens is a slab.")

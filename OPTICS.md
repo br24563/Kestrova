@@ -114,56 +114,100 @@ If M = [[A, B], [C, D]], then:
 f_eff = -1 / C
 ```
 
-## Paraxial Approximation
+## How the Engine Traces Rays
 
-All ray tracing uses the **paraxial (small-angle) approximation**:
-- sin(θ) ≈ θ
-- tan(θ) ≈ θ
-- cos(θ) ≈ 1
+All analyses are built on one sequential engine (`backend/optics/raytrace.py`).
 
-This is valid for small angles (typically < 5°). Rays that pass through different aperture heights should all converge to the same paraxial image point, giving an RMS spot radius of ~0.
+### Paraxial (first-order) trace
 
-## Spherical Surface Refraction (Phase 2)
+First-order properties come from a y-nu paraxial trace with signed indices
+(a mirror reverses the direction of travel and the sign of the index):
+EFL, BFL, FFL, principal planes, the paraxial image, the entrance and exit
+pupils and the Lagrange invariant. The aperture stop is the `ApertureStop`
+component, or otherwise the surface that limits the axial beam.
 
-### Surface power:
+### Exact (real) ray trace
+
+Spot diagrams, wavefronts, MTF, PSF, vignetting and relative illumination
+use **exact 3D real rays**: vector Snell's law at every refracting surface,
+exact intersection with spherical, conic and aspheric surfaces, and rays
+aimed iteratively so that pupil coordinates map onto the real stop.
+No small-angle approximation is made in these analyses.
+
+### Ideal (thin) lenses
+
+A `ThinLens` is an *ideal paraxial lens*, like Zemax's paraxial surface:
+it maps ray direction tangents as t' = t - (x, y)/f, which images every
+pair of conjugate planes without aberration. It therefore shows first-order
+behaviour and chromatic effects only (its focal length scales with
+wavelength as (n_ref - 1)/(n(lambda) - 1) of its glass, with f defined at
+the analysis reference wavelength). Use `ThickLens`, surfaces and mirrors
+to see real aberrations.
+
+## Single Surface Refraction
+
+### Surface power
 
 ```
 Φ = (n2 - n1) / R
 ```
 
-Where R is the radius of curvature (positive if center of curvature is to the right of the surface).
+R is positive if the centre of curvature is to the right of the surface.
 
-### Image distance:
+### Imaging by one surface (same sign convention as above, s < 0 to the left)
 
 ```
-n1/s + n2/s' = (n2 - n1) / R
+n2/s' - n1/s = (n2 - n1) / R
 ```
 
-### Lensmaker's equation (thick lens):
+### Lensmaker's equation (thick lens in air)
 
 ```
 1/f = (n - 1) * [1/R1 - 1/R2 + (n-1)*t / (n * R1 * R2)]
+BFL = f * (1 - (n - 1) * t / (n * R1))
 ```
 
-Where:
-- R1, R2 = radii of curvature of the two surfaces
-- t = lens thickness
-- n = refractive index
+## Aberrations and Image Quality
+
+- **Seidel (third-order) sums** S1 to S5, CL and CT follow Welford,
+  *Aberrations of Optical Systems*. Wavefront coefficients are
+  W040 = S1/8, W131 = S2/2, W222 = S3/2, W220 = (S3 + S4)/4, W311 = S5/2.
+  Real-ray measures are reported alongside for comparison.
+- **OPD** is W = OPL(chief) - OPL(ray) on a reference sphere centred on
+  the chief ray's image point and passing through the exit pupil (a plane
+  wave for an image at infinity).
+- **PSF and MTF** are FFTs of the pupil function built from the real-ray
+  OPD. The Strehl ratio is |sum P|^2 / (sum A)^2 over the pupil.
+- **Diffraction limited** means Strehl >= 0.8 (Maréchal criterion,
+  about lambda/14 RMS wavefront error).
+- **Relative illumination** is the projected solid angle of the real ray
+  bundle at each field point relative to the axis (it includes cos^4
+  obliquity, pupil aberrations and vignetting).
 
 ## Materials
 
-Refractive indices are provided at the Fraunhofer e-line (587.6 nm). Sellmeier coefficients are available for wavelength-dependent calculations in Phase 2.
+Glass data comes from the vendors' own catalog files: SCHOTT, OHARA, HOYA
+and CDGM (820 glasses; see `backend/tools/build_glass_catalog.py`).
+Crystals, IR materials, polymers and water use published dispersion
+formulas, each with its citation in `backend/optics/materials.py`.
+Every index comes from the dispersion formula and is refused outside the
+wavelength range the source states. Properties a source does not give are
+left empty rather than estimated.
+
+Reference wavelengths: d line 587.56 nm (helium), e line 546.07 nm
+(mercury), F line 486.13 nm, C line 656.27 nm.
 
 ## Ray Types
 
-- **Chief ray**: Passes through the center of the aperture (y = 0 at the first lens). Defines the optical axis path.
-- **Marginal ray**: Passes through the edge of the aperture. Defines the aperture stop.
-- **Fill ray**: Evenly distributed between chief and marginal rays. Fills the aperture.
+- **Chief ray**: from the edge of the field through the centre of the aperture stop.
+- **Marginal ray**: from the axial object point through the edge of the aperture stop.
+- **Fill rays**: a grid of rays across the pupil.
 
-## Key Assumptions
+## Key Assumptions and Limits
 
-1. **Monochromatic light**: Single wavelength (default 550 nm) for the MVP.
-2. **Paraxial rays**: Small-angle approximation throughout.
-3. **Thin lenses**: No lens thickness; all refraction at a single plane.
-4. **No diffraction**: Spot diagrams show geometric ray intersections only.
-5. **Sequential tracing**: Rays follow a single path through the system (no scattering, no diffraction, no interference).
+1. Sequential tracing: each ray meets the surfaces in a fixed order.
+   Non-sequential tracing lives in `optics/nsc` and is separate.
+2. Ideal thin lenses are aberration-free by construction (see above).
+3. Polychromatic analyses sample the wavelengths you list.
+4. Coatings, polarization and scatter are modelled in their own modules
+   and are not yet folded into the sequential image-quality analyses.

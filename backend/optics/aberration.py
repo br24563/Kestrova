@@ -1,63 +1,38 @@
 """
-Chromatic aberration analysis.
+Chromatic aberration analysis (paraxial).
 
-This module analyzes how the image position and height vary with
-wavelength (chromatic aberration). It builds on the wavelength-dependent
-refractive index (Sellmeier equation) to compute:
+    - Longitudinal (axial) colour: shift of the paraxial image position
+      between two wavelengths.
+    - Lateral colour (chromatic difference of magnification): difference of
+      the paraxial chief-ray heights of two wavelengths, both measured in
+      the paraxial image plane of the reference wavelength.
 
-    - Longitudinal chromatic aberration (LCA): variation of image
-      position with wavelength.
-    - Lateral chromatic aberration (TCA): variation of image height
-      with wavelength.
-
-All values are in SI base units (meters, radians).
+Indices come from each material's published dispersion formula
+(see :mod:`optics.materials`). All values are in SI base units.
 """
 
 from typing import Optional
 
 from .models import OpticalSystem
-from .rays import (
-    calculate_paraxial_image_position, calculate_paraxial_image_height,
-)
+from .materials import F_LINE, D_LINE, C_LINE
+from . import raytrace as rt
 
 
-# Standard wavelengths for chromatic analysis (meters)
-# F line (blue), d line (green/yellow), C line (red)
-F_LINE = 486.1e-9
-D_LINE = 587.6e-9
-C_LINE = 656.3e-9
+def image_position_at_wavelength(system: OpticalSystem, wavelength: float) -> float:
+    """Paraxial image position (z, meters) at a wavelength."""
+    return rt.first_order(system, wavelength).image_z
 
 
-def image_position_at_wavelength(
-    system: OpticalSystem, wavelength: float
-) -> float:
-    """
-    Calculate the paraxial image position at a specific wavelength.
-
-    Args:
-        system: The optical system.
-        wavelength: Wavelength in meters.
-
-    Returns:
-        Image position along the z-axis (meters).
-    """
-    return calculate_paraxial_image_position(system, wavelength)
+def image_height_at_wavelength(system: OpticalSystem, wavelength: float) -> float:
+    """Paraxial image height (meters) in that wavelength's own image plane."""
+    return rt.first_order(system, wavelength).image_height
 
 
-def image_height_at_wavelength(
-    system: OpticalSystem, wavelength: float
-) -> float:
-    """
-    Calculate the paraxial image height at a specific wavelength.
-
-    Args:
-        system: The optical system.
-        wavelength: Wavelength in meters.
-
-    Returns:
-        Image height (meters).
-    """
-    return calculate_paraxial_image_height(system, wavelength)
+def _chief_height_at(system: OpticalSystem, wavelength: float, z_plane: float) -> float:
+    seq = rt.build_sequence(system, wavelength)
+    fo = rt.first_order(system, seq=seq)
+    c = fo.chief
+    return c.y[-1] + c.u_after[-1] * (z_plane - seq.surfaces[-1].z)
 
 
 def longitudinal_chromatic_aberration(
@@ -66,48 +41,29 @@ def longitudinal_chromatic_aberration(
     wavelength_red: float = C_LINE,
 ) -> float:
     """
-    Calculate the longitudinal chromatic aberration (LCA).
-
-    LCA is the difference in image position between the blue and red
-    wavelengths. A positive value means blue focuses closer to the lens
-    than red (normal dispersion).
-
-    Args:
-        system: The optical system.
-        wavelength_blue: Blue wavelength (meters).
-        wavelength_red: Red wavelength (meters).
-
-    Returns:
-        LCA in meters (image position at blue minus image position at red).
+    Axial colour: image position at the blue wavelength minus that at the red
+    wavelength, along the direction of travel (negative = blue focuses
+    first, the usual under-corrected case).
     """
-    pos_blue = image_position_at_wavelength(system, wavelength_blue)
-    pos_red = image_position_at_wavelength(system, wavelength_red)
-    return pos_blue - pos_red
+    seq = rt.build_sequence(system, wavelength_blue)
+    d = seq.image_direction
+    return (image_position_at_wavelength(system, wavelength_blue)
+            - image_position_at_wavelength(system, wavelength_red)) * d
 
 
 def lateral_chromatic_aberration(
     system: OpticalSystem,
     wavelength_blue: float = F_LINE,
     wavelength_red: float = C_LINE,
+    reference_wavelength: float = D_LINE,
 ) -> float:
     """
-    Calculate the lateral chromatic aberration (TCA).
-
-    TCA is the difference in image height between the blue and red
-    wavelengths. A nonzero value means different colors form images at
-    different heights (color fringing).
-
-    Args:
-        system: The optical system.
-        wavelength_blue: Blue wavelength (meters).
-        wavelength_red: Red wavelength (meters).
-
-    Returns:
-        TCA in meters (image height at blue minus image height at red).
+    Lateral colour: chief-ray height at the blue wavelength minus that at the
+    red wavelength, both in the reference wavelength's paraxial image plane.
     """
-    height_blue = image_height_at_wavelength(system, wavelength_blue)
-    height_red = image_height_at_wavelength(system, wavelength_red)
-    return height_blue - height_red
+    z_ref = image_position_at_wavelength(system, reference_wavelength)
+    return (_chief_height_at(system, wavelength_blue, z_ref)
+            - _chief_height_at(system, wavelength_red, z_ref))
 
 
 def chromatic_aberration_analysis(
@@ -115,38 +71,21 @@ def chromatic_aberration_analysis(
     wavelengths: Optional[list[float]] = None,
 ) -> dict:
     """
-    Perform a full chromatic aberration analysis.
+    Image position and height at each wavelength plus the axial and lateral
+    colour between the first and last wavelengths (default F, d, C).
 
-    Computes the image position and height at each wavelength, plus the
-    longitudinal and lateral chromatic aberration between the extreme
-    wavelengths.
-
-    Args:
-        system: The optical system.
-        wavelengths: List of wavelengths in meters. If None, uses the
-            standard F, d, C lines.
-
-    Returns:
-        Dict with keys:
-            - "wavelengths": list of wavelengths (meters)
-            - "image_positions": list of image positions (meters)
-            - "image_heights": list of image heights (meters)
-            - "lca": longitudinal chromatic aberration (meters)
-            - "tca": lateral chromatic aberration (meters)
+    Returns keys "wavelengths", "image_positions", "image_heights", "lca",
+    "tca" (lateral colour, in the middle wavelength's image plane).
     """
     if wavelengths is None:
         wavelengths = [F_LINE, D_LINE, C_LINE]
-
     positions = [image_position_at_wavelength(system, w) for w in wavelengths]
     heights = [image_height_at_wavelength(system, w) for w in wavelengths]
-
-    lca = positions[0] - positions[-1]
-    tca = heights[0] - heights[-1]
-
+    ref = wavelengths[len(wavelengths) // 2]
     return {
         "wavelengths": wavelengths,
         "image_positions": positions,
         "image_heights": heights,
-        "lca": lca,
-        "tca": tca,
+        "lca": longitudinal_chromatic_aberration(system, wavelengths[0], wavelengths[-1]),
+        "tca": lateral_chromatic_aberration(system, wavelengths[0], wavelengths[-1], ref),
     }

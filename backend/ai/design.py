@@ -24,6 +24,13 @@ aperture_diameter=10mm, objective="rms_spot". This module then:
        requirement.
     3. Returns one or more candidate designs with full analysis.
 
+The candidates are first-order layouts of two ideal thin lenses (see
+optics.raytrace): ideal lenses have no monochromatic aberrations, so the
+RMS-spot objective only brings the image into focus on the fixed 300 mm
+image plane, and the result says nothing about real-lens aberrations. Turn
+each thin lens into real elements (e.g. optics.standards.PartDefinition)
+before judging image quality.
+
 All length values are in SI base units (meters, radians).
 """
 

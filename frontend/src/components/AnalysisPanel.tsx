@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import type { AnalysisResult, OpticalSystem, LengthUnit, ChromaticAberrationResult } from "../types";
-import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
+import { fmtLen, fmtNum, fromMeters, LENGTH_UNIT_LABELS } from "../types";
 import { analyzeAberration } from "../api";
 
 interface AnalysisPanelProps {
@@ -55,27 +55,27 @@ export function AnalysisPanel({ analysis, system, displayUnit }: AnalysisPanelPr
       <div className="space-y-3">
         <div className="p-3 bg-gray-50 rounded border">
           <div className="text-xs text-gray-500 uppercase">Effective Focal Length</div>
-          <div className="text-xl font-bold text-optical-700">{fromMeters(analysis.effective_focal_length, displayUnit).toFixed(2)} {unitLabel}</div>
+          <div className="text-xl font-bold text-optical-700">{fmtLen(analysis.effective_focal_length, displayUnit, 2)} {unitLabel}</div>
         </div>
         <div className="p-3 bg-gray-50 rounded border">
           <div className="text-xs text-gray-500 uppercase">Magnification</div>
           <div className="text-xl font-bold text-optical-700">
-            {analysis.magnification.toFixed(3)}
+            {fmtNum(analysis.magnification, 3)}
             {analysis.is_image_inverted && " (inverted)"}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="p-2 bg-gray-50 rounded border">
             <div className="text-xs text-gray-500">Object Distance</div>
-            <div className="font-medium">{fromMeters(analysis.object_distance, displayUnit).toFixed(2)} {unitLabel}</div>
+            <div className="font-medium">{fmtLen(analysis.object_distance, displayUnit, 2)} {unitLabel}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
             <div className="text-xs text-gray-500">Image Distance</div>
-            <div className="font-medium">{fromMeters(analysis.image_distance, displayUnit).toFixed(2)} {unitLabel}</div>
+            <div className="font-medium">{fmtLen(analysis.image_distance, displayUnit, 2)} {unitLabel}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
             <div className="text-xs text-gray-500">F-number</div>
-            <div className="font-medium">f/{analysis.f_number.toFixed(2)}</div>
+            <div className="font-medium">f/{fmtNum(analysis.f_number, 2)}</div>
           </div>
           <div className="p-2 bg-gray-50 rounded border">
             <div className="text-xs text-gray-500">Numerical Aperture</div>
@@ -87,7 +87,7 @@ export function AnalysisPanel({ analysis, system, displayUnit }: AnalysisPanelPr
           </div>
           <div className="p-2 bg-gray-50 rounded border">
             <div className="text-xs text-gray-500">Working Distance</div>
-            <div className="font-medium">{fromMeters(analysis.working_distance, displayUnit).toFixed(2)} {unitLabel}</div>
+            <div className="font-medium">{fmtLen(analysis.working_distance, displayUnit, 2)} {unitLabel}</div>
           </div>
         </div>
         <div className="p-3 bg-gray-50 rounded border">

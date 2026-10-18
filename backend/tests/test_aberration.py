@@ -88,8 +88,8 @@ class TestChromaticAberration:
         assert result["wavelengths"] == wavelengths
         assert len(result["image_positions"]) == 3
 
-    def test_thin_lens_no_chromatic_aberration(self):
-        """A thin lens has fixed focal length, so no chromatic aberration."""
+    def test_thin_lens_chromatic_aberration(self):
+        """A thin lens should have non-zero chromatic aberration."""
         system = OpticalSystem(
             components=[
                 ThinLens(
@@ -97,11 +97,15 @@ class TestChromaticAberration:
                     position=0.100,
                     focal_length=0.050,
                     aperture_diameter=0.025,
+                    material="N-BK7",
                 ),
             ],
+            wavelengths=[486.1e-9, 587.6e-9, 656.3e-9],
             object=Object(position=0.0, height=0.010),
             image_plane=ImagePlane(position=0.200),
-            analysis_settings=AnalysisSettings(num_rays=11),
+            analysis_settings=AnalysisSettings(num_rays=11, ray_types=["chief","marginal","fill"], aperture_fraction=1.0, wavelength=587.6e-9),
         )
         lca = longitudinal_chromatic_aberration(system)
-        assert lca == pytest.approx(0.0, abs=1e-12)
+        # N-BK7 has dispersion: chromatic aberration should be non-zero
+        assert lca != 0.0, "Thin lens should have chromatic aberration"
+        assert abs(lca) < 0.01, f"LCA should be small but non-zero, got {lca}"
