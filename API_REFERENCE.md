@@ -145,6 +145,32 @@ Third-order values at full aperture and field (meters; distortion is a
 fraction); focus positions are relative to the paraxial image. Afocal
 systems are rejected with 400.
 
+#### POST /api/analyze/ray-fan
+
+Real-ray transverse ray fans at the system image plane, relative to the
+chief ray. Body: `{ "system": ..., "field_fraction": 1.0, "num_rays": 21 }`.
+
+**Response:** `pupil_x` (-1..1), `transverse_t` (y error vs py),
+`transverse_s` (x error vs px), `transverse_s_y`, `chief_ray_height`,
+`paraxial_image_height`, `field_max` and `field_unit` (`"deg"` for an object
+at infinity, else `"m"`). Lengths in meters; null marks a vignetted ray.
+
+#### POST /api/analyze/opd-fan
+
+Same body as `ray-fan`. OPD along the tangential (`opd_t`) and sagittal
+(`opd_s`) pupil axes against `pupil`, referenced to the chief ray at the
+image plane (meters), plus `opd_rms`, `opd_peak_to_valley` and
+`strehl_ratio` over the full 2D pupil and `wavelength`.
+
+#### POST /api/analyze/field-curves
+
+Body: `{ "system": ..., "num_fields": 11 }`. Real tangential, sagittal and
+medial foci (relative to the paraxial image, meters), third-order `petzval`,
+`astigmatism` and real `distortion` (fraction) at each of `field_fractions`,
+plus `field_max` / `field_unit`.
+
+The three endpoints above return 400 when the image is at infinity.
+
 
 #### POST /api/analyze/aberration
 
@@ -205,11 +231,23 @@ Basic optimization.
 
 #### POST /api/optimize/hybrid
 
-Hybrid global+local optimization.
+Hybrid global+local optimization. `objective` is `rms_spot`, `efl` or
+`magnification` (the last two need `target`); `global_algorithm` is
+`differential_evolution` or `particle_swarm`; `local_algorithm` is
+`damped_least_squares`, `l_bfgs_b` or `nelder_mead` (no local step).
+A null constraint bound means unbounded on that side.
 
 #### POST /api/optimize/high-yield
 
-High-yield optimization with tolerances.
+High-yield optimization with tolerances (`rms_spot` objective only;
+`global_maxiter` default 50, `local_maxiter` default 25).
+
+#### POST /api/optimize/constraints
+
+Body: `{ "system": ..., "constraints": [{ "type": "efl", "surface_index": null, "lower": 0.099, "upper": null, "weight": 1 }] }`.
+Returns each operand's current `value`, `violation` and `penalty`
+(weight x violation x 1e6, as the hybrid optimizer adds it), or `error`
+when it cannot be evaluated for this system.
 
 ### Tolerance
 

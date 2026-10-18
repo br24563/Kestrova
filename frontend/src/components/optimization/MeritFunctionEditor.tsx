@@ -1,306 +1,207 @@
 /**
  * Merit Function Editor Component.
  *
- * Professional merit function editor for optical optimization.
+ * Edits the constraint operands passed to the hybrid optimizer. Each
+ * operand bounds one quantity between Min and Max; the optimizer adds
+ * weight x violation x 1e6 to the merit for any operand outside its bounds.
+ * Current values and penalties come from the backend's own evaluator.
  */
 
-import { useState, useCallback } from 'react';
+import type { OpticalSystem, LengthUnit } from '../../types';
+import { fromMeters, toMeters, LENGTH_UNIT_LABELS } from '../../types';
+import { evaluateConstraints, type ConstraintSpec } from '../../api';
+import { useAnalysis } from '../analysis/useAnalysis';
 
-interface MeritOperand {
+export interface MeritOperand {
   id: number;
   type: string;
-  target: number;
+  componentIndex: number | null;
+  min: number | null;   // display units
+  max: number | null;
   weight: number;
-  value: number;
-  contribution: number;
   active: boolean;
-  constraintMin: number | null;
-  constraintMax: number | null;
 }
 
-interface MeritFunctionEditorProps {
-  onMeritFunctionChange?: (operands: MeritOperand[]) => void;
+type Kind = 'length' | 'percent' | 'number';
+
+/** Operand types supported by optics.advanced_optimization._get_constraint_value. */
+export const OPERAND_CATALOG: { type: string; description: string; kind: Kind; perComponent?: boolean }[] = [
+  { type: 'efl', description: 'Effective focal length', kind: 'length' },
+  { type: 'bfl', description: 'Back focal length', kind: 'length' },
+  { type: 'image_distance', description: 'Image distance', kind: 'length' },
+  { type: 'magnification', description: 'Magnification', kind: 'number' },
+  { type: 'f_number', description: 'F-number', kind: 'number' },
+  { type: 'numerical_aperture', description: 'Numerical aperture', kind: 'number' },
+  { type: 'rms_spot', description: 'RMS spot radius', kind: 'length' },
+  { type: 'distortion', description: 'Distortion at full field (real)', kind: 'percent' },
+  { type: 'total_track', description: 'First lens to image', kind: 'length' },
+  { type: 'center_thickness', description: 'Centre thickness (thick lens)', kind: 'length', perComponent: true },
+  { type: 'edge_thickness', description: 'Edge thickness (thick lens)', kind: 'length', perComponent: true },
+  { type: 'air_gap', description: 'Air gap after component', kind: 'length', perComponent: true },
+];
+
+const kindOf = (type: string): Kind => OPERAND_CATALOG.find((o) => o.type === type)?.kind ?? 'number';
+
+/** Display-unit value to the SI value the backend uses. */
+function toSI(v: number, kind: Kind, unit: LengthUnit): number {
+  return kind === 'length' ? toMeters(v, unit) : kind === 'percent' ? v / 100 : v;
+}
+
+function fromSI(v: number, kind: Kind, unit: LengthUnit): number {
+  return kind === 'length' ? fromMeters(v, unit) : kind === 'percent' ? v * 100 : v;
+}
+
+/** Operands as the backend's constraint dicts (inactive ones dropped). */
+export function operandsToConstraints(operands: MeritOperand[], unit: LengthUnit): ConstraintSpec[] {
+  return operands.filter((o) => o.active).map((o) => {
+    const k = kindOf(o.type);
+    return {
+      type: o.type,
+      surface_index: o.componentIndex,
+      lower: o.min === null ? null : toSI(o.min, k, unit),
+      upper: o.max === null ? null : toSI(o.max, k, unit),
+      weight: o.weight,
+    };
+  });
 }
 
 let nextOperandId = 1;
 
-const OPERAND_CATALOG = [
-  { type: 'EFFL', description: 'Effective Focal Length', defaultTarget: 100 },
-  { type: 'WFNO', description: 'Working F/number', defaultTarget: 2.8 },
-  { type: 'SPHA', description: 'Spherical Aberration', defaultTarget: 0 },
-  { type: 'COMA', description: 'Coma', defaultTarget: 0 },
-  { type: 'ASTI', description: 'Astigmatism', defaultTarget: 0 },
-  { type: 'DIST', description: 'Distortion', defaultTarget: 0 },
-  { type: 'LAXC', description: 'Longitudinal Axial Color', defaultTarget: 0 },
-  { type: 'TAXC', description: 'Transverse Axial Color', defaultTarget: 0 },
-  { type: 'AXCL', description: 'Axial Color', defaultTarget: 0 },
-  { type: 'LACL', description: 'Lateral Color', defaultTarget: 0 },
-  { type: 'MTFT', description: 'MTF Tangential', defaultTarget: 0.5 },
-  { type: 'MTFS', description: 'MTF Sagittal', defaultTarget: 0.5 },
-  { type: 'BLEN', description: 'Back Focal Length', defaultTarget: 50 },
-  { type: 'CTGT', description: 'Center Thickness >', defaultTarget: 2 },
-  { type: 'CTLT', description: 'Center Thickness <', defaultTarget: 20 },
-  { type: 'ETLX', description: 'Edge Thickness >', defaultTarget: 1 },
-  { type: 'DIMD', description: 'Diameter', defaultTarget: 25 },
-  { type: 'TTLT', description: 'Total Track Length', defaultTarget: 150 },
-  { type: 'TTHI', description: 'Total Thickness', defaultTarget: 10 },
-  { type: 'REAY', description: 'Real Ray Y height', defaultTarget: 0 },
-  { type: 'REAX', description: 'Real Ray X height', defaultTarget: 0 },
-  { type: 'OPLT', description: 'Operand Less Than', defaultTarget: 0 },
-  { type: 'OPGT', description: 'Operand Greater Than', defaultTarget: 0 },
-];
-
-function createOperand(type: string, target: number, weight: number = 1): MeritOperand {
-  return {
-    id: nextOperandId++,
-    type,
-    target,
-    weight,
-    value: 0,
-    contribution: 0,
-    active: true,
-    constraintMin: null,
-    constraintMax: null,
-  };
+interface MeritFunctionEditorProps {
+  system: OpticalSystem;
+  displayUnit: LengthUnit;
+  operands: MeritOperand[];
+  onChange: (operands: MeritOperand[]) => void;
 }
 
-export function MeritFunctionEditor({ onMeritFunctionChange }: MeritFunctionEditorProps) {
-  const [operands, setOperands] = useState<MeritOperand[]>([
-    createOperand('EFFL', 100, 1),
-    createOperand('WFNO', 2.8, 1),
-    createOperand('SPHA', 0, 0.1),
-    createOperand('COMA', 0, 0.1),
-  ]);
-  const [selectedOperand, setSelectedOperand] = useState<number | null>(null);
+export function MeritFunctionEditor({ system, displayUnit, operands, onChange }: MeritFunctionEditorProps) {
+  const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
+  const active = operands.filter((o) => o.active);
+  const { data, error } = useAnalysis(
+    () => active.length
+      ? evaluateConstraints(system, operandsToConstraints(operands, displayUnit))
+      : Promise.resolve({ constraints: [] }),
+    [system, operands, displayUnit],
+  );
 
-  const updateOperand = useCallback((id: number, updates: Partial<MeritOperand>) => {
-    setOperands(prev => {
-      const newOperands = prev.map(op => 
-        op.id === id ? { ...op, ...updates } : op
-      );
-      onMeritFunctionChange?.(newOperands);
-      return newOperands;
-    });
-  }, [onMeritFunctionChange]);
+  const update = (id: number, changes: Partial<MeritOperand>) =>
+    onChange(operands.map((o) => (o.id === id ? { ...o, ...changes } : o)));
 
-  const addOperand = useCallback((type: string) => {
-    const catalog = OPERAND_CATALOG.find(o => o.type === type);
-    if (!catalog) return;
-    const newOperand = createOperand(type, catalog.defaultTarget, 1);
-    setOperands(prev => {
-      const newOperands = [...prev, newOperand];
-      onMeritFunctionChange?.(newOperands);
-      return newOperands;
-    });
-  }, [onMeritFunctionChange]);
-
-  const removeOperand = useCallback((id: number) => {
-    setOperands(prev => {
-      const newOperands = prev.filter(op => op.id !== id);
-      onMeritFunctionChange?.(newOperands);
-      return newOperands;
-    });
-  }, [onMeritFunctionChange]);
-
-  const moveOperand = useCallback((id: number, direction: 'up' | 'down') => {
-    setOperands(prev => {
-      const index = prev.findIndex(op => op.id === id);
-      if (index < 0) return prev;
-      const newIndex = direction === 'up' ? index - 1 : index + 1;
-      if (newIndex < 0 || newIndex >= prev.length) return prev;
-      const newOperands = [...prev];
-      [newOperands[index], newOperands[newIndex]] = [newOperands[newIndex], newOperands[index]];
-      onMeritFunctionChange?.(newOperands);
-      return newOperands;
-    });
-  }, [onMeritFunctionChange]);
-
-  const totalMerit = operands.reduce((sum, op) => {
-    if (!op.active) return sum;
-    return sum + op.weight * Math.pow(op.value - op.target, 2);
-  }, 0);
-
-  const formatValue = (value: number) => {
-    if (Math.abs(value) < 0.001) return value.toExponential(3);
-    if (Math.abs(value) > 1000) return value.toFixed(1);
-    return value.toFixed(4);
+  const add = (type: string) => {
+    const entry = OPERAND_CATALOG.find((o) => o.type === type);
+    if (!entry) return;
+    onChange([...operands, {
+      id: nextOperandId++, type, componentIndex: entry.perComponent ? 0 : null,
+      min: null, max: null, weight: 1, active: true,
+    }]);
   };
+
+  const parse = (s: string) => (s.trim() === '' || Number.isNaN(parseFloat(s)) ? null : parseFloat(s));
+  const unitFor = (k: Kind) => (k === 'length' ? unitLabel : k === 'percent' ? '%' : '');
+  const totalPenalty = data?.constraints.reduce((s, c) => s + (c.penalty ?? 0), 0) ?? 0;
+
+  // results are returned for active operands only, in order
+  let activeIndex = -1;
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-      <div className="bg-gray-100 px-3 py-2 border-b border-gray-200">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-semibold text-gray-700">Merit Function Editor</h3>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">Total:</span>
-            <span className={`text-sm font-mono ${totalMerit < 1 ? 'text-green-600' : 'text-orange-600'}`}>
-              {formatValue(totalMerit)}
-            </span>
-          </div>
-        </div>
+      <div className="bg-gray-100 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
+        <h3 className="text-sm font-semibold text-gray-700">Constraint Operands</h3>
+        <span className="text-xs text-gray-600">
+          Penalty: <span className={`font-mono ${totalPenalty > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+            {totalPenalty.toPrecision(3)}
+          </span>
+        </span>
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 text-gray-600">
             <tr>
-              <th className="px-2 py-1 text-left text-gray-600 font-medium w-8">#</th>
-              <th className="px-2 py-1 text-left text-gray-600 font-medium">Type</th>
-              <th className="px-2 py-1 text-left text-gray-600 font-medium">Description</th>
-              <th className="px-2 py-1 text-center text-gray-600 font-medium w-8">Act</th>
-              <th className="px-2 py-1 text-right text-gray-600 font-medium">Target</th>
-              <th className="px-2 py-1 text-right text-gray-600 font-medium">Weight</th>
-              <th className="px-2 py-1 text-right text-gray-600 font-medium">Value</th>
-              <th className="px-2 py-1 text-right text-gray-600 font-medium">Contrib</th>
-              <th className="px-2 py-1 text-center text-gray-600 font-medium">Min</th>
-              <th className="px-2 py-1 text-center text-gray-600 font-medium">Max</th>
-              <th className="px-2 py-1 text-center text-gray-600 font-medium w-16">Move</th>
-              <th className="px-2 py-1 text-center text-gray-600 font-medium w-8">Del</th>
+              <th className="px-2 py-1 text-center">On</th>
+              <th className="px-2 py-1 text-left">Operand</th>
+              <th className="px-2 py-1 text-left">Component</th>
+              <th className="px-2 py-1 text-right">Min</th>
+              <th className="px-2 py-1 text-right">Max</th>
+              <th className="px-2 py-1 text-right">Weight</th>
+              <th className="px-2 py-1 text-right">Value</th>
+              <th className="px-2 py-1 text-right">Penalty</th>
+              <th className="px-2 py-1 text-center">Del</th>
             </tr>
           </thead>
           <tbody>
-            {operands.map((operand, index) => {
-              const catalog = OPERAND_CATALOG.find(o => o.type === operand.type);
+            {operands.map((op) => {
+              const entry = OPERAND_CATALOG.find((o) => o.type === op.type);
+              const k = kindOf(op.type);
+              const res = op.active ? data?.constraints[++activeIndex] : undefined;
               return (
-                <tr
-                  key={operand.id}
-                  className={`border-b border-gray-100 hover:bg-blue-50 ${
-                    !operand.active ? 'opacity-50' : ''
-                  } ${selectedOperand === operand.id ? 'bg-blue-100' : ''}`}
-                  onClick={() => setSelectedOperand(operand.id)}
-                >
-                  <td className="px-2 py-1 text-gray-500">{index + 1}</td>
-                  <td className="px-2 py-1 font-mono font-medium text-gray-700">{operand.type}</td>
-                  <td className="px-2 py-1 text-gray-600">{catalog?.description ?? ''}</td>
+                <tr key={op.id} className={`border-b border-gray-100 ${op.active ? '' : 'opacity-50'}`}>
                   <td className="px-2 py-1 text-center">
-                    <input
-                      type="checkbox"
-                      checked={operand.active}
-                      onChange={(e) => updateOperand(operand.id, { active: e.target.checked })}
-                      className="w-3 h-3"
-                    />
+                    <input type="checkbox" checked={op.active} className="w-3 h-3"
+                      onChange={(e) => update(op.id, { active: e.target.checked })} />
                   </td>
+                  <td className="px-2 py-1 text-gray-700">{entry?.description ?? op.type}</td>
+                  <td className="px-2 py-1">
+                    {entry?.perComponent ? (
+                      <select
+                        value={op.componentIndex ?? 0}
+                        onChange={(e) => update(op.id, { componentIndex: parseInt(e.target.value) })}
+                        className="text-xs border border-gray-200 rounded px-1 py-0.5"
+                      >
+                        {system.components.map((c, i) => <option key={c.id} value={i}>{c.id}</option>)}
+                      </select>
+                    ) : <span className="text-gray-400">system</span>}
+                  </td>
+                  {(['min', 'max'] as const).map((field) => (
+                    <td key={field} className="px-2 py-1 text-right">
+                      <input
+                        type="number" step="any" placeholder="-"
+                        value={op[field] ?? ''}
+                        onChange={(e) => update(op.id, { [field]: parse(e.target.value) })}
+                        className="w-20 px-1 py-0.5 text-right text-xs border border-gray-200 rounded"
+                      />
+                    </td>
+                  ))}
                   <td className="px-2 py-1 text-right">
                     <input
-                      type="number"
-                      value={operand.target}
-                      onChange={(e) => updateOperand(operand.id, { target: parseFloat(e.target.value) || 0 })}
-                      className="w-20 px-1 py-0.5 text-right text-xs border border-gray-200 rounded"
-                      step="any"
+                      type="number" step="0.1" min="0" value={op.weight}
+                      onChange={(e) => update(op.id, { weight: parse(e.target.value) ?? 0 })}
+                      className="w-14 px-1 py-0.5 text-right text-xs border border-gray-200 rounded"
                     />
                   </td>
-                  <td className="px-2 py-1 text-right">
-                    <input
-                      type="number"
-                      value={operand.weight}
-                      onChange={(e) => updateOperand(operand.id, { weight: parseFloat(e.target.value) || 0 })}
-                      className="w-16 px-1 py-0.5 text-right text-xs border border-gray-200 rounded"
-                      step="0.1"
-                      min="0"
-                    />
+                  <td className="px-2 py-1 text-right font-mono text-gray-800" title={res?.error ?? undefined}>
+                    {res === undefined ? '' : res.value === null
+                      ? <span className="text-red-500">{res.error ? 'n/a' : '∞'}</span>
+                      : `${fromSI(res.value, k, displayUnit).toPrecision(5)} ${unitFor(k)}`}
                   </td>
-                  <td className="px-2 py-1 text-right font-mono text-gray-800">
-                    {formatValue(operand.value)}
-                  </td>
-                  <td className="px-2 py-1 text-right font-mono text-gray-600">
-                    {formatValue(operand.contribution)}
+                  <td className={`px-2 py-1 text-right font-mono ${res?.penalty ? 'text-orange-600' : 'text-gray-500'}`}>
+                    {res?.penalty === undefined || res.penalty === null ? '' : res.penalty.toPrecision(3)}
                   </td>
                   <td className="px-2 py-1 text-center">
-                    <input
-                      type="number"
-                      value={operand.constraintMin ?? ''}
-                      onChange={(e) => updateOperand(operand.id, { 
-                        constraintMin: e.target.value ? parseFloat(e.target.value) : null 
-                      })}
-                      className="w-14 px-1 py-0.5 text-xs border border-gray-200 rounded"
-                      placeholder="-"
-                      step="any"
-                    />
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <input
-                      type="number"
-                      value={operand.constraintMax ?? ''}
-                      onChange={(e) => updateOperand(operand.id, { 
-                        constraintMax: e.target.value ? parseFloat(e.target.value) : null 
-                      })}
-                      className="w-14 px-1 py-0.5 text-xs border border-gray-200 rounded"
-                      placeholder="-"
-                      step="any"
-                    />
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <div className="flex justify-center gap-0.5">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); moveOperand(operand.id, 'up'); }}
-                        disabled={index === 0}
-                        className="px-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                      >
-                        \u25B2
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); moveOperand(operand.id, 'down'); }}
-                        disabled={index === operands.length - 1}
-                        className="px-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                      >
-                        \u25BC
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); removeOperand(operand.id); }}
-                      className="text-red-400 hover:text-red-600 text-xs"
-                    >
-                      X
-                    </button>
+                    <button onClick={() => onChange(operands.filter((o) => o.id !== op.id))}
+                      className="text-red-400 hover:text-red-600">X</button>
                   </td>
                 </tr>
               );
             })}
+            {operands.length === 0 && (
+              <tr><td colSpan={9} className="px-2 py-2 text-gray-500">No operands: the optimizer uses the objective alone.</td></tr>
+            )}
           </tbody>
         </table>
       </div>
-      
-      <div className="bg-gray-50 px-3 py-2 border-t border-gray-200">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-600">Add operand:</span>
-          <select
-            onChange={(e) => {
-              if (e.target.value) {
-                addOperand(e.target.value);
-                e.target.value = '';
-              }
-            }}
-            className="text-xs border border-gray-200 rounded px-2 py-1"
-            defaultValue=""
-          >
-            <option value="">Select...</option>
-            {OPERAND_CATALOG.map(op => (
-              <option key={op.type} value={op.type}>
-                {op.type} - {op.description}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      
-      <div className="px-3 py-2 border-t border-gray-200">
-        <div className="text-xs text-gray-600 mb-1">Residual Breakdown</div>
-        <div className="flex gap-1 h-4">
-          {operands.filter(op => op.active && op.contribution > 0).map(op => {
-            const totalContrib = operands.reduce((s, o) => s + (o.active ? o.contribution : 0), 0);
-            const pct = totalContrib > 0 ? (op.contribution / totalContrib) * 100 : 0;
-            return (
-              <div
-                key={op.id}
-                className="bg-blue-500 h-full"
-                style={{ width: `${pct}%` }}
-                title={`${op.type}: ${formatValue(op.contribution)} (${pct.toFixed(1)}%)`}
-              />
-            );
-          })}
-        </div>
+
+      <div className="bg-gray-50 px-3 py-2 border-t border-gray-200 flex items-center gap-2 text-xs">
+        <span className="text-gray-600">Add operand:</span>
+        <select
+          value=""
+          onChange={(e) => add(e.target.value)}
+          className="text-xs border border-gray-200 rounded px-2 py-1"
+        >
+          <option value="">Select...</option>
+          {OPERAND_CATALOG.map((o) => <option key={o.type} value={o.type}>{o.description}</option>)}
+        </select>
+        {error && <span className="text-red-500">{error}</span>}
       </div>
     </div>
   );

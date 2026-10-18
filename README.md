@@ -130,10 +130,13 @@ catalog does not give are left empty.
 └── .github/workflows/      # CI
 ```
 
-Several frontend components (design comparison, ghost analysis, merit
-function editor, prescription editor, report generator, ray fan and OPD
-plots and others in `frontend/src/components`) are written but not yet
-wired into the app.
+All frontend components in `frontend/src/components` are wired into the
+app. The tabs under the optical bench hold the real-ray ray fan, OPD,
+field curvature/distortion and chromatic focal shift plots
+(`/api/analyze/ray-fan`, `/opd-fan`, `/field-curves`, `/aberration`), ghost
+analysis, advanced (hybrid / high-yield) optimization with its constraint
+editor (`/api/optimize/constraints`), and the engineering report
+(`/api/report`). Afocal systems return 400 for the image-plane plots.
 
 ---
 
