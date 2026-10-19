@@ -40,8 +40,10 @@ prebuilt installers are published yet; build it from source.
   flags, with constrained damped least squares optimization (Code V style):
   exact EFL / BFL / F-number / magnification / track / centre- and
   edge-thickness constraints, model glasses (nd, Vd) as variables held inside
-  the catalog glass map, and snapping to the nearest real glass (API only for
-  now; see `/api/lens/*`)
+  the catalog glass map, and snapping to the nearest real glass, plus fast
+  Code V-style tolerancing (sensitivities, predicted RMS wavefront
+  distribution with compensators, inverse sensitivity) checked against
+  exact Monte Carlo (API only for now; see `/api/lens/*`)
 - Ideal (paraxial) thin lenses, thick lenses, spherical surfaces, mirrors
   (spherical and conic), aperture stops
 - Aspheres (even, odd, Forbes Q), Zernike, toroidal and diffractive surfaces,

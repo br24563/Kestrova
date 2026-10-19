@@ -129,6 +129,35 @@ the pupil edge at the axial and full fields for all wavelengths. A lens
 converts to the component model below (and back) without changing the
 optics.
 
+### Tolerancing
+
+`optics/tolerancing.py` tolerances a prescription the way Code V's TOR
+does.
+
+**Tolerance types** (Code V names):
+
+- **DLF (radius in fringes):** changes the exact conic sag at the test
+  diameter by Nλ/2.
+- **DLN, DLV (index and Abbe number):** use a perturbed glass,
+  `PERTURB:<glass>:<dn>:<dVd>`, with n'(λ) = nd + dn + k(n(λ) − nd). This
+  shifts nd and Vd exactly and keeps the catalog's partial dispersions.
+- **Decenters and tilts:** a coordinate break before the surfaces and its
+  exact inverse after them (Rx(−tx) then Ry(−ty), with the origin returned
+  to the axis). Element tilts pivot on the first vertex.
+
+**Performance** is the RMS wavefront error with piston and tilt removed,
+over the field table and wavelengths, on a Gaussian pupil quadrature.
+
+**The fast method** traces each tolerance at ±limit and each compensator by
+central differences. This gives a model of the wavefront residual vector
+that is quadratic in each tolerance (cross terms neglected) and linear in
+the compensators. Compensators are fitted by bounded least squares. The
+predicted distribution comes from Monte Carlo on the model.
+`tolerancing.monte_carlo` is the exact reference. On a cemented achromat
+with five times the default tolerances, the two agree within the sampling
+noise of the exact run (mean 0.1118 vs 0.1117 waves, 84 % level 0.140 vs
+0.135).
+
 ### Optimization
 
 `optics/lens_optimize.py` minimises the transverse ray errors (fields 0,

@@ -37,11 +37,11 @@ jobs:
         pip install pytest pytest-cov
 
     # One pass: tests and coverage together. The gate is a ratchet at the
-    # current coverage (68.7%); raise it as tests are added.
+    # current coverage (80.6%); raise it as tests are added.
     - name: Run unit tests with coverage
       run: |
         cd backend
-        pytest tests/ --tb=short --cov=optics --cov-report=term-missing --cov-fail-under=68
+        pytest tests/ --tb=short --cov=optics --cov-report=term-missing --cov-fail-under=80
 
     - name: Upload coverage report
       if: matrix.python-version == '3.12'

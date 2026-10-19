@@ -24,7 +24,21 @@ All notable changes to this project will be documented in this file.
 - API returns null for infinite values (afocal systems) instead of failing.
 - Tests rewritten against independent references.
 
+### Fixed (tests)
+- Tolerancing: a compensator that does not improve the metric no longer
+  moves to an arbitrary point.
+- Backend coverage raised to the 80% target with tests against independent
+  references (Zernike tables, exact Strehl, tilted-plate shift, lensmaker,
+  mesh volume, compiled kernel versus NumPy).
+
 ### Added (Code V parity)
+- Fast tolerancing of a prescription (Code V TOR style): DLF, DLR, DLT,
+  DLN, DLV, surface and element decenters and tilts, back-focus and
+  thickness compensators, a sensitivity table, the predicted RMS wavefront
+  distribution and inverse sensitivity, plus an exact Monte Carlo reference
+  (`/api/lens/tolerance`, `/tolerance/monte-carlo`, `/tolerance/defaults`).
+- Perturbed glasses (`PERTURB:<glass>:<dn>:<dVd>`) with exact nd and Vd
+  shifts.
 - Constrained optimizer (Code V style): exact EFL, BFL, F-number,
   magnification, track and centre/edge-thickness constraints by damped least
   squares on the KKT system; radii varied as curvatures.
@@ -33,6 +47,11 @@ All notable changes to this project will be documented in this file.
   glass (`/api/lens/snap-glasses`, `/api/lens/constraints`).
 
 ### Removed
+- STEP/IGES "full" importers: they turned B-rep vertices into arbitrary
+  triangles (STEP) or loose points (IGES) rather than the model's geometry.
+  STEP and IGES import now refuse with a clear message (convert to STL/OBJ).
+- Unused 2D sag/intersect methods on the advanced surface models; the
+  engine's exact surfaces in `raytrace.py` were always the ones traced.
 - BOM cost estimates (no published prices), fabricated GRIN materials,
   numeric "reference" prescriptions in the AI verifier.
 
