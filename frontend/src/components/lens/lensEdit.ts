@@ -5,7 +5,13 @@
  * of a single parameter.
  */
 
-import type { LensData, LensSurface, Pickup, Solve, SurfaceType } from "../../types";
+import type {
+  LensData,
+  LensSurface,
+  Pickup,
+  Solve,
+  SurfaceType,
+} from "../../types";
 
 /** How a parameter's value is determined. */
 export type Modifier =
@@ -59,10 +65,19 @@ function mapPickups(
 }
 
 /** Insert a new surface so that it becomes surface `index`. */
-export function insertSurface(lens: LensData, index: number, surface: LensSurface = newSurface()): LensData {
+export function insertSurface(
+  lens: LensData,
+  index: number,
+  surface: LensSurface = newSurface(),
+): LensData {
   const i = Math.max(0, Math.min(index, lens.surfaces.length));
-  const shifted = lens.surfaces.map((s) => mapPickups(s, (src) => (src >= i ? src + 1 : src)));
-  return { ...lens, surfaces: [...shifted.slice(0, i), surface, ...shifted.slice(i)] };
+  const shifted = lens.surfaces.map((s) =>
+    mapPickups(s, (src) => (src >= i ? src + 1 : src)),
+  );
+  return {
+    ...lens,
+    surfaces: [...shifted.slice(0, i), surface, ...shifted.slice(i)],
+  };
 }
 
 /**
@@ -72,12 +87,19 @@ export function insertSurface(lens: LensData, index: number, surface: LensSurfac
 export function deleteSurface(lens: LensData, index: number): LensData {
   if (index < 0 || index >= lens.surfaces.length) return lens;
   if (lens.surfaces[index].is_stop) {
-    throw new Error("The aperture stop cannot be deleted; move the stop to another surface first");
+    throw new Error(
+      "The aperture stop cannot be deleted; move the stop to another surface first",
+    );
   }
-  if (lens.surfaces.length <= 1) throw new Error("A lens needs at least one surface");
+  if (lens.surfaces.length <= 1)
+    throw new Error("A lens needs at least one surface");
   const surfaces = lens.surfaces
     .filter((_, k) => k !== index)
-    .map((s) => mapPickups(s, (src) => (src === index ? null : src > index ? src - 1 : src)));
+    .map((s) =>
+      mapPickups(s, (src) =>
+        src === index ? null : src > index ? src - 1 : src,
+      ),
+    );
   return { ...lens, surfaces };
 }
 
@@ -85,7 +107,9 @@ export function deleteSurface(lens: LensData, index: number): LensData {
 export function setStop(lens: LensData, index: number): LensData {
   return {
     ...lens,
-    surfaces: lens.surfaces.map((s, k) => (s.is_stop === (k === index) ? s : { ...s, is_stop: k === index })),
+    surfaces: lens.surfaces.map((s, k) =>
+      s.is_stop === (k === index) ? s : { ...s, is_stop: k === index },
+    ),
   };
 }
 
@@ -99,7 +123,11 @@ export function getModifier(surface: LensSurface, param: string): Modifier {
 }
 
 /** The surface with `param` made fixed, variable, solved or picked up (exclusive). */
-export function setModifier(surface: LensSurface, param: string, modifier: Modifier): LensSurface {
+export function setModifier(
+  surface: LensSurface,
+  param: string,
+  modifier: Modifier,
+): LensSurface {
   const variables = surface.variables.filter((v) => v !== param);
   const solves = { ...surface.solves };
   const pickups = { ...surface.pickups };

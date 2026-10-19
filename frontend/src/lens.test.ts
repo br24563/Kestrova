@@ -16,7 +16,12 @@ const system: OpticalSystem = {
   wavelengths: [550e-9],
   object: { position: 0, height: 0.01, orientation: 0 },
   image_plane: { position: 0.2 },
-  analysis_settings: { num_rays: 11, ray_types: ["chief"], aperture_fraction: 1, wavelength: 550e-9 },
+  analysis_settings: {
+    num_rays: 11,
+    ray_types: ["chief"],
+    aperture_fraction: 1,
+    wavelength: 550e-9,
+  },
 };
 
 function surface(patch: Partial<LensSurface>): LensSurface {
@@ -26,8 +31,19 @@ function surface(patch: Partial<LensSurface>): LensSurface {
 const lens: LensData = {
   name: "",
   surfaces: [
-    surface({ label: "STO", is_stop: true, semi_diameter: 0.008, thickness: 0.002 }),
-    surface({ element: "L1", radius: 0.05, thickness: 0.006, material: "N-BK7", variables: ["radius"] }),
+    surface({
+      label: "STO",
+      is_stop: true,
+      semi_diameter: 0.008,
+      thickness: 0.002,
+    }),
+    surface({
+      element: "L1",
+      radius: 0.05,
+      thickness: 0.006,
+      material: "N-BK7",
+      variables: ["radius"],
+    }),
     surface({
       element: "L1",
       radius: -0.05,
@@ -62,21 +78,37 @@ describe("lens data API", () => {
   });
 
   it("lensFromSystem posts the system", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ lens }));
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ lens }));
     const result = await lensFromSystem(system);
-    expect(fetchMock).toHaveBeenCalledWith("/api/lens/from-system", expect.objectContaining({ method: "POST" }));
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lens/from-system",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
     expect(body).toEqual({ system });
     expect(result.lens.surfaces).toHaveLength(3);
   });
 
   it("resolveLens posts the lens and returns lens, system and first order", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ lens, system, first_order: { efl: 0.05, image_z: 0.108 } }),
+      jsonResponse({
+        lens,
+        system,
+        first_order: { efl: 0.05, image_z: 0.108 },
+      }),
     );
     const result = await resolveLens(lens);
-    expect(fetchMock).toHaveBeenCalledWith("/api/lens/resolve", expect.objectContaining({ method: "POST" }));
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/lens/resolve",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
     expect(body.lens.surfaces[2].solves.thickness.kind).toBe("marginal_height");
     expect(result.system.image_plane.position).toBe(0.2);
     expect(result.first_order.efl).toBe(0.05);
@@ -84,10 +116,18 @@ describe("lens data API", () => {
 
   it("optimizeLens sends bounds and max_evaluations", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ lens, system, first_order: {}, rms_spot_before: 2e-5, rms_spot_after: 1e-5 }),
+      jsonResponse({
+        lens,
+        system,
+        first_order: {},
+        rms_spot_before: 2e-5,
+        rms_spot_after: 1e-5,
+      }),
     );
     const result = await optimizeLens(lens, { "1.radius": [0.02, 1] }, 50);
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
     expect(fetchMock.mock.calls[0][0]).toBe("/api/lens/optimize");
     expect(body.bounds).toEqual({ "1.radius": [0.02, 1] });
     expect(body.max_evaluations).toBe(50);
@@ -96,7 +136,11 @@ describe("lens data API", () => {
 
   it("surfaces the backend's error detail", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ detail: "Exactly one surface must be the aperture stop" }, false, 400),
+      jsonResponse(
+        { detail: "Exactly one surface must be the aperture stop" },
+        false,
+        400,
+      ),
     );
     await expect(resolveLens(lens)).rejects.toThrow(
       "Failed to resolve lens data: Exactly one surface must be the aperture stop",
@@ -139,10 +183,19 @@ describe("lens edits", () => {
   it("setModifier makes a parameter variable, solved or picked up exclusively", () => {
     let s = lens.surfaces[1];
     expect(getModifier(s, "radius")).toEqual({ kind: "variable" });
-    s = setModifier(s, "radius", { kind: "solve", solve: { kind: "f_number", target: 4 } });
+    s = setModifier(s, "radius", {
+      kind: "solve",
+      solve: { kind: "f_number", target: 4 },
+    });
     expect(s.variables).toEqual([]);
-    expect(getModifier(s, "radius")).toEqual({ kind: "solve", solve: { kind: "f_number", target: 4 } });
-    s = setModifier(s, "radius", { kind: "pickup", pickup: { source: 0, scale: 1, offset: 0 } });
+    expect(getModifier(s, "radius")).toEqual({
+      kind: "solve",
+      solve: { kind: "f_number", target: 4 },
+    });
+    s = setModifier(s, "radius", {
+      kind: "pickup",
+      pickup: { source: 0, scale: 1, offset: 0 },
+    });
     expect(s.solves).toEqual({});
     expect(getModifier(s, "radius").kind).toBe("pickup");
     s = setModifier(s, "radius", { kind: "fixed" });

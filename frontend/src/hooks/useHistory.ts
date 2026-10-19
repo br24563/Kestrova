@@ -4,7 +4,7 @@
  * Provides undo/redo functionality for state management.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 interface HistoryState<T> {
   past: T[];
@@ -22,31 +22,38 @@ export function useHistory<T>(initialState: T, maxHistory = 50) {
   const canUndo = state.past.length > 0;
   const canRedo = state.future.length > 0;
 
-  const set = useCallback((newPresent: T | ((prev: T) => T)) => {
-    setState(currentState => {
-      const resolvedPresent = typeof newPresent === 'function'
-        ? (newPresent as (prev: T) => T)(currentState.present)
-        : newPresent;
+  const set = useCallback(
+    (newPresent: T | ((prev: T) => T)) => {
+      setState((currentState) => {
+        const resolvedPresent =
+          typeof newPresent === "function"
+            ? (newPresent as (prev: T) => T)(currentState.present)
+            : newPresent;
 
-      if (JSON.stringify(resolvedPresent) === JSON.stringify(currentState.present)) {
-        return currentState;
-      }
+        if (
+          JSON.stringify(resolvedPresent) ===
+          JSON.stringify(currentState.present)
+        ) {
+          return currentState;
+        }
 
-      const newPast = [...currentState.past, currentState.present];
-      if (newPast.length > maxHistory) {
-        newPast.shift();
-      }
+        const newPast = [...currentState.past, currentState.present];
+        if (newPast.length > maxHistory) {
+          newPast.shift();
+        }
 
-      return {
-        past: newPast,
-        present: resolvedPresent,
-        future: [],
-      };
-    });
-  }, [maxHistory]);
+        return {
+          past: newPast,
+          present: resolvedPresent,
+          future: [],
+        };
+      });
+    },
+    [maxHistory],
+  );
 
   const undo = useCallback(() => {
-    setState(currentState => {
+    setState((currentState) => {
       if (currentState.past.length === 0) {
         return currentState;
       }
@@ -63,7 +70,7 @@ export function useHistory<T>(initialState: T, maxHistory = 50) {
   }, []);
 
   const redo = useCallback(() => {
-    setState(currentState => {
+    setState((currentState) => {
       if (currentState.future.length === 0) {
         return currentState;
       }

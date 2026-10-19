@@ -6,10 +6,10 @@
  * or standalone HTML.
  */
 
-import type { OpticalSystem, OpticalComponent, LengthUnit } from '../../types';
-import { fromMeters, LENGTH_UNIT_LABELS } from '../../types';
-import { generateReport } from '../../api';
-import { useAnalysis } from '../analysis/useAnalysis';
+import type { OpticalSystem, OpticalComponent, LengthUnit } from "../../types";
+import { fromMeters, LENGTH_UNIT_LABELS } from "../../types";
+import { generateReport } from "../../api";
+import { useAnalysis } from "../analysis/useAnalysis";
 
 interface ReportGeneratorProps {
   system: OpticalSystem;
@@ -21,37 +21,40 @@ function prescriptionMarkdown(system: OpticalSystem, unit: LengthUnit): string {
   const len = (m: number) => fromMeters(m, unit).toFixed(4);
   const params = (c: OpticalComponent): string => {
     switch (c.type) {
-      case 'thin_lens':
+      case "thin_lens":
         return `f = ${len(c.focal_length)} ${u}, D = ${len(c.aperture_diameter)} ${u}, ${c.material}`;
-      case 'thick_lens':
+      case "thick_lens":
         return `R1 = ${len(c.radius1)}, R2 = ${len(c.radius2)}, t = ${len(c.thickness)}, D = ${len(c.aperture_diameter)} ${u}, ${c.material}`;
-      case 'spherical_surface':
+      case "spherical_surface":
         return `R = ${len(c.radius)} ${u}, ${c.material}`;
-      case 'aperture':
+      case "aperture":
         return `D = ${len(c.diameter)} ${u}`;
-      case 'mirror':
-        return `R = ${c.radius ? `${len(c.radius)} ${u}` : 'flat'}, width = ${len(c.width)} ${u}`;
+      case "mirror":
+        return `R = ${c.radius ? `${len(c.radius)} ${u}` : "flat"}, width = ${len(c.width)} ${u}`;
       default:
-        return '';
+        return "";
     }
   };
   const lines = [
-    '## Prescription',
-    '',
+    "## Prescription",
+    "",
     `Object at ${len(system.object.position)} ${u}, height ${len(system.object.height)} ${u}; ` +
       `image plane at ${len(system.image_plane.position)} ${u}; ` +
       `wavelength ${(system.analysis_settings.wavelength * 1e9).toFixed(1)} nm.`,
-    '',
+    "",
     `| # | Label | Type | Position (${u}) | Parameters |`,
-    '| --- | --- | --- | --- | --- |',
-    ...system.components.map((c, i) => `| ${i + 1} | ${c.id} | ${c.type} | ${len(c.position)} | ${params(c)} |`),
-    '',
+    "| --- | --- | --- | --- | --- |",
+    ...system.components.map(
+      (c, i) =>
+        `| ${i + 1} | ${c.id} | ${c.type} | ${len(c.position)} | ${params(c)} |`,
+    ),
+    "",
   ];
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Convert the report's Markdown subset (headings, tables, paragraphs) to HTML. */
@@ -61,32 +64,46 @@ function markdownToHtml(md: string): string {
   const flushTable = () => {
     if (!table) return;
     const [head, ...rows] = table;
-    out.push('<table><thead><tr>' + head.map((c) => `<th>${escapeHtml(c)}</th>`).join('') + '</tr></thead><tbody>');
-    rows.forEach((r) => out.push('<tr>' + r.map((c) => `<td>${escapeHtml(c)}</td>`).join('') + '</tr>'));
-    out.push('</tbody></table>');
+    out.push(
+      "<table><thead><tr>" +
+        head.map((c) => `<th>${escapeHtml(c)}</th>`).join("") +
+        "</tr></thead><tbody>",
+    );
+    rows.forEach((r) =>
+      out.push(
+        "<tr>" + r.map((c) => `<td>${escapeHtml(c)}</td>`).join("") + "</tr>",
+      ),
+    );
+    out.push("</tbody></table>");
     table = null;
   };
-  for (const line of md.split('\n')) {
-    if (line.startsWith('|')) {
-      const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+  for (const line of md.split("\n")) {
+    if (line.startsWith("|")) {
+      const cells = line
+        .split("|")
+        .slice(1, -1)
+        .map((c) => c.trim());
       if (cells.every((c) => /^-+$/.test(c))) continue;
       (table ??= []).push(cells);
       continue;
     }
     flushTable();
-    if (line.startsWith('### ')) out.push(`<h3>${escapeHtml(line.slice(4))}</h3>`);
-    else if (line.startsWith('## ')) out.push(`<h2>${escapeHtml(line.slice(3))}</h2>`);
-    else if (line.startsWith('# ')) out.push(`<h1>${escapeHtml(line.slice(2))}</h1>`);
+    if (line.startsWith("### "))
+      out.push(`<h3>${escapeHtml(line.slice(4))}</h3>`);
+    else if (line.startsWith("## "))
+      out.push(`<h2>${escapeHtml(line.slice(3))}</h2>`);
+    else if (line.startsWith("# "))
+      out.push(`<h1>${escapeHtml(line.slice(2))}</h1>`);
     else if (line.trim()) out.push(`<p>${escapeHtml(line)}</p>`);
   }
   flushTable();
-  return out.join('\n');
+  return out.join("\n");
 }
 
 function download(content: string, type: string, filename: string) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  const link = document.createElement("a");
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
@@ -96,8 +113,13 @@ function download(content: string, type: string, filename: string) {
 }
 
 export function ReportGenerator({ system, displayUnit }: ReportGeneratorProps) {
-  const { data, error, loading } = useAnalysis(() => generateReport(system), [system]);
-  const report = data ? `${data.markdown.trimEnd()}\n\n${prescriptionMarkdown(system, displayUnit)}` : '';
+  const { data, error, loading } = useAnalysis(
+    () => generateReport(system),
+    [system],
+  );
+  const report = data
+    ? `${data.markdown.trimEnd()}\n\n${prescriptionMarkdown(system, displayUnit)}`
+    : "";
 
   const exportHtml = () => {
     const html = `<!DOCTYPE html>
@@ -113,13 +135,15 @@ th{background:#f3f4f6;}
 ${markdownToHtml(report)}
 <p><em>Generated ${escapeHtml(new Date().toLocaleString())} by AI Optical Design Engineer</em></p>
 </body></html>`;
-    download(html, 'text/html', 'optical-design-report.html');
+    download(html, "text/html", "optical-design-report.html");
   };
 
   return (
     <div className="p-4">
       <div className="flex justify-between items-center mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Engineering Report</h3>
+        <h3 className="text-sm font-semibold text-gray-700">
+          Engineering Report
+        </h3>
         <div className="flex gap-2">
           <button
             onClick={exportHtml}
@@ -129,7 +153,9 @@ ${markdownToHtml(report)}
             Export HTML
           </button>
           <button
-            onClick={() => download(report, 'text/markdown', 'optical-design-report.md')}
+            onClick={() =>
+              download(report, "text/markdown", "optical-design-report.md")
+            }
             disabled={!data}
             className="px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
           >
@@ -138,11 +164,15 @@ ${markdownToHtml(report)}
         </div>
       </div>
 
-      {loading && !data && <p className="text-xs text-gray-500">Generating report...</p>}
+      {loading && !data && (
+        <p className="text-xs text-gray-500">Generating report...</p>
+      )}
       {error && <p className="text-xs text-red-500">{error}</p>}
       {data && !error && (
         <div className="border border-gray-200 rounded bg-gray-50 p-4 max-h-96 overflow-y-auto">
-          <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono">{report}</pre>
+          <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono">
+            {report}
+          </pre>
         </div>
       )}
     </div>

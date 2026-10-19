@@ -1,8 +1,19 @@
 import { describe, it, expect } from "vitest";
 import {
-  toMM, toM, toNm, MM_TO_M, M_TO_MM, NM_TO_M, M_TO_NM,
-  fromMeters, toMeters, LENGTH_UNIT_FACTORS, LENGTH_UNIT_LABELS,
-  DEFAULT_LENGTH_UNIT, type ComponentType, type OpticalComponent,
+  toMM,
+  toM,
+  toNm,
+  MM_TO_M,
+  M_TO_MM,
+  NM_TO_M,
+  M_TO_NM,
+  fromMeters,
+  toMeters,
+  LENGTH_UNIT_FACTORS,
+  LENGTH_UNIT_LABELS,
+  DEFAULT_LENGTH_UNIT,
+  type ComponentType,
+  type OpticalComponent,
 } from "./types";
 
 describe("unit conversion helpers", () => {
@@ -91,10 +102,10 @@ describe("thick_lens component type", () => {
     const thickLens: OpticalComponent = {
       type: "thick_lens",
       id: "thick_lens_1",
-      position: 0.200,
-      radius1: 0.100,
-      radius2: -0.100,
-      thickness: 0.010,
+      position: 0.2,
+      radius1: 0.1,
+      radius2: -0.1,
+      thickness: 0.01,
       aperture_diameter: 0.025,
       material: "N-BK7",
     };
@@ -111,8 +122,24 @@ describe("thick_lens component type", () => {
 
   it("distinguishes thick_lens from thin_lens in the union", () => {
     const comps: OpticalComponent[] = [
-      { type: "thin_lens", id: "l1", position: 0.1, focal_length: 0.05, aperture_diameter: 0.025, material: "N-BK7" },
-      { type: "thick_lens", id: "tl1", position: 0.2, radius1: 0.1, radius2: -0.1, thickness: 0.01, aperture_diameter: 0.025, material: "N-BK7" },
+      {
+        type: "thin_lens",
+        id: "l1",
+        position: 0.1,
+        focal_length: 0.05,
+        aperture_diameter: 0.025,
+        material: "N-BK7",
+      },
+      {
+        type: "thick_lens",
+        id: "tl1",
+        position: 0.2,
+        radius1: 0.1,
+        radius2: -0.1,
+        thickness: 0.01,
+        aperture_diameter: 0.025,
+        material: "N-BK7",
+      },
     ];
 
     // The discriminated union should preserve each component's type tag.

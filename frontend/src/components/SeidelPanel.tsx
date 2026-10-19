@@ -42,13 +42,17 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [system]);
 
   if (loading) {
     return (
       <div className="p-4 border-t border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Seidel Aberrations</h2>
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">
+          Seidel Aberrations
+        </h2>
         <p className="text-gray-500 text-sm">Analyzing aberrations...</p>
       </div>
     );
@@ -57,7 +61,9 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
   if (error) {
     return (
       <div className="p-4 border-t border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Seidel Aberrations</h2>
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">
+          Seidel Aberrations
+        </h2>
         <p className="text-red-500 text-sm">{error}</p>
       </div>
     );
@@ -66,13 +72,18 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
   if (!data) {
     return (
       <div className="p-4 border-t border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Seidel Aberrations</h2>
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">
+          Seidel Aberrations
+        </h2>
         <p className="text-gray-500 text-sm">No aberration data available.</p>
       </div>
     );
   }
 
-  const saLong = fromMeters(data.spherical_aberration.longitudinal, displayUnit);
+  const saLong = fromMeters(
+    data.spherical_aberration.longitudinal,
+    displayUnit,
+  );
   const saTrans = fromMeters(data.spherical_aberration.transverse, displayUnit);
   const coma = fromMeters(data.coma, displayUnit);
   const astig = fromMeters(data.astigmatism, displayUnit);
@@ -81,22 +92,31 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
 
   return (
     <div className="p-4 border-t border-gray-200">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">Seidel Aberrations</h2>
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">
+        Seidel Aberrations
+      </h2>
       <div className="space-y-3">
         <div className="text-[10px] text-gray-400">
-          Third-order values from the Seidel sums at full aperture and full field.
+          Third-order values from the Seidel sums at full aperture and full
+          field.
         </div>
         {/* Spherical Aberration */}
         <div className="p-3 bg-gray-50 rounded border">
-          <div className="text-xs text-gray-500 uppercase">Spherical Aberration</div>
+          <div className="text-xs text-gray-500 uppercase">
+            Spherical Aberration
+          </div>
           <div className="grid grid-cols-2 gap-2 mt-1">
             <div>
               <div className="text-xs text-gray-400">Longitudinal</div>
-              <div className="font-medium text-sm">{saLong.toFixed(4)} {unitLabel}</div>
+              <div className="font-medium text-sm">
+                {saLong.toFixed(4)} {unitLabel}
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-400">Transverse</div>
-              <div className="font-medium text-sm">{saTrans.toFixed(4)} {unitLabel}</div>
+              <div className="font-medium text-sm">
+                {saTrans.toFixed(4)} {unitLabel}
+              </div>
             </div>
           </div>
         </div>
@@ -105,7 +125,9 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
         <div className="p-2 bg-gray-50 rounded border">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Coma</span>
-            <span className="font-medium">{coma.toFixed(4)} {unitLabel}</span>
+            <span className="font-medium">
+              {coma.toFixed(4)} {unitLabel}
+            </span>
           </div>
         </div>
 
@@ -113,7 +135,9 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
         <div className="p-2 bg-gray-50 rounded border">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Astigmatism</span>
-            <span className="font-medium">{astig.toFixed(4)} {unitLabel}</span>
+            <span className="font-medium">
+              {astig.toFixed(4)} {unitLabel}
+            </span>
           </div>
         </div>
 
@@ -121,7 +145,9 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
         <div className="p-2 bg-gray-50 rounded border">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Field Curvature</span>
-            <span className="font-medium">{fieldCurv.toFixed(4)} {unitLabel}</span>
+            <span className="font-medium">
+              {fieldCurv.toFixed(4)} {unitLabel}
+            </span>
           </div>
         </div>
 
@@ -135,22 +161,34 @@ export function SeidelPanel({ system, displayUnit }: SeidelPanelProps) {
 
         {/* Focus positions */}
         <div className="p-3 bg-gray-50 rounded border">
-          <div className="text-xs text-gray-500 uppercase mb-1">Focus Positions</div>
+          <div className="text-xs text-gray-500 uppercase mb-1">
+            Focus Positions
+          </div>
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div>
               <div className="text-gray-400">Paraxial</div>
-              <div className="font-medium">{fromMeters(data.paraxial_image_position, displayUnit).toFixed(2)}</div>
+              <div className="font-medium">
+                {fromMeters(data.paraxial_image_position, displayUnit).toFixed(
+                  2,
+                )}
+              </div>
             </div>
             <div>
               <div className="text-gray-400">Tangential (from paraxial)</div>
-              <div className="font-medium">{fromMeters(data.tangential_focus, displayUnit).toFixed(4)}</div>
+              <div className="font-medium">
+                {fromMeters(data.tangential_focus, displayUnit).toFixed(4)}
+              </div>
             </div>
             <div>
               <div className="text-gray-400">Sagittal (from paraxial)</div>
-              <div className="font-medium">{fromMeters(data.sagittal_focus, displayUnit).toFixed(4)}</div>
+              <div className="font-medium">
+                {fromMeters(data.sagittal_focus, displayUnit).toFixed(4)}
+              </div>
             </div>
           </div>
-          <div className="text-[10px] text-gray-400 mt-1">(all in {unitLabel})</div>
+          <div className="text-[10px] text-gray-400 mt-1">
+            (all in {unitLabel})
+          </div>
         </div>
       </div>
     </div>

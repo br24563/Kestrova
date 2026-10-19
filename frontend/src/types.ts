@@ -11,11 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export type ComponentType =
-  | "thin_lens"
-  | "spherical_surface"
-  | "thick_lens"
-  | "aperture"
-  | "mirror";
+  "thin_lens" | "spherical_surface" | "thick_lens" | "aperture" | "mirror";
 
 export interface OpticalComponentBase {
   id: string;
@@ -59,11 +55,7 @@ export interface Mirror extends OpticalComponentBase {
 }
 
 export type OpticalComponent =
-  | ThinLens
-  | SphericalSurface
-  | ThickLens
-  | ApertureStop
-  | Mirror;
+  ThinLens | SphericalSurface | ThickLens | ApertureStop | Mirror;
 
 // ---------------------------------------------------------------------------
 // Object and Image Plane
@@ -398,14 +390,23 @@ export function fromMeters(meters: number, unit: LengthUnit): number {
 }
 
 /** Format a number that may be null (infinite in the backend) as "∞". */
-export function fmtNum(value: number | null | undefined, digits: number): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "∞";
+export function fmtNum(
+  value: number | null | undefined,
+  digits: number,
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value))
+    return "∞";
   return value.toFixed(digits);
 }
 
 /** Format a length in meters (null = infinite) in the given display unit. */
-export function fmtLen(meters: number | null | undefined, unit: LengthUnit, digits: number): string {
-  if (meters === null || meters === undefined || !Number.isFinite(meters)) return "∞";
+export function fmtLen(
+  meters: number | null | undefined,
+  unit: LengthUnit,
+  digits: number,
+): string {
+  if (meters === null || meters === undefined || !Number.isFinite(meters))
+    return "∞";
   return fromMeters(meters, unit).toFixed(digits);
 }
 
@@ -437,11 +438,7 @@ export function formatValue(value: number, decimals: number = 3): string {
 // ---------------------------------------------------------------------------
 
 export type SurfaceType =
-  | "standard"
-  | "even_asphere"
-  | "paraxial"
-  | "coordinate_break"
-  | "component";
+  "standard" | "even_asphere" | "paraxial" | "coordinate_break" | "component";
 
 export type SolveKind =
   | "marginal_height"
@@ -450,8 +447,15 @@ export type SolveKind =
   | "chief_angle"
   | "f_number";
 
-export const THICKNESS_SOLVES: SolveKind[] = ["marginal_height", "chief_height"];
-export const RADIUS_SOLVES: SolveKind[] = ["marginal_angle", "chief_angle", "f_number"];
+export const THICKNESS_SOLVES: SolveKind[] = [
+  "marginal_height",
+  "chief_height",
+];
+export const RADIUS_SOLVES: SolveKind[] = [
+  "marginal_angle",
+  "chief_angle",
+  "f_number",
+];
 
 /** A parameter computed from a paraxial ray (target: m, slope, or F-number). */
 export interface Solve {

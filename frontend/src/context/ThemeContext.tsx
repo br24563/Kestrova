@@ -4,9 +4,15 @@
  * Manages dark/light mode with localStorage persistence.
  */
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 
-type Theme = 'light' | 'dark';
+type Theme = "light" | "dark";
 
 interface ThemeContextType {
   theme: Theme;
@@ -16,21 +22,21 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const THEME_KEY = 'ai-optical-design-engineer-theme';
+const THEME_KEY = "ai-optical-design-engineer-theme";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     const stored = localStorage.getItem(THEME_KEY);
-    return (stored === 'dark' || stored === 'light') ? stored : 'light';
+    return stored === "dark" || stored === "light" ? stored : "light";
   });
 
   useEffect(() => {
     localStorage.setItem(THEME_KEY, theme);
-    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
   const toggleTheme = () => {
-    setThemeState(prev => prev === 'light' ? 'dark' : 'light');
+    setThemeState((prev) => (prev === "light" ? "dark" : "light"));
   };
 
   const setTheme = (newTheme: Theme) => {
@@ -47,7 +53,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
 }
