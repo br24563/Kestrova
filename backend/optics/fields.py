@@ -22,6 +22,7 @@ system's own object height is.
 
 from __future__ import annotations
 
+import functools
 import math
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -128,6 +129,19 @@ def resolve_fields(system: OpticalSystem) -> tuple[OpticalSystem, list[ResolvedF
     return tracing, fields
 
 
+@functools.lru_cache(maxsize=64)
+def _gaussian_pupil_cached(rings: int, arms: int) -> tuple:
+    x, w = np.polynomial.legendre.leggauss(rings)
+    r = np.sqrt((x + 1.0) / 2.0)
+    th = (np.arange(arms) + 0.5) * (2 * np.pi / arms)
+    R, T = np.meshgrid(r, th, indexing="ij")
+    W = np.repeat((w / 2.0)[:, None] / arms, arms, axis=1)
+    out = ((R * np.cos(T)).ravel(), (R * np.sin(T)).ravel(), W.ravel())
+    for arr in out:
+        arr.setflags(write=False)
+    return out
+
+
 def gaussian_pupil(rings: int, arms: Optional[int] = None) -> tuple:
     """
     Gaussian quadrature over the unit pupil (G. W. Forbes, JOSA A 5, 1943,
@@ -136,13 +150,7 @@ def gaussian_pupil(rings: int, arms: Optional[int] = None) -> tuple:
     to 1, so sum(w * f) integrates f over the pupil area exactly for
     polynomials of degree 2 * rings - 1 in r^2.
     """
-    arms = arms or max(6, 4 * rings)
-    x, w = np.polynomial.legendre.leggauss(rings)
-    r = np.sqrt((x + 1.0) / 2.0)
-    th = (np.arange(arms) + 0.5) * (2 * np.pi / arms)
-    R, T = np.meshgrid(r, th, indexing="ij")
-    W = np.repeat((w / 2.0)[:, None] / arms, arms, axis=1)
-    return (R * np.cos(T)).ravel(), (R * np.sin(T)).ravel(), W.ravel()
+    return _gaussian_pupil_cached(int(rings), int(arms or max(6, 4 * rings)))
 
 
 def pupil_samples(rings: int, vignetting: tuple) -> tuple:

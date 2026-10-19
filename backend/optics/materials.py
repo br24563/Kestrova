@@ -20,6 +20,7 @@ Wavelengths are in meters. The reference wavelength is the helium d-line,
 587.5618 nm.
 """
 
+import functools
 import json
 import math
 import re
@@ -536,6 +537,15 @@ def material_names() -> list[str]:
 
 
 def refractive_index(material: str, wavelength: float = D_LINE) -> float:
+    """
+    Refractive index (relative to air) of a material at a wavelength.
+    Results are cached: the catalog is fixed once loaded.
+    """
+    return _refractive_index(material, float(wavelength))
+
+
+@functools.lru_cache(maxsize=8192)
+def _refractive_index(material: str, wavelength: float) -> float:
     """
     Refractive index (relative to air) of a material at a wavelength.
 
