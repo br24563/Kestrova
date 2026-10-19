@@ -122,11 +122,45 @@ position and pupils.
 #### POST /api/lens/optimize
 
 `{ "lens", "bounds": {"1.radius": [0.02, 1.0]}, "max_evaluations": 300 }`
-→ damped least squares over the variables, minimising the transverse ray
-errors over fields 0, 0.7 and 1 and all wavelengths with solves and pickups
-held. Returns the optimized `lens` and `system`, `variables`,
-`rms_spot_before` / `rms_spot_after` (m) and `first_order`. As in Code V,
+→ constrained damped least squares over the variables, minimising the
+transverse ray errors over fields 0, 0.7 and 1 and all wavelengths with
+solves, pickups and the lens's `constraints` held. Radius bounds must not
+span a flat surface (radii vary as curvatures). Returns the optimized `lens`
+and `system`, `variables`, `rms_spot_before` / `rms_spot_after` (m),
+`first_order`, `constraints` (each with its `value` and `satisfied`),
+`history` (merit, violation and damping per cycle), `iterations`,
+`evaluations`, `success` (all constraints met) and `message`. As in Code V,
 only the stop limits the beam while optimizing.
+
+Constraints are part of the lens:
+
+```json
+"constraints": [
+  {"kind": "efl", "target": 0.1},
+  {"kind": "edge_thickness", "surface": 1, "minimum": 0.0015},
+  {"kind": "center_thickness", "surface": 2, "minimum": 0.002, "maximum": 0.006}
+]
+```
+
+Kinds: `efl`, `bfl`, `working_f_number`, `magnification`, `total_track`,
+and per surface `center_thickness` and `edge_thickness` (m). Give a
+`target`, or a `minimum` and/or `maximum`.
+
+A surface whose `material` is a model glass, `"MODEL:<nd>:<vd>"`, may list
+`glass_nd` and `glass_vd` among its `variables`; they stay inside the
+catalog glass map.
+
+#### POST /api/lens/constraints
+
+`{ "lens" }` → `{"constraints": [...]}`, each with its current `value` and
+`satisfied`.
+
+#### POST /api/lens/snap-glasses
+
+`{ "lens", "vendors": ["SCHOTT"], "include_inquiry": false }` → the lens with
+every model glass replaced by the nearest catalog glass (0.01 in nd counts as
+1 in Vd), its glass variables dropped, and `substitutions`
+(`[{"surface", "model", "glass"}]`). Re-optimize afterwards.
 
 ### Ray Tracing
 

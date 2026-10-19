@@ -24,6 +24,14 @@ All notable changes to this project will be documented in this file.
 - API returns null for infinite values (afocal systems) instead of failing.
 - Tests rewritten against independent references.
 
+### Added (Code V parity)
+- Constrained optimizer (Code V style): exact EFL, BFL, F-number,
+  magnification, track and centre/edge-thickness constraints by damped least
+  squares on the KKT system; radii varied as curvatures.
+- Model glasses (`MODEL:<nd>:<vd>`, normal-line partial dispersion) as
+  variables inside the catalog glass map, and snapping to the nearest real
+  glass (`/api/lens/snap-glasses`, `/api/lens/constraints`).
+
 ### Removed
 - BOM cost estimates (no published prices), fabricated GRIN materials,
   numeric "reference" prescriptions in the AI verifier.

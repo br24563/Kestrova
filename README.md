@@ -37,8 +37,11 @@ prebuilt installers are published yet; build it from source.
   literature dispersion formulas
 - Surface-by-surface lens data (Code V / Zemax style): thicknesses, solves
   (paraxial image, ray heights and angles, F-number), pickups and variable
-  flags, with damped least squares optimization over the flagged variables
-  (API only for now; see `/api/lens/*`)
+  flags, with constrained damped least squares optimization (Code V style):
+  exact EFL / BFL / F-number / magnification / track / centre- and
+  edge-thickness constraints, model glasses (nd, Vd) as variables held inside
+  the catalog glass map, and snapping to the nearest real glass (API only for
+  now; see `/api/lens/*`)
 - Ideal (paraxial) thin lenses, thick lenses, spherical surfaces, mirrors
   (spherical and conic), aperture stops
 - Aspheres (even, odd, Forbes Q), Zernike, toroidal and diffractive surfaces,
