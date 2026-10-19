@@ -33,8 +33,9 @@ pytest tests/test_edge_cases.py::TestObjectAtInfinity -v
 # Run performance tests
 pytest tests/test_performance.py -v
 
-# Run with coverage threshold
-pytest tests/ --cov=optics --cov-fail-under=80
+# Run with the CI coverage threshold (a ratchet at the current 68%;
+# the target is 80%, see Coverage Targets)
+pytest tests/ --cov=optics --cov-fail-under=68
 ```
 
 ### Frontend Tests

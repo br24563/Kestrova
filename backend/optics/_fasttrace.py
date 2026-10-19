@@ -15,6 +15,7 @@ Numba is optional: without it (or with the environment variable
 
 from __future__ import annotations
 
+import importlib
 import os
 
 from typing import Any
@@ -25,7 +26,7 @@ numba: Any
 try:  # pragma: no cover - depends on the environment
     if os.environ.get("OPTICS_NO_NUMBA"):
         raise ImportError("disabled by OPTICS_NO_NUMBA")
-    import numba
+    numba = importlib.import_module("numba")
 
     AVAILABLE = True
 except ImportError:  # pragma: no cover
