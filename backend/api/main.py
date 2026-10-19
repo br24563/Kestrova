@@ -876,6 +876,53 @@ async def lens_optimize(request: LensOptimizeRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ---------------------------------------------------------------------------
+# Field table analyses
+# ---------------------------------------------------------------------------
+
+
+class FieldsRequest(BaseModel):
+    system: OpticalSystem
+    rings: int = Field(6, ge=1, le=20)
+
+
+class FieldMtfRequest(BaseModel):
+    system: OpticalSystem
+    field: int = Field(0, ge=0)
+    frequencies: Optional[list[float]] = Field(None, description="cycles/mm")
+    grid: int = Field(64, ge=16, le=256)
+
+
+@app.post("/api/analyze/fields")
+async def analyze_fields(request: FieldsRequest):
+    """
+    Per-field results for the system's field table (or the default 0, 0.7
+    and 1 of the object height): real chief ray and paraxial image position,
+    distortion, wavelength-weighted RMS spot and centroid, vignetting, and
+    the field-weighted RMS spot.
+    """
+    from optics.fields import field_summary
+
+    try:
+        return field_summary(request.system, rings=request.rings)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/field-mtf")
+async def analyze_field_mtf(request: FieldMtfRequest):
+    """Wavelength-weighted diffraction MTF of one field point, tangential
+    along its image direction and sagittal across it."""
+    from optics.fields import field_mtf
+
+    try:
+        return field_mtf(
+            request.system, request.field, request.frequencies, request.grid
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/validate", response_model=SystemResponse)
 async def validate(system: OpticalSystem):
     """

@@ -45,6 +45,7 @@ from .advanced_surfaces import AsphericSurface, CoordinateBreak
 from .models import (
     AnalysisSettings,
     ApertureStop,
+    FieldPoint,
     ImagePlane,
     Mirror,
     Object,
@@ -215,6 +216,18 @@ class LensData(BaseModel):
         description="Aperture as an entrance pupil diameter (m); otherwise the stop's semi-diameter",
     )
     wavelengths: list[float] = Field(default_factory=lambda: [550e-9])
+    wavelength_weights: Optional[list[float]] = Field(
+        default=None, description="Weight of each wavelength (None = equal)"
+    )
+    fields: Optional[list[FieldPoint]] = Field(
+        default=None, description="Field table (None = 0, 0.7, 1 of the full field)"
+    )
+    field_type: Optional[Literal["object_height", "angle", "paraxial_image_height"]] = (
+        Field(
+            default=None,
+            description="object_height, angle or paraxial_image_height (None = by object distance)",
+        )
+    )
     first_surface_position: float = 0.0
     analysis_settings: AnalysisSettings = Field(default_factory=AnalysisSettings)
 
@@ -546,6 +559,9 @@ def _build(
             components=components,
             wavelengths=list(lens.wavelengths),
             object=Object(position=z0 - obj_dist, height=obj_height),
+            fields=lens.fields,
+            field_type=lens.field_type,
+            wavelength_weights=lens.wavelength_weights,
             image_plane=ImagePlane(position=image_z),
             analysis_settings=lens.analysis_settings,
         )
@@ -684,16 +700,29 @@ def _fill_semi_diameters(lens: LensData, stop_semi: float) -> None:
     heights: dict[int, float] = {}
     incomplete = False  # some edge ray failed: real heights may be too small
     th = np.linspace(0.0, 2 * np.pi, 24, endpoint=False)
-    px = np.concatenate([[0.0], np.cos(th)])
-    py = np.concatenate([[0.0], np.sin(th)])
-    fields = [0.0] + ([1.0, -1.0] if system.object.height else [])
+    ring_x = np.concatenate([[0.0], np.cos(th)])
+    ring_y = np.concatenate([[0.0], np.sin(th)])
+    from .fields import resolve_fields
+    from .pupil import vignetted_pupil
+
+    tracing, field_list = resolve_fields(system)
+    points: list[tuple[float, float, Optional[tuple]]]
+    if system.fields is None:  # also cover the -y full field
+        points = [
+            (0.0, ff, None)
+            for ff in ([0.0, 1.0, -1.0] if system.object.height else [0.0])
+        ]
+    else:
+        points = [(f.hx, f.hy, f.vignetting) for f in field_list]
     try:
         for wl in lens.wavelengths:
-            seq = rt.build_sequence(system, wl)
-            fo = rt.first_order(system, seq=seq)
-            for ff in fields:
+            seq = rt.build_sequence(tracing, wl)
+            fo = rt.first_order(tracing, seq=seq)
+            for hx, hy, vig in points:
+                cx, cy, ax, ay = vignetted_pupil(vig)
+                px, py = cx + ax * ring_x, cy + ay * ring_y
                 b, _, _ = rt.trace_field_rays(
-                    system, 0.0, ff, px, py, wavelength=wl, seq=seq, fo=fo, clip=False
+                    tracing, hx, hy, px, py, wavelength=wl, seq=seq, fo=fo, clip=False
                 )
                 incomplete |= not bool(b.valid.all())
                 for i in todo:
@@ -945,6 +974,9 @@ def from_system(system: OpticalSystem) -> LensData:
         object_height=system.object.height,
         field_angle=math.atan2(system.object.height, obj_dist) if infinite else 0.0,
         wavelengths=list(system.wavelengths),
+        wavelength_weights=system.wavelength_weights,
+        fields=system.fields,
+        field_type=system.field_type,
         first_surface_position=zs[0],
         analysis_settings=system.analysis_settings,
     )
@@ -1005,7 +1037,11 @@ def optimize(
         return out
 
     r0 = np.asarray(merit(_merit_system(lens)), dtype=float)
-    penalty = max(float(np.max(np.abs(r0))) if r0.size else 1.0, 1e-3) * 10.0
+    # Work with residuals normalised by the starting RMS so the solver's
+    # stopping tolerances mean the same at any scale (residuals in meters
+    # are ~1e-5 and their gradients would fall below gtol at once).
+    norm0 = float(np.sqrt(np.sum(r0**2))) or 1.0
+    penalty = 10.0 * max(float(np.max(np.abs(r0))) / norm0 if r0.size else 1.0, 1.0)
     evaluations = [0]
 
     def residual(x):
@@ -1014,7 +1050,7 @@ def optimize(
             r = np.asarray(merit(_merit_system(apply(x))), dtype=float)
             if r.shape != r0.shape or not np.all(np.isfinite(r)):
                 raise ValueError("invalid merit")
-            return r
+            return r / norm0
         except (ValueError, ZeroDivisionError, FloatingPointError):
             return np.full(r0.shape, penalty)
 
@@ -1034,7 +1070,7 @@ def optimize(
         "system": to_system(best),
         "variables": {k: float(v) for k, v in zip(keys, res.x)},
         "merit_before": float(np.sum(r0**2)),
-        "merit_after": float(np.sum(res.fun**2)),
+        "merit_after": float(np.sum(res.fun**2)) * norm0**2,
         "evaluations": evaluations[0],
         "success": bool(res.success),
         "message": str(res.message),

@@ -180,7 +180,14 @@ def real_spot(
 
     Returns (points [[x, y], ...] relative to the centroid, rms radius about
     the centroid, centroid (x, y), number of rays traced, number vignetted).
+
+    The points (for plotting) come from a ``grid`` x ``grid`` pupil grid;
+    the RMS radius and centroid integrate over the pupil area by Gaussian
+    quadrature (Forbes 1988), which a square grid only approximates at the
+    pupil rim.
     """
+    from .fields import gaussian_pupil
+
     wl = wavelength if wavelength is not None else _wl(system)
     seq = rt.build_sequence(system, wl)
     fo = rt.first_order(system, seq=seq)
@@ -191,9 +198,28 @@ def real_spot(
     pts = pl[b.valid][:, :2]
     if len(pts) == 0:
         return [], 0.0, (0.0, 0.0), len(px), len(px)
-    c = pts.mean(axis=0)
+    gx, gy, gw = gaussian_pupil(10)  # independent of the plot grid
+    bg, _, _ = rt.trace_field_rays(
+        system,
+        0.0,
+        field_fraction,
+        gx * aperture_fraction,
+        gy * aperture_fraction,
+        seq=seq,
+        fo=fo,
+    )
+    if bg.valid.any():
+        gp = rt._to_local(
+            seq.image_origin, seq.image_rotation, bg.image, bg.directions
+        )[0]
+        gp = gp[bg.valid][:, :2]
+        w = gw[bg.valid] / gw[bg.valid].sum()
+        c = (gp * w[:, None]).sum(axis=0)
+        rms = float(np.sqrt(np.sum(w * np.sum((gp - c) ** 2, axis=1))))
+    else:
+        c = pts.mean(axis=0)
+        rms = float(np.sqrt(np.mean(np.sum((pts - c) ** 2, axis=1))))
     rel = pts - c
-    rms = float(np.sqrt(np.mean(np.sum(rel**2, axis=1))))
     return rel.tolist(), rms, (float(c[0]), float(c[1])), len(px), int((~b.valid).sum())
 
 
