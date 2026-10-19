@@ -7,6 +7,7 @@ the valid masks must be identical and every quantity equal to round-off.
 """
 
 import math
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -21,7 +22,7 @@ from optics.models import (
 )
 from optics.presets import get_preset_by_id
 
-pytestmark = pytest.mark.skipif(not ft.AVAILABLE, reason="Numba is not installed")
+needs_numba = pytest.mark.skipif(not ft.AVAILABLE, reason="Numba is not installed")
 
 
 def six_element():
@@ -65,6 +66,7 @@ SYSTEMS = {
 }
 
 
+@needs_numba
 @pytest.mark.parametrize("name", SYSTEMS)
 @pytest.mark.parametrize("clip", [True, False])
 def test_kernel_matches_numpy(name, clip):
@@ -101,6 +103,7 @@ def test_unsupported_surfaces_use_numpy():
     assert not ft.supports(rt.build_sequence(asph))
 
 
+@needs_numba
 def test_numpy_fallback_gives_the_same_bundle(monkeypatch):
     s = six_element()
     seq = rt.build_sequence(s)
@@ -128,3 +131,36 @@ def test_aimed_rays_hit_their_stop_targets():
     z_scale = max(abs(seq.object_z), max(abs(sf.z) for sf in seq.surfaces))
     tol = max(1e-10 * rs, 64 * np.finfo(float).eps * z_scale)
     assert np.max(np.hypot(x - px * rs, y - py * rs)) < tol
+
+
+@pytest.mark.parametrize("name", SYSTEMS)
+@pytest.mark.parametrize("clip", [True, False])
+def test_kernel_source_matches_numpy_in_python(name, clip, monkeypatch):
+    # The kernel's Python source, run uncompiled (prange is range), against
+    # the NumPy trace: checks the algorithm itself, with or without Numba
+    # (compiled code is invisible to coverage).
+    monkeypatch.setattr(ft, "numba", SimpleNamespace(prange=range))
+    s = SYSTEMS[name]()
+    seq = rt.build_sequence(s)
+    fo = rt.first_order(s, seq=seq)
+    rng = np.random.default_rng(11)
+    px, py = rng.uniform(-1.3, 1.3, 150), rng.uniform(-1.3, 1.3, 150)
+    p0, d0, _ = rt.aim_rays(seq, fo, 0.0, 0.8, px, py)
+    kind, c, k, origin, rot, ident, semi, n1, n2 = ft._pack(seq)
+    with np.errstate(all="ignore"):
+        pts, d, opl, valid, img, sopl = ft._kernel_impl(
+            np.ascontiguousarray(p0, dtype=float), np.ascontiguousarray(d0, dtype=float),
+            kind, c, k, origin, rot, ident, semi, n1, n2,
+            float(seq.surfaces[0].n_before),
+            np.ascontiguousarray(seq.image_origin, dtype=float),
+            np.ascontiguousarray(seq.image_rotation, dtype=float), clip,
+        )
+        ref = rt._trace_bundle(seq, p0, d0, clip)
+    assert np.array_equal(valid, ref.valid)
+    assert 0 < ref.valid.sum() < len(px) or not clip
+    v = ref.valid
+    np.testing.assert_allclose(pts[v], ref.points[v], rtol=0, atol=1e-12)
+    np.testing.assert_allclose(d[v], ref.directions[v], rtol=0, atol=1e-14)
+    np.testing.assert_allclose(opl[v], ref.opl[v], rtol=1e-14, atol=1e-15)
+    np.testing.assert_allclose(sopl[v], ref.surface_opl[v], rtol=1e-14, atol=1e-15)
+    np.testing.assert_allclose(img[v], ref.image[v], rtol=0, atol=1e-12)

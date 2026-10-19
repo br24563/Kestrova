@@ -18,8 +18,8 @@ def import_cad_file(filepath: Union[str, Path]) -> Mesh:
     Supported formats:
     - STL (ASCII and binary)
     - OBJ (Wavefront)
-    - STEP (AP203, AP214)
-    - IGES (5.3)
+    STEP and IGES are recognised but refused (NotImplementedError): they
+    need a CAD kernel.
 
     Args:
         filepath: Path to CAD file
@@ -78,7 +78,7 @@ def get_supported_formats() -> dict:
             "name": "STEP",
             "description": "ISO 10303",
             "extensions": [".step", ".stp"],
-            "import": "with OpenCascade (pythonocc-core) only",
+            "import": False,
             "export": False,
         },
         "iges": {

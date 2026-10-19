@@ -377,7 +377,9 @@ def tolerance_with_compensators(
                     method="bounded",
                     options={"xatol": 1e-9},
                 )
-                best = res.x if f(res.x) <= f(0.0) else 0.0
+                # move only for a strict improvement (a compensator the
+                # metric does not depend on stays where it is)
+                best = res.x if f(res.x) < f(0.0) else 0.0
                 s = set_parameter(s, comp.parameter, x0 + best)
                 comp_values[comp.name].append(float(best))
             v = float(metric(s))
