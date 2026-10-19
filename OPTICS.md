@@ -129,6 +129,33 @@ the pupil edge at the axial and full fields for all wavelengths. A lens
 converts to the component model below (and back) without changing the
 optics.
 
+### Optimization
+
+`optics/lens_optimize.py` minimises the transverse ray errors (fields 0,
+0.7 and 1, all wavelengths, Gaussian pupil) by damped least squares with
+the lens's constraints held exactly, as Code V does: each cycle solves the
+KKT system of the damped normal equations and the linearised active
+constraints (an active-set iteration, or a small QP solve where that
+cycles), then takes a second-order correction step back onto curved
+constraints. Steps are accepted on an exact-penalty merit; a final Newton
+restoration meets the constraints to round-off. Radii vary as curvatures
+(power, and so focal length, is nearly linear in them), and radius bounds
+may not span a flat surface.
+
+Constraints are targets or limits on EFL, BFL, working F-number,
+magnification, total track, the centre thickness after a surface, or the
+edge thickness after a surface, measured at the smaller of the two
+semi-diameters with the exact sag.
+
+A model glass, `MODEL:<nd>:<vd>`, has the dispersion
+n = A + B/λ² + C/λ⁴ (λ in µm) fitted exactly to nd, to nF − nC = (nd − 1)/Vd
+and to a partial dispersion on Schott's normal line,
+P_g,F = 0.6438 − 0.001682 Vd (SCHOTT TIE-29), valid 0.38 to 1.0 µm. Its
+nd and Vd can be variables; the optimizer keeps them inside the convex hull
+of the vendor glasses' (nd, Vd) points. `snap_glasses` then replaces each
+model glass by the nearest catalog glass, with 0.01 in nd counting as 1 in
+Vd and SCHOTT inquiry glasses skipped; re-optimize after snapping.
+
 ## How the Engine Traces Rays
 
 All analyses are built on one sequential engine (`backend/optics/raytrace.py`).

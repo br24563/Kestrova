@@ -77,9 +77,15 @@ _ASPHERE_PARAMS = tuple(f"asphere_{k}" for k in _ASPHERE_ORDERS)
 _CB_PARAMS = ("decenter_x", "decenter_y", "decenter_z", "tilt_x", "tilt_y", "tilt_z")
 
 #: Parameters each surface type has (all numeric).
+#: Model-glass parameters (only for a surface whose material is a model
+#: glass, "MODEL:<nd>:<vd>").
+GLASS_PARAMS = ("glass_nd", "glass_vd")
+
 PARAMETERS: dict[str, tuple[str, ...]] = {
-    "standard": ("radius", "thickness", "conic", "semi_diameter"),
-    "even_asphere": ("radius", "thickness", "conic", "semi_diameter") + _ASPHERE_PARAMS,
+    "standard": ("radius", "thickness", "conic", "semi_diameter") + GLASS_PARAMS,
+    "even_asphere": ("radius", "thickness", "conic", "semi_diameter")
+    + _ASPHERE_PARAMS
+    + GLASS_PARAMS,
     "paraxial": ("focal_length", "thickness", "semi_diameter"),
     "coordinate_break": ("thickness",) + _CB_PARAMS,
     "component": ("thickness",),
@@ -173,6 +179,15 @@ class LensSurface(BaseModel):
                 raise ValueError(
                     f"'{name}' is not a parameter of a {self.surface_type} surface"
                 )
+        uses_glass = set(self.variables) | set(self.pickups)
+        if uses_glass & set(GLASS_PARAMS):
+            from .materials import parse_model_glass
+
+            if self.material is None or parse_model_glass(self.material) is None:
+                raise ValueError(
+                    "Glass nd/Vd can vary only for a model glass material "
+                    "('MODEL:<nd>:<vd>')"
+                )
         for name, solve in self.solves.items():
             if name == "thickness" and solve.kind not in THICKNESS_SOLVES:
                 raise ValueError(f"A thickness solve must be one of {THICKNESS_SOLVES}")
@@ -193,6 +208,63 @@ class LensSurface(BaseModel):
             )
         for name in set(self.solves) & set(self.pickups):
             raise ValueError(f"'{name}' cannot be both solved and picked up")
+        return self
+
+
+ConstraintKind = Literal[
+    "efl",
+    "bfl",
+    "working_f_number",
+    "magnification",
+    "total_track",
+    "center_thickness",
+    "edge_thickness",
+]
+#: Constraints that refer to one surface (its thickness to the next).
+SURFACE_CONSTRAINTS = ("center_thickness", "edge_thickness")
+
+
+class Constraint(BaseModel):
+    """
+    A system property held during optimization: equal to ``target``, or
+    within ``minimum`` / ``maximum``.
+
+    efl, bfl, working_f_number, magnification: first-order values.
+    total_track: first surface to image (m).
+    center_thickness (``surface``): axial thickness after the surface (m).
+    edge_thickness (``surface``): thickness after the surface measured at
+        the smaller of the two surfaces' semi-diameters (m).
+    """
+
+    kind: ConstraintKind
+    surface: Optional[int] = Field(default=None, ge=0)
+    target: Optional[float] = None
+    minimum: Optional[float] = None
+    maximum: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.target is None and self.minimum is None and self.maximum is None:
+            raise ValueError("A constraint needs a target, a minimum or a maximum")
+        if self.target is not None and (
+            self.minimum is not None or self.maximum is not None
+        ):
+            raise ValueError("Give a target or limits, not both")
+        if (
+            self.minimum is not None
+            and self.maximum is not None
+            and self.minimum > self.maximum
+        ):
+            raise ValueError("The minimum exceeds the maximum")
+        if (self.kind in SURFACE_CONSTRAINTS) != (self.surface is not None):
+            raise ValueError(
+                f"{self.kind} "
+                + (
+                    "needs a surface"
+                    if self.kind in SURFACE_CONSTRAINTS
+                    else "does not take a surface"
+                )
+            )
         return self
 
 
@@ -230,11 +302,21 @@ class LensData(BaseModel):
     )
     first_surface_position: float = 0.0
     analysis_settings: AnalysisSettings = Field(default_factory=AnalysisSettings)
+    constraints: list[Constraint] = Field(
+        default_factory=list, description="Held exactly during optimization"
+    )
 
     @model_validator(mode="after")
     def _check(self):
         if not self.surfaces:
             raise ValueError("A lens needs at least one surface")
+        for c in self.constraints:
+            if c.surface is not None and c.surface >= len(self.surfaces) - (
+                1 if c.kind == "edge_thickness" else 0
+            ):
+                raise ValueError(
+                    f"Constraint {c.kind}: surface {c.surface} has no next surface"
+                )
         stops = [i for i, s in enumerate(self.surfaces) if s.is_stop]
         if len(stops) != 1:
             raise ValueError("Exactly one surface must be the aperture stop")
@@ -279,6 +361,13 @@ def get_parameter(surface: LensSurface, name: str) -> float:
         k = _ASPHERE_ORDERS.index(int(name.split("_")[1]))
         coeffs = surface.aspheric_coefficients
         return coeffs[k] if k < len(coeffs) else 0.0
+    if name in GLASS_PARAMS:
+        from .materials import parse_model_glass
+
+        model = parse_model_glass(surface.material or "")
+        if model is None:
+            raise ValueError(f"Surface '{surface.label}' does not have a model glass")
+        return model[0] if name == "glass_nd" else model[1]
     value = getattr(surface, name)
     if value is None:
         raise ValueError(f"'{name}' is not set on surface '{surface.label}'")
@@ -292,6 +381,18 @@ def _set(surface: LensSurface, name: str, value: float) -> None:
         coeffs += [0.0] * (k + 1 - len(coeffs))
         coeffs[k] = float(value)
         surface.aspheric_coefficients = coeffs
+    elif name in GLASS_PARAMS:
+        from .materials import model_glass_name, parse_model_glass
+
+        model = parse_model_glass(surface.material or "")
+        if model is None:
+            raise ValueError(f"Surface '{surface.label}' does not have a model glass")
+        nd, vd = model
+        if name == "glass_nd":
+            nd = float(value)
+        else:
+            vd = float(value)
+        surface.material = model_glass_name(nd, vd)
     else:
         setattr(surface, name, float(value))
     if name == "semi_diameter":
@@ -994,84 +1095,10 @@ def optimize(
     max_evaluations: int = 300,
 ) -> dict:
     """
-    Damped least squares over the lens's variables (scipy's trust-region
-    reflective least squares), with solves and pickups re-applied at every
-    step, as in Code V. Only the stop limits the beam during optimization;
-    the clear apertures you set are kept in the result.
-
-    Args:
-        merit: residual vector of a system (default: transverse ray errors
-            over fields 0, 0.7, 1 and all wavelengths, whose sum of squares
-            is the mean-square spot radius in m^2).
-        bounds: optional ``{"<surface>.<parameter>": (low, high)}``.
+    Constrained damped least squares over the lens's variables, with
+    solves, pickups and ``lens.constraints`` held (see
+    :mod:`optics.lens_optimize`).
     """
-    from scipy.optimize import least_squares
+    from .lens_optimize import optimize as _optimize
 
-    from .advanced_optimization import ray_aberration_residuals
-
-    var = variables(lens)
-    if not var:
-        raise ValueError("No surface parameter is flagged as a variable")
-    if merit is None:
-
-        def merit(system: OpticalSystem) -> np.ndarray:
-            return ray_aberration_residuals(
-                system, wavelengths=list(system.wavelengths), vignetting=False
-            )
-
-    bounds = bounds or {}
-    keys = [f"{i}.{name}" for i, name in var]
-    for key in bounds:
-        if key not in keys:
-            raise ValueError(f"Bound '{key}' is not a variable (variables: {keys})")
-    lo = np.array([bounds.get(k, (-np.inf, np.inf))[0] for k in keys], dtype=float)
-    hi = np.array([bounds.get(k, (-np.inf, np.inf))[1] for k in keys], dtype=float)
-    x0 = np.array([get_parameter(lens.surfaces[i], name) for i, name in var])
-    if np.any(x0 < lo) or np.any(x0 > hi):
-        raise ValueError("The starting values must lie within the bounds")
-
-    def apply(x) -> LensData:
-        out = lens.model_copy(deep=True)
-        for (i, name), v in zip(var, x):
-            _set(out.surfaces[i], name, v)
-        return out
-
-    r0 = np.asarray(merit(_merit_system(lens)), dtype=float)
-    # Work with residuals normalised by the starting RMS so the solver's
-    # stopping tolerances mean the same at any scale (residuals in meters
-    # are ~1e-5 and their gradients would fall below gtol at once).
-    norm0 = float(np.sqrt(np.sum(r0**2))) or 1.0
-    penalty = 10.0 * max(float(np.max(np.abs(r0))) / norm0 if r0.size else 1.0, 1.0)
-    evaluations = [0]
-
-    def residual(x):
-        evaluations[0] += 1
-        try:
-            r = np.asarray(merit(_merit_system(apply(x))), dtype=float)
-            if r.shape != r0.shape or not np.all(np.isfinite(r)):
-                raise ValueError("invalid merit")
-            return r / norm0
-        except (ValueError, ZeroDivisionError, FloatingPointError):
-            return np.full(r0.shape, penalty)
-
-    scale = np.where(x0 != 0, np.abs(x0), 1e-3)
-    res = least_squares(
-        residual,
-        x0,
-        bounds=(lo, hi),
-        method="trf",
-        x_scale=scale,
-        max_nfev=max_evaluations,
-        diff_step=1e-6,
-    )
-    best = resolve(apply(res.x))
-    return {
-        "lens": best,
-        "system": to_system(best),
-        "variables": {k: float(v) for k, v in zip(keys, res.x)},
-        "merit_before": float(np.sum(r0**2)),
-        "merit_after": float(np.sum(res.fun**2)) * norm0**2,
-        "evaluations": evaluations[0],
-        "success": bool(res.success),
-        "message": str(res.message),
-    }
+    return _optimize(lens, merit=merit, bounds=bounds, max_evaluations=max_evaluations)

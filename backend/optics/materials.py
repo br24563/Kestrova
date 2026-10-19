@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+
 # Fraunhofer / spectral-line wavelengths (meters)
 D_LINE = 587.5618e-9  # helium d
 E_LINE = 546.0740e-9  # mercury e
@@ -519,8 +521,78 @@ def resolve_material_name(material: str) -> str:
     return ALIASES.get(material, material)
 
 
+# ---------------------------------------------------------------------------
+# Model (fictitious) glasses
+# ---------------------------------------------------------------------------
+
+#: Prefix of a model glass name: "MODEL:<nd>:<vd>", e.g. "MODEL:1.62:36.3".
+MODEL_PREFIX = "MODEL:"
+#: Validity of the model glass dispersion (visible and near infrared).
+MODEL_RANGE_UM = (0.38, 1.0)
+
+
+def model_glass_name(nd: float, vd: float) -> str:
+    """The material name of a model glass with these nd and Vd."""
+    return f"{MODEL_PREFIX}{nd:.12g}:{vd:.12g}"
+
+
+def parse_model_glass(material: str) -> Optional[tuple[float, float]]:
+    """(nd, vd) of a model glass name, or None for any other material."""
+    if not material.upper().startswith(MODEL_PREFIX):
+        return None
+    try:
+        nd_s, vd_s = material[len(MODEL_PREFIX) :].split(":")
+        nd, vd = float(nd_s), float(vd_s)
+    except ValueError:
+        raise ValueError(f"A model glass is written MODEL:<nd>:<vd>, not '{material}'")
+    if not (1.0 < nd < 3.0) or not (5.0 < vd < 120.0):
+        raise ValueError(
+            f"Model glass nd {nd} / Vd {vd} out of range (1 < nd < 3, 5 < Vd < 120)"
+        )
+    return nd, vd
+
+
+@functools.lru_cache(maxsize=4096)
+def _model_glass(nd: float, vd: float) -> Material:
+    """
+    A model glass: n = A + B / l^2 + C / l^4 (l in um) fitted exactly to nd,
+    to the Abbe number (nF - nC = (nd - 1) / Vd) and to a partial dispersion
+    P_g,F on Schott's normal line, P_g,F = 0.6438 - 0.001682 Vd (SCHOTT
+    TIE-29), so model glasses have the secondary colour of ordinary glasses.
+    """
+    x = [1.0 / (lam * 1e6) ** 2 for lam in (D_LINE, F_LINE, C_LINE, G_LINE)]
+    xd, xF, xC, xg = x
+    dFC = (nd - 1.0) / vd
+    dgF = (0.6438 - 0.001682 * vd) * dFC
+    M = np.array(
+        [
+            [1.0, xd, xd * xd],
+            [0.0, xF - xC, xF * xF - xC * xC],
+            [0.0, xg - xF, xg * xg - xF * xF],
+        ]
+    )
+    A, B, C = np.linalg.solve(M, np.array([nd, dFC, dgF]))
+    return Material(
+        name=model_glass_name(nd, vd),
+        manufacturer="Model",
+        nd=nd,
+        vd=vd,
+        dispersion=Dispersion(
+            "cauchy",
+            B=(float(A), float(B), float(C)),
+            P=(0, -2, -4),
+            range_um=MODEL_RANGE_UM,
+        ),
+        source="model glass (nd, Vd; partial dispersion on the SCHOTT normal line)",
+        material_type=classify_glass("MODEL", nd, vd),
+    )
+
+
 def get_material(material: str) -> Material:
     """Return the :class:`Material` record, raising ValueError if unknown."""
+    model = parse_model_glass(material)
+    if model is not None:
+        return _model_glass(*model)
     name = resolve_material_name(material)
     m = MATERIALS.get(name)
     if m is None:

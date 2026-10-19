@@ -876,6 +876,43 @@ async def lens_optimize(request: LensOptimizeRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class SnapGlassesRequest(BaseModel):
+    lens: _ld.LensData
+    vendors: Optional[list[str]] = Field(
+        None, description="Default: SCHOTT, OHARA, HOYA, CDGM"
+    )
+    include_inquiry: bool = False
+
+
+@app.post("/api/lens/constraints")
+async def lens_constraints(request: LensRequest):
+    """Each constraint of the lens with its current value and whether it is met."""
+    from optics.lens_optimize import evaluate_constraints
+
+    try:
+        return {"constraints": evaluate_constraints(request.lens)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/lens/snap-glasses")
+async def lens_snap_glasses(request: SnapGlassesRequest):
+    """
+    Replace every model glass (MODEL:<nd>:<vd>) by the nearest catalog glass
+    (0.01 in nd counts as 1 in Vd; SCHOTT inquiry glasses skipped unless
+    asked). Re-optimize afterwards.
+    """
+    from optics.lens_optimize import snap_glasses
+
+    try:
+        lens, subs = snap_glasses(
+            request.lens, request.vendors, request.include_inquiry
+        )
+        return {"lens": lens, "substitutions": subs}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ---------------------------------------------------------------------------
 # Field table analyses
 # ---------------------------------------------------------------------------
