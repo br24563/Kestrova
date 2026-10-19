@@ -35,6 +35,10 @@ prebuilt installers are published yet; build it from source.
 - **820 vendor glasses** read from the SCHOTT, OHARA, HOYA and CDGM catalog
   files, plus 18 crystals, IR materials, polymers and water from cited
   literature dispersion formulas
+- Surface-by-surface lens data (Code V / Zemax style): thicknesses, solves
+  (paraxial image, ray heights and angles, F-number), pickups and variable
+  flags, with damped least squares optimization over the flagged variables
+  (API only for now; see `/api/lens/*`)
 - Ideal (paraxial) thin lenses, thick lenses, spherical surfaces, mirrors
   (spherical and conic), aperture stops
 - Aspheres (even, odd, Forbes Q), Zernike, toroidal and diffractive surfaces,

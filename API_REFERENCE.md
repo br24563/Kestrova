@@ -39,6 +39,61 @@ Health check endpoint.
 }
 ```
 
+### Lens Data (surface-by-surface prescription)
+
+A `lens` is a Code V / Zemax style surface table. Each surface has
+`radius` (0 = flat), `thickness` to the next surface, `conic`,
+`aspheric_coefficients` (A4, A6, ...), `material` after it (null = air,
+`"MIRROR"` reflects), `semi_diameter` (null = automatic from real rays) and
+`is_stop` (exactly one surface). Per surface, `variables` lists parameters
+the optimizer may change, `solves` maps `thickness` or `radius` to a solve,
+and `pickups` maps a parameter to `{source, parameter, scale, offset}`.
+Lens-level fields: `object_distance` (null = infinity), `object_height` or
+`field_angle` (rad), optional `entrance_pupil_diameter`, `wavelengths`.
+
+Solve kinds: `marginal_height` / `chief_height` (thickness; target height
+at the next surface, 0 = paraxial image), `marginal_angle` / `chief_angle`
+(radius; target slope after the surface) and `f_number` (radius; working
+F-number).
+
+#### POST /api/lens/from-system
+
+`{ "system": {...} }` → `{ "lens": {...} }`, the prescription of a
+component-based system (round trip is exact).
+
+#### POST /api/lens/resolve
+
+`{ "lens": {...} }` → `{ "lens", "system", "first_order" }`: pickups and
+solves applied, automatic semi-diameters filled, the component-based
+`system` for every other analysis endpoint, and EFL, BFL, F-numbers, image
+position and pupils.
+
+```json
+{
+  "lens": {
+    "surfaces": [
+      { "label": "STO", "is_stop": true, "semi_diameter": 0.008, "thickness": 0.002 },
+      { "element": "L1", "radius": 0.05, "thickness": 0.006, "material": "N-BK7",
+        "variables": ["radius"] },
+      { "element": "L1", "radius": -0.08, "thickness": 0.1,
+        "solves": { "radius": { "kind": "f_number", "target": 4 },
+                    "thickness": { "kind": "marginal_height" } } }
+    ],
+    "object_distance": null,
+    "field_angle": 0.0873
+  }
+}
+```
+
+#### POST /api/lens/optimize
+
+`{ "lens", "bounds": {"1.radius": [0.02, 1.0]}, "max_evaluations": 300 }`
+→ damped least squares over the variables, minimising the transverse ray
+errors over fields 0, 0.7 and 1 and all wavelengths with solves and pickups
+held. Returns the optimized `lens` and `system`, `variables`,
+`rms_spot_before` / `rms_spot_after` (m) and `first_order`. As in Code V,
+only the stop limits the beam while optimizing.
+
 ### Ray Tracing
 
 #### POST /api/trace

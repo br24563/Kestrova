@@ -212,14 +212,20 @@ def ray_aberration_residuals(
     field_fractions: tuple = (0.0, 0.7, 1.0),
     rings: int = 3,
     wavelengths: Optional[list] = None,
+    vignetting: bool = True,
 ) -> np.ndarray:
     """
     Residual vector of transverse ray errors (x and y, meters) relative to
     the chief ray at the image plane, over a hexapolar pupil sampling at
     several fields and wavelengths, each divided by sqrt(number of rays) so
-    the sum of squares is the mean-square spot size. Vignetted rays give a
-    residual equal to the semi-diagonal of the pupil footprint at the image,
-    which pushes the optimiser away from vignetting.
+    the sum of squares is the mean-square spot size.
+
+    With ``vignetting`` (default), a ray clipped by any clear aperture gets
+    a residual equal to the entrance pupil diameter, which pushes the
+    optimizer away from vignetting (a flat penalty: it has no gradient).
+    With ``vignetting=False`` only the aperture stop limits the beam, as in
+    Code V's optimization; rays that fail geometrically (missing a surface,
+    total internal reflection) still get the penalty.
     """
     from . import raytrace as rt
 
@@ -240,6 +246,7 @@ def ray_aberration_residuals(
                 np.concatenate([[0.0], py]),
                 seq=seq,
                 fo=fo,
+                clip=vignetting,
             )
             P = rt._to_local(
                 seq.image_origin, seq.image_rotation, b.image, b.directions
