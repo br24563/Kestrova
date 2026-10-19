@@ -74,7 +74,7 @@ class ThinLens(OpticalComponentBase):
             raise ValueError("Aperture diameter must be positive")
         if v > 1e3:
             raise ValueError(
-                "Aperture diameter must be within reasonable bounds (D < 10 m)"
+                "Aperture diameter must be within reasonable bounds (D <= 1000 m)"
             )
         return float(v)
 

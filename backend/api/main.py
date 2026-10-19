@@ -782,6 +782,100 @@ async def analyze_field_curves(request: FieldCurvesRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ---------------------------------------------------------------------------
+# Surface-by-surface prescription (lens data editor model)
+# ---------------------------------------------------------------------------
+# These work alongside the component-based endpoints: a LensData converts to
+# the OpticalSystem every analysis endpoint accepts, and back.
+
+from optics import lens_data as _ld  # noqa: E402
+
+
+class LensFromSystemRequest(BaseModel):
+    system: OpticalSystem
+
+
+class LensRequest(BaseModel):
+    lens: _ld.LensData
+
+
+class LensOptimizeRequest(BaseModel):
+    lens: _ld.LensData
+    bounds: dict[str, list[float]] = Field(
+        default_factory=dict, description='{"<surface>.<parameter>": [low, high]}'
+    )
+    max_evaluations: int = Field(300, ge=1, le=10000)
+
+
+def _first_order_summary(system: OpticalSystem) -> dict:
+    from optics import raytrace as rt
+
+    fo = rt.first_order(system)
+    return {
+        "efl": fo.efl,
+        "bfl": fo.bfl,
+        "f_number": fo.f_number,
+        "working_f_number": fo.working_f_number,
+        "image_z": fo.image_z,
+        "image_height": fo.image_height,
+        "magnification": fo.magnification,
+        "entrance_pupil_diameter": 2 * fo.entrance_pupil_semi_diameter,
+        "exit_pupil_z": fo.exit_pupil_z,
+    }
+
+
+@app.post("/api/lens/from-system")
+async def lens_from_system(request: LensFromSystemRequest):
+    """Surface-by-surface prescription of a component-based system."""
+    try:
+        return {"lens": _ld.from_system(request.system)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/lens/resolve")
+async def lens_resolve(request: LensRequest):
+    """
+    Apply pickups and solves, fill automatic semi-diameters, and return the
+    resolved prescription with its component-based system (for every other
+    analysis endpoint) and its first-order properties.
+    """
+    try:
+        resolved = _ld.resolve(request.lens)
+        system = _ld.to_system(resolved)
+        return {
+            "lens": resolved,
+            "system": system,
+            "first_order": _first_order_summary(system),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/lens/optimize")
+async def lens_optimize(request: LensOptimizeRequest):
+    """
+    Damped least squares over the prescription's variables, minimising the
+    transverse ray errors (mean-square spot over fields 0, 0.7, 1 and all
+    wavelengths) with solves and pickups held.
+    """
+    try:
+        bounds = {}
+        for key, pair in request.bounds.items():
+            if len(pair) != 2:
+                raise ValueError(f"Bound '{key}' needs [low, high]")
+            bounds[key] = (pair[0], pair[1])
+        result = _ld.optimize(
+            request.lens, bounds=bounds, max_evaluations=request.max_evaluations
+        )
+        result["rms_spot_before"] = result["merit_before"] ** 0.5
+        result["rms_spot_after"] = result["merit_after"] ** 0.5
+        result["first_order"] = _first_order_summary(result["system"])
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/validate", response_model=SystemResponse)
 async def validate(system: OpticalSystem):
     """

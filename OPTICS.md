@@ -114,6 +114,21 @@ If M = [[A, B], [C, D]], then:
 f_eff = -1 / C
 ```
 
+## Lens Data (surface prescription)
+
+`optics/lens_data.py` holds the Code V / Zemax style prescription: an
+ordered list of surfaces, each with a thickness to the next surface, so a
+change of one thickness moves everything after it. Thicknesses after a
+mirror are negative. Parameters can be variables (for the optimizer),
+solved (thickness from a marginal or chief ray height; radius from a ray
+slope or an F-number) or picked up from another surface
+(`scale * source + offset`). Solves use the engine's own paraxial trace;
+they and pickups are re-applied in surface order until nothing changes.
+Unset semi-diameters are the largest real-ray height at the surface over
+the pupil edge at the axial and full fields for all wavelengths. A lens
+converts to the component model below (and back) without changing the
+optics.
+
 ## How the Engine Traces Rays
 
 All analyses are built on one sequential engine (`backend/optics/raytrace.py`).
