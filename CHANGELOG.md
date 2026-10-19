@@ -32,6 +32,13 @@ All notable changes to this project will be documented in this file.
   mesh volume, compiled kernel versus NumPy).
 
 ### Added (Code V parity)
+- Fast tolerancing of a prescription (Code V TOR style): DLF, DLR, DLT,
+  DLN, DLV, surface and element decenters and tilts, back-focus and
+  thickness compensators, a sensitivity table, the predicted RMS wavefront
+  distribution and inverse sensitivity, plus an exact Monte Carlo reference
+  (`/api/lens/tolerance`, `/tolerance/monte-carlo`, `/tolerance/defaults`).
+- Perturbed glasses (`PERTURB:<glass>:<dn>:<dVd>`) with exact nd and Vd
+  shifts.
 - Constrained optimizer (Code V style): exact EFL, BFL, F-number,
   magnification, track and centre/edge-thickness constraints by damped least
   squares on the KKT system; radii varied as curvatures.

@@ -20,6 +20,7 @@ Wavelengths are in meters. The reference wavelength is the helium d-line,
 587.5618 nm.
 """
 
+import dataclasses
 import functools
 import json
 import math
@@ -588,8 +589,63 @@ def _model_glass(nd: float, vd: float) -> Material:
     )
 
 
+# ---------------------------------------------------------------------------
+# Perturbed glasses (index and Abbe-number tolerances)
+# ---------------------------------------------------------------------------
+
+#: Prefix of a perturbed glass: "PERTURB:<glass>:<dn>:<dVd>".
+PERTURB_PREFIX = "PERTURB:"
+
+
+def perturbed_glass_name(base: str, dn: float, dvd: float) -> str:
+    """A glass whose nd is shifted by dn and Abbe number by dvd."""
+    return f"{PERTURB_PREFIX}{base}:{dn:.12g}:{dvd:.12g}"
+
+
+def parse_perturbed_glass(material: str) -> Optional[tuple[str, float, float]]:
+    """(base glass, dn, dVd) of a perturbed glass name, or None."""
+    if not material.upper().startswith(PERTURB_PREFIX):
+        return None
+    try:
+        base, dn_s, dv_s = material[len(PERTURB_PREFIX) :].rsplit(":", 2)
+        return base, float(dn_s), float(dv_s)
+    except ValueError:
+        raise ValueError(
+            f"A perturbed glass is written PERTURB:<glass>:<dn>:<dVd>, not '{material}'"
+        )
+
+
+@functools.lru_cache(maxsize=1024)
+def _perturbation(base: str, dn: float, dvd: float) -> tuple[float, float]:
+    """(nd of the base glass, dispersion scale k) for a perturbed glass:
+    n'(l) = nd + dn + k (n(l) - nd) with k = (nd + dn - 1) / (nd - 1) *
+    Vd / (Vd + dVd), so nd' = nd + dn and Vd' = Vd + dVd exactly while the
+    shape of the dispersion (partial dispersions) is the base glass's."""
+    nd = _refractive_index(base, D_LINE)
+    dFC = _refractive_index(base, F_LINE) - _refractive_index(base, C_LINE)
+    vd = (nd - 1.0) / dFC
+    if vd + dvd <= 0:
+        raise ValueError(f"Abbe number change {dvd} makes Vd of {base} non-positive")
+    return nd, (nd + dn - 1.0) / (nd - 1.0) * vd / (vd + dvd)
+
+
 def get_material(material: str) -> Material:
     """Return the :class:`Material` record, raising ValueError if unknown."""
+    perturbed = parse_perturbed_glass(material)
+    if perturbed is not None:
+        base, dn, dvd = perturbed
+        rec = get_material(base)
+        nd, k = _perturbation(base, dn, dvd)
+        vd = (nd - 1.0) / (
+            _refractive_index(base, F_LINE) - _refractive_index(base, C_LINE)
+        )
+        return dataclasses.replace(
+            rec,
+            name=material,
+            nd=nd + dn,
+            vd=vd + dvd,
+            source=f"{rec.source} (perturbed)",
+        )
     model = parse_model_glass(material)
     if model is not None:
         return _model_glass(*model)
@@ -632,6 +688,11 @@ def _refractive_index(material: str, wavelength: float) -> float:
         ValueError: Unknown material, or a wavelength outside the range over
             which the source's formula was measured.
     """
+    perturbed = parse_perturbed_glass(material)
+    if perturbed is not None:
+        base, dn, dvd = perturbed
+        nd, k = _perturbation(base, dn, dvd)
+        return nd + dn + k * (_refractive_index(base, wavelength) - nd)
     m = get_material(material)
     if m.dispersion is None:
         if m.nd is None:

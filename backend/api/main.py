@@ -789,6 +789,7 @@ async def analyze_field_curves(request: FieldCurvesRequest):
 # the OpticalSystem every analysis endpoint accepts, and back.
 
 from optics import lens_data as _ld  # noqa: E402
+from optics import tolerancing as _tol  # noqa: E402
 
 
 class LensFromSystemRequest(BaseModel):
@@ -872,6 +873,82 @@ async def lens_optimize(request: LensOptimizeRequest):
         result["rms_spot_after"] = result["merit_after"] ** 0.5
         result["first_order"] = _first_order_summary(result["system"])
         return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class LensToleranceRequest(BaseModel):
+    lens: _ld.LensData
+    tolerances: Optional[list[_tol.Tolerance]] = Field(
+        None, description="Default: optics.tolerancing.default_tolerances"
+    )
+    compensators: Optional[list[_tol.Compensator]] = Field(
+        None, description="Default: back focus, unlimited"
+    )
+    trials: int = Field(20000, ge=100, le=200000)
+    rings: int = Field(6, ge=2, le=16)
+    seed: Optional[int] = 0
+    rss_budget: Optional[float] = Field(
+        None, gt=0, description="Waves: also return inverse-sensitivity limits"
+    )
+
+
+class LensMonteCarloRequest(BaseModel):
+    lens: _ld.LensData
+    tolerances: Optional[list[_tol.Tolerance]] = None
+    compensators: Optional[list[_tol.Compensator]] = None
+    trials: int = Field(50, ge=1, le=500)
+    rings: int = Field(6, ge=2, le=16)
+    seed: Optional[int] = 0
+
+
+@app.post("/api/lens/tolerance/defaults")
+async def lens_tolerance_defaults(request: LensRequest):
+    """A starting tolerance set for every element (edit before use)."""
+    try:
+        return {"tolerances": _tol.default_tolerances(request.lens)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/lens/tolerance")
+async def lens_tolerance(request: LensToleranceRequest):
+    """
+    Fast tolerancing (Code V TOR style): sensitivity of the RMS wavefront
+    error (waves) to each tolerance at its limits with compensators, and the
+    predicted distribution over random builds.
+    """
+    try:
+        tols = request.tolerances or _tol.default_tolerances(request.lens)
+        a = _tol.analyze(
+            request.lens,
+            tols,
+            request.compensators,
+            trials=request.trials,
+            rings=request.rings,
+            seed=request.seed,
+        )
+        out = a.to_dict()
+        if request.rss_budget is not None:
+            out["inverse_limits"] = _tol.inverse_limits(a, request.rss_budget)
+        return out
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/lens/tolerance/monte-carlo")
+async def lens_tolerance_monte_carlo(request: LensMonteCarloRequest):
+    """Exact Monte Carlo: every trial traced and its compensators re-optimized."""
+    try:
+        tols = request.tolerances or _tol.default_tolerances(request.lens)
+        return _tol.monte_carlo(
+            request.lens,
+            tols,
+            request.compensators,
+            trials=request.trials,
+            rings=request.rings,
+            seed=request.seed,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

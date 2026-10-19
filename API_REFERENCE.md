@@ -150,6 +150,60 @@ A surface whose `material` is a model glass, `"MODEL:<nd>:<vd>"`, may list
 `glass_nd` and `glass_vd` among its `variables`; they stay inside the
 catalog glass map.
 
+#### POST /api/lens/tolerance
+
+Fast tolerancing in the manner of Code V's TOR.
+
+`{ "lens", "tolerances": [...], "compensators": [...], "trials": 20000,
+"rings": 6, "seed": 0, "rss_budget": 0.05 }`
+
+Tolerances use Code V's names:
+
+| Kind | Meaning |
+|---|---|
+| `DLF` | Radius error in fringes at `test_wavelength` over `test_diameter` |
+| `DLR` | Radius error (m) |
+| `DLT` | Thickness error (m) |
+| `DLN`, `DLV` | Index and Abbe-number errors of the glass after the surface |
+| `DSX`, `DSY` | Surface decenter (m) |
+| `TRX`, `TRY` | Surface tilt (rad) |
+| `DLX`, `DLY` | Element decenter (m), over `surface`..`last_surface` |
+| `BTX`, `BTY` | Element tilt (rad), over `surface`..`last_surface` |
+
+Each tolerance takes a `limit` (±) and a `distribution`: `uniform`,
+`gaussian` (σ = limit/2, truncated at the limit) or `end_point`. Without
+`tolerances`, the starting set from `/api/lens/tolerance/defaults` is used.
+
+Compensators: `{"kind": "back_focus"}` (the default) or `{"kind":
+"thickness", "surface": i}`, with an optional `limit`.
+
+Returns, all in waves:
+
+- `nominal_rms` and `nominal_field_rms`: RMS wavefront error with piston and
+  tilt removed, over the fields and wavelengths with their weights;
+- `sensitivities`: the traced, compensated RMS at +limit and -limit for
+  each tolerance;
+- `rss_increase`;
+- `predicted`: mean, std, the 50 / 84.13 / 97.72 / 99.87 % percentiles and
+  the cumulative curve, from Monte Carlo on a fitted model of the wavefront
+  that is quadratic in each tolerance and linear in the compensators;
+- `predicted_fields` and `compensators` statistics;
+- with `rss_budget`, `inverse_limits`: the limit at which each tolerance
+  alone uses an equal share of the budget.
+
+Solves and pickups are frozen before tolerancing.
+
+#### POST /api/lens/tolerance/monte-carlo
+
+Same inputs (`trials` ≤ 500). An exact reference: each trial is perturbed
+and traced, and its compensators are re-optimized. Returns the RMS of every
+trial, the mean, std and percentiles, and the compensation applied.
+
+#### POST /api/lens/tolerance/defaults
+
+`{ "lens" }` → a starting tolerance set for every element. The values are
+editable starting points, not a standard.
+
 #### POST /api/lens/constraints
 
 `{ "lens" }` → `{"constraints": [...]}`, each with its current `value` and
