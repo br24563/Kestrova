@@ -37,8 +37,17 @@ def trace_rays_parallel(system, rays, max_workers=None, use_processes=False):
 
         max_workers = os.cpu_count() or 4
     max_workers = max(1, min(max_workers, len(rays)))
-    executor = ProcessPoolExecutor if use_processes else ThreadPoolExecutor
-    with executor(max_workers=max_workers) as pool:
+    if use_processes:
+        import multiprocessing
+
+        # "spawn", not the Linux default "fork": forking a process whose
+        # compiled ray kernels have started threads can kill the workers
+        pool_cm = ProcessPoolExecutor(
+            max_workers=max_workers, mp_context=multiprocessing.get_context("spawn")
+        )
+    else:
+        pool_cm = ThreadPoolExecutor(max_workers=max_workers)
+    with pool_cm as pool:
         # a module-level function (not a lambda) so process pools can pickle it
         return list(pool.map(partial(_trace_one, system), rays))
 
