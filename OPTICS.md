@@ -149,6 +149,15 @@ exact intersection with spherical, conic and aspheric surfaces, and rays
 aimed iteratively so that pupil coordinates map onto the real stop.
 No small-angle approximation is made in these analyses.
 
+### Speed
+
+Sequences made only of spheres and conics (refracting or reflecting),
+stops and dummies, in any frames, are traced by a compiled kernel
+(`optics/_fasttrace.py`, Numba) that performs the same operations as the
+NumPy trace ray by ray; small batches run serially and large ones (4096+
+rays) in parallel. Other surfaces use the NumPy trace. Without Numba, or
+with `OPTICS_NO_NUMBA=1`, everything uses NumPy and gives the same results.
+
 ### Ideal (thin) lenses
 
 A `ThinLens` is an *ideal paraxial lens*, like Zemax's paraxial surface:

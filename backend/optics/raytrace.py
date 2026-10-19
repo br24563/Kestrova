@@ -51,7 +51,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional, TypeGuard
 
 import numpy as np
 from scipy.special import eval_jacobi
@@ -419,6 +419,9 @@ class Sequence:
     n_object: float
     n_image: float
     stop_index: int
+    # caches filled on first use (not part of the sequence's definition)
+    _stop_sub: Any = field(default=None, repr=False, compare=False)
+    _fast_pack: Any = field(default=None, repr=False, compare=False)
 
 
 def _medium_index(material: Optional[str], wavelength: float) -> float:
@@ -1107,18 +1110,35 @@ class RayBundle:
     surface_opl: np.ndarray  # (N, M+1) cumulative OPL at each surface and image
 
 
+_EYE3 = np.eye(3)
+
+
+def _is_identity(R) -> bool:
+    return R is _EYE3 or np.array_equal(R, _EYE3)
+
+
 def _to_local(s_origin, s_rot, p, d):
+    if _is_identity(s_rot):  # untilted frame: a translation only
+        return p - s_origin, d
     pl = (p - s_origin) @ s_rot  # R^T (p - o) via row vectors
     dl = d @ s_rot
     return pl, dl
 
 
 def _to_global(s_origin, s_rot, pl, dl):
+    if _is_identity(s_rot):
+        return pl + s_origin, dl
     return pl @ s_rot.T + s_origin, dl @ s_rot.T
+
+
+def _is_pure_conic(shape: Shape) -> TypeGuard["Conicoid"]:
+    return type(shape) is Conicoid and not shape.even and not shape.odd
 
 
 def _intersect(shape: Shape, p, d):
     """Intersect rays (local frame) with a shape; returns (t, point, ok)."""
+    if _is_pure_conic(shape):
+        return _intersect_conic(shape.c, shape.k, p, d)
     c, k = shape.conic_base()
     # Move to the vertex plane first.
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -1159,7 +1179,49 @@ def _intersect(shape: Shape, p, d):
     return t, pt, ok
 
 
+def _intersect_conic(c: float, k: float, p, d):
+    """
+    Exact intersection with a sphere or conic, c(x^2 + y^2) + c(1+k) z^2 = 2z
+    (the vertex branch), by the numerically stable small root of the
+    quadratic in the distance from the vertex plane. No iteration needed.
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t0 = -p[:, 2] / d[:, 2]
+    ok = np.isfinite(t0)
+    q = p + t0[:, None] * d
+    if c == 0.0:
+        return t0, q, ok
+    x, y = q[:, 0], q[:, 1]
+    dx, dy, dz = d[:, 0], d[:, 1], d[:, 2]
+    A = c * (dx * dx + dy * dy) + c * (1.0 + k) * dz * dz
+    B = 2.0 * (c * (x * dx + y * dy) - dz)
+    C = c * (x * x + y * y)
+    disc = B * B - 4.0 * A * C
+    ok &= disc >= 0
+    sq = np.sqrt(np.where(disc >= 0, disc, 0.0))
+    denom = B + np.where(B >= 0, 1.0, -1.0) * sq
+    with np.errstate(divide="ignore", invalid="ignore"):
+        dt = np.where(np.abs(denom) > 0, -2.0 * C / denom, 0.0)
+    t = t0 + dt
+    pt = q + dt[:, None] * d
+    # beyond the conic's extent (e.g. past a hemisphere's rim) the vertex
+    # branch does not exist: the sag argument 1 - (1+k)c^2 r^2 must be >= 0
+    r2 = pt[:, 0] ** 2 + pt[:, 1] ** 2
+    ok &= (1.0 - (1.0 + k) * c * c * r2 >= 0) & np.isfinite(t)
+    return t, pt, ok
+
+
 def _normals(shape: Shape, pt):
+    if _is_pure_conic(shape):
+        # gradient of z - sag for the conic: proportional to
+        # (-c x, -c y, 1 - c (1+k) z)
+        c, k = shape.c, shape.k
+        nrm = np.empty_like(pt)
+        nrm[:, 0] = -c * pt[:, 0]
+        nrm[:, 1] = -c * pt[:, 1]
+        nrm[:, 2] = 1.0 - c * (1.0 + k) * pt[:, 2]
+        nrm /= np.sqrt(np.sum(nrm * nrm, axis=1))[:, None]
+        return nrm
     gx, gy = shape.grad(pt[:, 0], pt[:, 1])
     nrm = np.stack([-gx, -gy, np.ones_like(gx)], axis=1)
     nrm /= np.linalg.norm(nrm, axis=1, keepdims=True)
@@ -1179,6 +1241,10 @@ def trace_bundle(
         clip: Mark rays outside any surface's semi-aperture as vignetted.
     """
     s_wavelength_holder[0] = seq.wavelength
+    from . import _fasttrace
+
+    if len(p0) and _fasttrace.supports(seq):
+        return RayBundle(*_fasttrace.trace(seq, p0, d0, clip))
     with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
         return _trace_bundle(seq, p0, d0, clip)
 
@@ -1353,6 +1419,17 @@ def _trace_bundle(seq, p0, d0, clip):
 # =============================================================================
 
 
+def _cross(u, v) -> np.ndarray:
+    """Cross product of two 3-vectors (np.cross is slow for single vectors)."""
+    return np.array(
+        [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ]
+    )
+
+
 def _start_rays(seq: Sequence, fo: FirstOrder, hx: float, hy: float, a, b):
     """
     Start points and directions for rays from field (hx, hy) (fractions of
@@ -1369,11 +1446,11 @@ def _start_rays(seq: Sequence, fo: FirstOrder, hx: float, hy: float, a, b):
         dvec /= np.linalg.norm(dvec)
         z_ref = seq.surfaces[0].z - _start_offset(seq)
         # points on the plane through (0,0,z_ref) perpendicular to dvec
-        e1 = np.cross([0.0, 1.0, 0.0], dvec)
+        e1 = _cross((0.0, 1.0, 0.0), dvec)
         if np.linalg.norm(e1) < 1e-12:
             e1 = np.array([1.0, 0.0, 0.0])
         e1 /= np.linalg.norm(e1)
-        e2 = np.cross(dvec, e1)
+        e2 = _cross(dvec, e1)
         p = (
             np.array([0.0, 0.0, z_ref])[None, :]
             + a[:, None] * e1[None, :]
@@ -1396,7 +1473,22 @@ def _start_offset(seq: Sequence) -> float:
 
 def _stop_coords(seq: Sequence, p0, d0):
     """Local (x, y) where rays cross the stop surface."""
-    sub = Sequence(
+    sub = getattr(seq, "_stop_sub", None)
+    if sub is None:
+        sub = _stop_sequence(seq)
+        try:
+            seq._stop_sub = sub
+        except AttributeError:  # pragma: no cover
+            pass
+    b = trace_bundle(sub, p0, d0, clip=False)
+    s = seq.surfaces[seq.stop_index]
+    pl = (b.points[:, seq.stop_index + 1] - s.origin) @ s.rotation
+    return pl[:, 0], pl[:, 1], b.valid
+
+
+def _stop_sequence(seq: Sequence) -> Sequence:
+    """The sequence up to and including the stop (cached by _stop_coords)."""
+    return Sequence(
         seq.surfaces[: seq.stop_index + 1],
         seq.wavelength,
         seq.object_z,
@@ -1410,10 +1502,6 @@ def _stop_coords(seq: Sequence, p0, d0):
         seq.n_image,
         seq.stop_index,
     )
-    b = trace_bundle(sub, p0, d0, clip=False)
-    s = seq.surfaces[seq.stop_index]
-    pl = (b.points[:, seq.stop_index + 1] - s.origin) @ s.rotation
-    return pl[:, 0], pl[:, 1], b.valid
 
 
 def aim_rays(
@@ -1441,9 +1529,9 @@ def aim_rays(
         dvec = np.array([math.tan(theta) * hx, math.tan(theta) * hy, 1.0])
         dvec /= np.linalg.norm(dvec)
         z_ref = seq.surfaces[0].z - _start_offset(seq)
-        e1 = np.cross([0.0, 1.0, 0.0], dvec)
+        e1 = _cross((0.0, 1.0, 0.0), dvec)
         e1 /= np.linalg.norm(e1)
-        e2 = np.cross(dvec, e1)
+        e2 = _cross(dvec, e1)
         zt = ep_z if math.isfinite(ep_z) else seq.surfaces[seq.stop_index].z
         X = np.stack([px * ep_r, py * ep_r, np.full(px.shape, zt)], axis=1)
         rel = X - np.array([0.0, 0.0, z_ref])
@@ -1467,28 +1555,43 @@ def aim_rays(
     # (objects "at infinity" sit ~1e6 m away).
     z_scale = max(abs(seq.object_z), max(abs(sf.z) for sf in seq.surfaces), 1.0)
     tol = max(1e-10 * max(rs, 1e-6), 64.0 * np.finfo(float).eps * z_scale)
+    # Newton iteration per ray. Converged rays are frozen, so only the
+    # active ones are traced; each iteration traces the base rays and the
+    # two finite-difference offsets in one batch.
+    active = np.arange(px.size)
     for _ in range(iterations):
-        p0, d0 = _start_rays(seq, fo, hx, hy, a, b)
-        x, y, ok = _stop_coords(seq, p0, d0)
-        ex, ey = x - tx_target, y - ty_target
-        err = np.hypot(ex, ey)
-        converged = ok & (err < tol)
-        if converged.all():
+        m = active.size
+        if m == 0:
             break
-        p1, d1 = _start_rays(seq, fo, hx, hy, a + h, b)
-        x1, y1, _ = _stop_coords(seq, p1, d1)
-        p2, d2 = _start_rays(seq, fo, hx, hy, a, b + h)
-        x2, y2, _ = _stop_coords(seq, p2, d2)
-        J11, J21 = (x1 - x) / h, (y1 - y) / h
-        J12, J22 = (x2 - x) / h, (y2 - y) / h
+        aa, bb = a[active], b[active]
+        P, D = _start_rays(
+            seq,
+            fo,
+            hx,
+            hy,
+            np.concatenate([aa, aa + h, aa]),
+            np.concatenate([bb, bb, bb + h]),
+        )
+        X, Y, OK = _stop_coords(seq, P, D)
+        x, y, ok = X[:m], Y[:m], OK[:m]
+        ex, ey = x - tx_target[active], y - ty_target[active]
+        err = np.hypot(ex, ey)
+        conv = ok & (err < tol)
+        converged[active] = conv
+        if conv.all():
+            break
+        J11, J21 = (X[m : 2 * m] - x) / h, (Y[m : 2 * m] - y) / h
+        J12, J22 = (X[2 * m :] - x) / h, (Y[2 * m :] - y) / h
         det = J11 * J22 - J12 * J21
         with np.errstate(divide="ignore", invalid="ignore"):
             da = np.where(np.abs(det) > 0, (J22 * ex - J12 * ey) / det, 0.0)
             db = np.where(np.abs(det) > 0, (-J21 * ex + J11 * ey) / det, 0.0)
         da = np.where(np.isfinite(da), da, 0.0)
         db = np.where(np.isfinite(db), db, 0.0)
-        a = a - np.where(converged, 0.0, da)
-        b = b - np.where(converged, 0.0, db)
+        move = ~conv
+        a[active[move]] -= da[move]
+        b[active[move]] -= db[move]
+        active = active[move]
     p0, d0 = _start_rays(seq, fo, hx, hy, a, b)
     return p0, d0, converged
 
