@@ -18,11 +18,13 @@ import type {
   RayTraceResult,
   AnalysisResult,
   LengthUnit,
+  LensData,
+  LensResolveResult,
 } from "./types";
 import {
   getDefaultSystem, traceRays, analyzeSystem,
   listSystems, saveSystem, loadSystem, deleteSystem,
-  getPresets, getPreset,
+  getPresets, getPreset, lensFromSystem,
   type SystemMetadata, type PresetInfo,
 } from "./api";
 import { OpticalBench } from "./components/OpticalBench";
@@ -42,6 +44,7 @@ import { ChromaticAberrationPlot } from "./components/analysis/ChromaticAberrati
 import { GhostAnalysisPanel } from "./components/analysis/GhostAnalysisPanel";
 import { AdvancedOptimizationPanel } from "./components/optimization/AdvancedOptimizationPanel";
 import { ReportGenerator } from "./components/report/ReportGenerator";
+import { LensDataEditor } from "./components/lens/LensDataEditor";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ErrorMessage } from "./components/ErrorMessage";
 import { useTheme } from "./context/ThemeContext";
@@ -80,6 +83,10 @@ function App() {
   const [projectName, setProjectName] = useState<string>("");
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [analysisTab, setAnalysisTab] = useState<AnalysisTab>("ray-fan");
+  // Surface-by-surface prescription shown in the lens data editor
+  const [lens, setLens] = useState<LensData | null>(null);
+  const [lensDirty, setLensDirty] = useState(false);
+  const [showLensEditor, setShowLensEditor] = useState(true);
 
   // History for system state (undo/redo)
   const systemHistory = useHistory<OpticalSystem | null>(null);
@@ -171,6 +178,7 @@ function App() {
       const response = await getDefaultSystem();
       setSystem(response.system);
       setSelectedComponentId(response.system.components[0]?.id ?? null);
+      loadLensData(response.system);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load system");
     } finally {
@@ -194,11 +202,44 @@ function App() {
       const preset = await getPreset(presetId);
       setSystem(preset.system);
       setSelectedComponentId(preset.system.components[0]?.id ?? null);
+      loadLensData(preset.system);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load preset");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Show a component system in the lens data editor. A system with no
+  // surface prescription leaves the editor empty (the error is shown there
+  // when the user converts it explicitly).
+  const loadLensData = async (sys: OpticalSystem) => {
+    try {
+      const { lens: converted } = await lensFromSystem(sys);
+      setLens(converted);
+    } catch (err) {
+      console.warn("No lens data for this system:", err);
+      setLens(null);
+    }
+    setLensDirty(false);
+  };
+
+  const handleLensChange = (next: LensData) => {
+    setLens(next);
+    setLensDirty(true);
+  };
+
+  // A resolved or optimized lens drives the bench and every analysis panel.
+  const handleLensResolved = (result: LensResolveResult) => {
+    setLens(result.lens);
+    setLensDirty(false);
+    setSystem(result.system);
+    setSelectedComponentId(result.system.components[0]?.id ?? null);
+  };
+
+  const handleLensImported = (imported: LensData) => {
+    setLens(imported);
+    setLensDirty(false);
   };
 
   const updateSimulation = useCallback(async () => {
@@ -640,8 +681,31 @@ function App() {
           </div>
         </div>
 
-        {/* Center: Optical Bench + analysis tabs */}
+        {/* Center: Lens data editor, optical bench + analysis tabs */}
         <div className="flex-1 overflow-auto">
+          <div className="mx-4 mt-4 bg-white border border-gray-200 rounded-lg">
+            <button
+              onClick={() => setShowLensEditor((v) => !v)}
+              aria-expanded={showLensEditor}
+              className="w-full flex justify-between items-center px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <span>Lens Data Editor</span>
+              <span className="text-gray-400">{showLensEditor ? "▾" : "▸"}</span>
+            </button>
+            {showLensEditor && (
+              <div className="border-t border-gray-200">
+                <LensDataEditor
+                  lens={lens}
+                  system={system}
+                  displayUnit={displayUnit}
+                  dirty={lensDirty}
+                  onChange={handleLensChange}
+                  onResolved={handleLensResolved}
+                  onImported={handleLensImported}
+                />
+              </div>
+            )}
+          </div>
           <OpticalBench
             system={system}
             rayResult={rayResult}

@@ -412,3 +412,107 @@ export function toNm(meters: number): number {
 export function formatValue(value: number, decimals: number = 3): string {
   return value.toFixed(decimals);
 }
+
+// ---------------------------------------------------------------------------
+// Lens Data (surface-by-surface prescription, mirrors optics/lens_data.py)
+// ---------------------------------------------------------------------------
+
+export type SurfaceType =
+  | "standard"
+  | "even_asphere"
+  | "paraxial"
+  | "coordinate_break"
+  | "component";
+
+export type SolveKind =
+  | "marginal_height"
+  | "chief_height"
+  | "marginal_angle"
+  | "chief_angle"
+  | "f_number";
+
+export const THICKNESS_SOLVES: SolveKind[] = ["marginal_height", "chief_height"];
+export const RADIUS_SOLVES: SolveKind[] = ["marginal_angle", "chief_angle", "f_number"];
+
+/** A parameter computed from a paraxial ray (target: m, slope, or F-number). */
+export interface Solve {
+  kind: SolveKind;
+  target: number;
+}
+
+/** parameter = scale * (surface `source`'s `parameter`) + offset. */
+export interface Pickup {
+  source: number; // 0-based surface index
+  parameter?: string | null; // default: the same parameter
+  scale: number;
+  offset: number;
+}
+
+/** One row of the lens data editor. Lengths in meters, angles in radians. */
+export interface LensSurface {
+  label: string;
+  element?: string | null;
+  surface_type: SurfaceType;
+  radius: number; // 0 = flat
+  conic: number;
+  aspheric_coefficients: number[];
+  thickness: number; // to the next surface
+  material: string | null; // medium after; null = air, "MIRROR" reflects
+  semi_diameter: number | null; // null = automatic
+  is_stop: boolean;
+  focal_length?: number | null;
+  ideal_lens_glass?: string;
+  decenter_x?: number;
+  decenter_y?: number;
+  decenter_z?: number;
+  tilt_x?: number;
+  tilt_y?: number;
+  tilt_z?: number;
+  break_order?: string;
+  component?: Record<string, unknown> | null;
+  variables: string[];
+  solves: Record<string, Solve>;
+  pickups: Record<string, Pickup>;
+  semi_diameter_auto: boolean;
+}
+
+export interface LensData {
+  name: string;
+  surfaces: LensSurface[];
+  object_distance: number | null; // null = object at infinity
+  object_height: number;
+  field_angle: number; // rad, for an object at infinity
+  entrance_pupil_diameter: number | null;
+  wavelengths: number[];
+  first_surface_position: number;
+  analysis_settings: AnalysisSettings;
+}
+
+export interface LensFirstOrder {
+  efl: number | null;
+  bfl: number | null;
+  f_number: number | null;
+  working_f_number: number | null;
+  image_z: number | null;
+  image_height: number | null;
+  magnification: number | null;
+  entrance_pupil_diameter: number;
+  exit_pupil_z: number | null;
+}
+
+export interface LensResolveResult {
+  lens: LensData;
+  system: OpticalSystem;
+  first_order: LensFirstOrder;
+}
+
+export interface LensOptimizeResult extends LensResolveResult {
+  variables: Record<string, number>;
+  merit_before: number;
+  merit_after: number;
+  rms_spot_before: number; // meters
+  rms_spot_after: number; // meters
+  evaluations: number;
+  success: boolean;
+  message: string;
+}
