@@ -53,9 +53,11 @@ describe("API client", () => {
   });
 
   it("getDefaultSystem fetches the default system", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ system: mockSystem, warnings: [] }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        mockFetchResponse({ system: mockSystem, warnings: [] }),
+      );
     const result = await getDefaultSystem();
     expect(fetchMock).toHaveBeenCalledWith("/api/system/default");
     expect(result.system.components[0].id).toBe("lens_1");
@@ -63,7 +65,12 @@ describe("API client", () => {
 
   it("traceRays posts the system and returns ray paths", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ ray_paths: [], image_position: 0.2, image_height: -0.01, paraxial_image_height: -0.01 }),
+      mockFetchResponse({
+        ray_paths: [],
+        image_position: 0.2,
+        image_height: -0.01,
+        paraxial_image_height: -0.01,
+      }),
     );
     const result = await traceRays(mockSystem, 11, 1.0);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -75,7 +82,10 @@ describe("API client", () => {
 
   it("analyzeSystem posts the system and returns analysis", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ effective_focal_length: 0.05, magnification: -1.0 }),
+      mockFetchResponse({
+        effective_focal_length: 0.05,
+        magnification: -1.0,
+      }),
     );
     const result = await analyzeSystem(mockSystem);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -94,9 +104,13 @@ describe("API client", () => {
   });
 
   it("listSystems returns metadata", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse([{ id: 1, name: "proj", created_at: "t", updated_at: "t" }]),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        mockFetchResponse([
+          { id: 1, name: "proj", created_at: "t", updated_at: "t" },
+        ]),
+      );
     const result = await listSystems();
     expect(fetchMock).toHaveBeenCalledWith("/api/systems");
     expect(result[0].name).toBe("proj");
@@ -104,7 +118,12 @@ describe("API client", () => {
 
   it("saveSystem posts name and system", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ id: 1, name: "proj", created_at: "t", updated_at: "t" }),
+      mockFetchResponse({
+        id: 1,
+        name: "proj",
+        created_at: "t",
+        updated_at: "t",
+      }),
     );
     const result = await saveSystem("proj", mockSystem);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -116,7 +135,13 @@ describe("API client", () => {
 
   it("loadSystem fetches a saved system by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ id: 1, name: "proj", system_json: "{}", created_at: "t", updated_at: "t" }),
+      mockFetchResponse({
+        id: 1,
+        name: "proj",
+        system_json: "{}",
+        created_at: "t",
+        updated_at: "t",
+      }),
     );
     const result = await loadSystem(1);
     expect(fetchMock).toHaveBeenCalledWith("/api/systems/1");
@@ -124,9 +149,9 @@ describe("API client", () => {
   });
 
   it("deleteSystem sends a DELETE request", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ message: "deleted" }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(mockFetchResponse({ message: "deleted" }));
     await deleteSystem(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/systems/1",
@@ -136,7 +161,12 @@ describe("API client", () => {
 
   it("optimizeSystem posts the system and returns the result", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ params: [0.05], objective: 0.001, system: mockSystem, success: true }),
+      mockFetchResponse({
+        params: [0.05],
+        objective: 0.001,
+        system: mockSystem,
+        success: true,
+      }),
     );
     const result = await optimizeSystem({
       system: mockSystem,
@@ -154,8 +184,22 @@ describe("API client", () => {
   it("runSweep posts the system and returns sweep points", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockFetchResponse([
-        { value: 0.1, analysis: { effective_focal_length: 0.05, magnification: -1.0, rms_spot_radius: 0.001 } },
-        { value: 0.2, analysis: { effective_focal_length: 0.05, magnification: -1.0, rms_spot_radius: 0.002 } },
+        {
+          value: 0.1,
+          analysis: {
+            effective_focal_length: 0.05,
+            magnification: -1.0,
+            rms_spot_radius: 0.001,
+          },
+        },
+        {
+          value: 0.2,
+          analysis: {
+            effective_focal_length: 0.05,
+            magnification: -1.0,
+            rms_spot_radius: 0.002,
+          },
+        },
       ]),
     );
     const result = await runSweep({
@@ -173,7 +217,11 @@ describe("API client", () => {
 
   it("getAIProvider fetches the provider config", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockFetchResponse({ use_ollama: false, model: "llama3.2", ollama_url: "http://localhost:11434" }),
+      mockFetchResponse({
+        use_ollama: false,
+        model: "llama3.2",
+        ollama_url: "http://localhost:11434",
+      }),
     );
     const result = await getAIProvider();
     expect(fetchMock).toHaveBeenCalledWith("/api/ai/provider");
@@ -184,6 +232,8 @@ describe("API client", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockFetchResponse({}, false, 500),
     );
-    await expect(getDefaultSystem()).rejects.toThrow("Failed to fetch default system");
+    await expect(getDefaultSystem()).rejects.toThrow(
+      "Failed to fetch default system",
+    );
   });
 });

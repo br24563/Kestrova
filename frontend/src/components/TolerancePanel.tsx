@@ -7,7 +7,13 @@
  */
 
 import { useState } from "react";
-import type { OpticalSystem, ToleranceResult, LengthUnit, ThinLens, ThickLens } from "../types";
+import type {
+  OpticalSystem,
+  ToleranceResult,
+  LengthUnit,
+  ThinLens,
+  ThickLens,
+} from "../types";
 import { runToleranceAnalysis } from "../api";
 
 interface TolerancePanelProps {
@@ -24,7 +30,8 @@ export function TolerancePanel({ system }: TolerancePanelProps) {
   const [error, setError] = useState<string | null>(null);
 
   const lenses = system.components.filter(
-    (c): c is ThinLens | ThickLens => c.type === "thin_lens" || c.type === "thick_lens",
+    (c): c is ThinLens | ThickLens =>
+      c.type === "thin_lens" || c.type === "thick_lens",
   );
 
   const handleRun = async () => {
@@ -50,7 +57,9 @@ export function TolerancePanel({ system }: TolerancePanelProps) {
       });
       setResult(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Tolerance analysis failed");
+      setError(
+        err instanceof Error ? err.message : "Tolerance analysis failed",
+      );
     } finally {
       setBusy(false);
     }
@@ -58,23 +67,31 @@ export function TolerancePanel({ system }: TolerancePanelProps) {
 
   return (
     <div className="p-4 border-t border-gray-200">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">Tolerance Analysis</h2>
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">
+        Tolerance Analysis
+      </h2>
 
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="block text-xs text-gray-600 mb-1">Trials</label>
             <input
-              type="number" min="10" max="1000"
+              type="number"
+              min="10"
+              max="1000"
               value={trials}
               onChange={(e) => setTrials(e.target.value)}
               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-600 mb-1">Position tol. (mm)</label>
+            <label className="block text-xs text-gray-600 mb-1">
+              Position tol. (mm)
+            </label>
             <input
-              type="number" step="0.01" min="0.01"
+              type="number"
+              step="0.01"
+              min="0.01"
               value={tolerance}
               onChange={(e) => setTolerance(e.target.value)}
               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
@@ -94,27 +111,39 @@ export function TolerancePanel({ system }: TolerancePanelProps) {
 
         {result && (
           <div className="p-3 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500 uppercase mb-2">RMS Spot Radius Statistics</div>
+            <div className="text-xs text-gray-500 uppercase mb-2">
+              RMS Spot Radius Statistics
+            </div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
                 <div className="text-xs text-gray-400">Mean</div>
-                <div className="font-medium">{(result.mean * 1e6).toFixed(3)} um</div>
+                <div className="font-medium">
+                  {(result.mean * 1e6).toFixed(3)} um
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400">Std Dev</div>
-                <div className="font-medium">{(result.std * 1e6).toFixed(3)} um</div>
+                <div className="font-medium">
+                  {(result.std * 1e6).toFixed(3)} um
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400">Min</div>
-                <div className="font-medium">{(result.min * 1e6).toFixed(3)} um</div>
+                <div className="font-medium">
+                  {(result.min * 1e6).toFixed(3)} um
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400">Max</div>
-                <div className="font-medium">{(result.max * 1e6).toFixed(3)} um</div>
+                <div className="font-medium">
+                  {(result.max * 1e6).toFixed(3)} um
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400">95th Percentile</div>
-                <div className="font-medium">{(result.p95 * 1e6).toFixed(3)} um</div>
+                <div className="font-medium">
+                  {(result.p95 * 1e6).toFixed(3)} um
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400">Trials</div>
@@ -146,15 +175,22 @@ function TrendPlot({ data }: { data: number[] }) {
   const minVal = Math.min(...data, 0);
   const range = maxVal - minVal || 1;
 
-  const points = data.map((v, i) => {
-    const x = pad + (i / Math.max(1, data.length - 1)) * plotW;
-    const y = pad + plotH - ((v - minVal) / range) * plotH;
-    return `${x},${y}`;
-  }).join(" ");
+  const points = data
+    .map((v, i) => {
+      const x = pad + (i / Math.max(1, data.length - 1)) * plotW;
+      const y = pad + plotH - ((v - minVal) / range) * plotH;
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   return (
     <svg width={width} height={height} className="bg-white rounded border">
-      <polyline points={points} fill="none" stroke="#6366f1" strokeWidth={1.5} />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="#6366f1"
+        strokeWidth={1.5}
+      />
     </svg>
   );
 }

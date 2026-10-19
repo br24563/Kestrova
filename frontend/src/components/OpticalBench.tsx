@@ -12,7 +12,17 @@
  */
 
 import { useRef, useState } from "react";
-import type { OpticalSystem, RayTraceResult, AnalysisResult, ThinLens, SphericalSurface, ThickLens, ApertureStop, Mirror, LengthUnit } from "../types";
+import type {
+  OpticalSystem,
+  RayTraceResult,
+  AnalysisResult,
+  ThinLens,
+  SphericalSurface,
+  ThickLens,
+  ApertureStop,
+  Mirror,
+  LengthUnit,
+} from "../types";
 import { fromMeters, LENGTH_UNIT_LABELS } from "../types";
 
 interface OpticalBenchProps {
@@ -33,7 +43,11 @@ const MARGIN_LEFT = 60;
 const OPTICAL_AXIS_Y = 200;
 const COMPONENT_HEIGHT = 120;
 
-export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchProps) {
+export function OpticalBench({
+  system,
+  rayResult,
+  displayUnit,
+}: OpticalBenchProps) {
   const unitLabel = LENGTH_UNIT_LABELS[displayUnit];
   const svgRef = useRef<SVGSVGElement>(null);
   const [scale, setScale] = useState(1);
@@ -82,7 +96,7 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
     setScale(Math.max(0.1, Math.min(5, scale + delta)));
   };
 
-    const drawLens = (comp: ThinLens) => {
+  const drawLens = (comp: ThinLens) => {
     const x = toSvgX(comp.position);
     const lensWidth = 20;
     const halfHeight = COMPONENT_HEIGHT / 2;
@@ -96,14 +110,34 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
           stroke="#3b82f6"
           strokeWidth={2}
         />
-        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 10} textAnchor="middle" fontSize={12} fill="#374151">
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y - halfHeight - 10}
+          textAnchor="middle"
+          fontSize={12}
+          fill="#374151"
+        >
           {comp.id}
         </text>
-        <text x={x} y={OPTICAL_AXIS_Y + halfHeight + 20} textAnchor="middle" fontSize={10} fill="#6b7280">
-          f={fromMeters(comp.focal_length, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y + halfHeight + 20}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#6b7280"
+        >
+          f={fromMeters(comp.focal_length, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
-        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y + 35}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {fromMeters(comp.position, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
       </g>
     );
@@ -123,11 +157,24 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
           stroke="#ef4444"
           strokeWidth={3}
         />
-        <text x={x - 10} y={toSvgY(height) - 5} textAnchor="end" fontSize={12} fill="#ef4444">
+        <text
+          x={x - 10}
+          y={toSvgY(height) - 5}
+          textAnchor="end"
+          fontSize={12}
+          fill="#ef4444"
+        >
           Object
         </text>
-        <text x={x - 10} y={OPTICAL_AXIS_Y + 35} textAnchor="end" fontSize={10} fill="#9ca3af">
-          {fromMeters(system.object.position, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={x - 10}
+          y={OPTICAL_AXIS_Y + 35}
+          textAnchor="end"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {fromMeters(system.object.position, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
       </g>
     );
@@ -146,11 +193,24 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
           stroke="#10b981"
           strokeWidth={2}
         />
-        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="middle" fontSize={11} fill="#10b981">
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y - halfHeight - 5}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#10b981"
+        >
           {comp.id}
         </text>
-        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y + 35}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {fromMeters(comp.position, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
       </g>
     );
@@ -173,14 +233,35 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
           stroke="#6366f1"
           strokeWidth={2}
         />
-        <text x={(x1 + x2) / 2} y={OPTICAL_AXIS_Y - halfHeight - 10} textAnchor="middle" fontSize={12} fill="#374151">
+        <text
+          x={(x1 + x2) / 2}
+          y={OPTICAL_AXIS_Y - halfHeight - 10}
+          textAnchor="middle"
+          fontSize={12}
+          fill="#374151"
+        >
           {comp.id}
         </text>
-        <text x={(x1 + x2) / 2} y={OPTICAL_AXIS_Y + halfHeight + 20} textAnchor="middle" fontSize={10} fill="#6b7280">
-          R1={fromMeters(comp.radius1, displayUnit).toFixed(1)}{unitLabel}, R2={fromMeters(comp.radius2, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={(x1 + x2) / 2}
+          y={OPTICAL_AXIS_Y + halfHeight + 20}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#6b7280"
+        >
+          R1={fromMeters(comp.radius1, displayUnit).toFixed(1)}
+          {unitLabel}, R2={fromMeters(comp.radius2, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
-        <text x={(x1 + x2) / 2} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={(x1 + x2) / 2}
+          y={OPTICAL_AXIS_Y + 35}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {fromMeters(comp.position, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
       </g>
     );
@@ -200,11 +281,24 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
           stroke="#f59e0b"
           strokeWidth={3}
         />
-        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="middle" fontSize={11} fill="#f59e0b">
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y - halfHeight - 5}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#f59e0b"
+        >
           {comp.id}
         </text>
-        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y + 35}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {fromMeters(comp.position, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
       </g>
     );
@@ -224,11 +318,24 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
           stroke="#64748b"
           strokeWidth={4}
         />
-        <text x={x} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="middle" fontSize={11} fill="#64748b">
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y - halfHeight - 5}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#64748b"
+        >
           {comp.id}
         </text>
-        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {fromMeters(comp.position, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y + 35}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {fromMeters(comp.position, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
       </g>
     );
@@ -249,11 +356,24 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
           strokeWidth={2}
           strokeDasharray="5,3"
         />
-        <text x={x + 5} y={OPTICAL_AXIS_Y - halfHeight - 5} textAnchor="start" fontSize={12} fill="#8b5cf6">
+        <text
+          x={x + 5}
+          y={OPTICAL_AXIS_Y - halfHeight - 5}
+          textAnchor="start"
+          fontSize={12}
+          fill="#8b5cf6"
+        >
           Image Plane
         </text>
-        <text x={x} y={OPTICAL_AXIS_Y + 35} textAnchor="middle" fontSize={10} fill="#9ca3af">
-          {fromMeters(system.image_plane.position, displayUnit).toFixed(1)}{unitLabel}
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y + 35}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          {fromMeters(system.image_plane.position, displayUnit).toFixed(1)}
+          {unitLabel}
         </text>
       </g>
     );
@@ -320,8 +440,21 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
     const x = toSvgX(rayResult.image_position);
     return (
       <g className="image-indicator">
-        <line x1={x} y1={OPTICAL_AXIS_Y - 10} x2={x} y2={OPTICAL_AXIS_Y + 10} stroke="#10b981" strokeWidth={2} />
-        <text x={x} y={OPTICAL_AXIS_Y - 15} textAnchor="middle" fontSize={10} fill="#10b981">
+        <line
+          x1={x}
+          y1={OPTICAL_AXIS_Y - 10}
+          x2={x}
+          y2={OPTICAL_AXIS_Y + 10}
+          stroke="#10b981"
+          strokeWidth={2}
+        />
+        <text
+          x={x}
+          y={OPTICAL_AXIS_Y - 15}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#10b981"
+        >
           Image forms here
         </text>
       </g>
@@ -348,7 +481,14 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
         style={{ cursor: isDragging ? "grabbing" : "grab" }}
       >
         <defs>
-          <marker id="arrowhead-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <marker
+            id="arrowhead-red"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            orient="auto"
+          >
             <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
           </marker>
         </defs>
@@ -360,7 +500,9 @@ export function OpticalBench({ system, rayResult, displayUnit }: OpticalBenchPro
             .filter((c): c is ThinLens => c.type === "thin_lens")
             .map((comp) => drawLens(comp))}
           {system.components
-            .filter((c): c is SphericalSurface => c.type === "spherical_surface")
+            .filter(
+              (c): c is SphericalSurface => c.type === "spherical_surface",
+            )
             .map((comp) => drawSphericalSurface(comp))}
           {system.components
             .filter((c): c is ThickLens => c.type === "thick_lens")

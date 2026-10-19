@@ -6,12 +6,12 @@
  * system image plane, in waves. RMS, P-V and Strehl are over the full 2D pupil.
  */
 
-import { useState } from 'react';
-import type { OpticalSystem, LengthUnit } from '../../types';
-import { analyzeOPDFan } from '../../api';
-import { LinePlot } from './LinePlot';
-import { ExportButton } from '../ExportButton';
-import { useAnalysis, FIELD_FRACTIONS, describeField } from './useAnalysis';
+import { useState } from "react";
+import type { OpticalSystem, LengthUnit } from "../../types";
+import { analyzeOPDFan } from "../../api";
+import { LinePlot } from "./LinePlot";
+import { ExportButton } from "../ExportButton";
+import { useAnalysis, FIELD_FRACTIONS, describeField } from "./useAnalysis";
 
 interface OPDPlotProps {
   system: OpticalSystem;
@@ -32,7 +32,9 @@ export function OPDPlot({ system, displayUnit }: OPDPlotProps) {
     <div className="p-4">
       <div className="flex justify-between items-center mb-2 gap-2">
         <h3 className="text-sm font-semibold text-gray-700">
-          OPD{data && ` (field ${describeField(data, fieldFraction, displayUnit)}, λ = ${(data.wavelength * 1e9).toFixed(0)} nm)`}
+          OPD
+          {data &&
+            ` (field ${describeField(data, fieldFraction, displayUnit)}, λ = ${(data.wavelength * 1e9).toFixed(0)} nm)`}
         </h3>
         <div className="flex items-center gap-2">
           <select
@@ -41,7 +43,9 @@ export function OPDPlot({ system, displayUnit }: OPDPlotProps) {
             className="text-xs border border-gray-200 rounded px-2 py-1"
           >
             {FIELD_FRACTIONS.map((f) => (
-              <option key={f} value={f}>Field {f.toFixed(1)}</option>
+              <option key={f} value={f}>
+                Field {f.toFixed(1)}
+              </option>
             ))}
           </select>
           {data && <ExportButton svgId="opd-plot" filename="opd-fan" />}
@@ -59,29 +63,47 @@ export function OPDPlot({ system, displayUnit }: OPDPlotProps) {
         </div>
       </div>
 
-      {loading && !data && <p className="text-xs text-gray-500">Computing wavefront...</p>}
+      {loading && !data && (
+        <p className="text-xs text-gray-500">Computing wavefront...</p>
+      )}
       {error && <p className="text-xs text-red-500">{error}</p>}
       {data && !error && (
         <>
           <div className="flex gap-4 text-xs text-gray-600 mb-2">
-            <span>RMS: {(data.opd_rms / data.wavelength).toFixed(3)} {'λ'}</span>
-            <span>P-V: {(data.opd_peak_to_valley / data.wavelength).toFixed(3)} {'λ'}</span>
+            <span>
+              RMS: {(data.opd_rms / data.wavelength).toFixed(3)} {"λ"}
+            </span>
+            <span>
+              P-V: {(data.opd_peak_to_valley / data.wavelength).toFixed(3)}{" "}
+              {"λ"}
+            </span>
             <span>Strehl: {data.strehl_ratio.toFixed(3)}</span>
           </div>
           <LinePlot
             id="opd-plot"
             series={[
-              { label: 'Tangential (py)', color: '#2563eb', x: data.pupil, y: waves(data.opd_t) },
-              { label: 'Sagittal (px)', color: '#dc2626', x: data.pupil, y: waves(data.opd_s) },
+              {
+                label: "Tangential (py)",
+                color: "#2563eb",
+                x: data.pupil,
+                y: waves(data.opd_t),
+              },
+              {
+                label: "Sagittal (px)",
+                color: "#dc2626",
+                x: data.pupil,
+                y: waves(data.opd_s),
+              },
             ]}
             xLabel="Normalised pupil coordinate"
-            yLabel={'OPD (waves)'}
+            yLabel={"OPD (waves)"}
             xDomain={[-1, 1]}
             symmetricY
           />
           <div className="mt-2 text-xs text-gray-500">
-            Referenced to the chief ray at the current image plane, so defocus from it is included.
-            Diffraction-limited (Mar&eacute;chal): RMS &le; 0.071 {'λ'}, Strehl &ge; 0.8.
+            Referenced to the chief ray at the current image plane, so defocus
+            from it is included. Diffraction-limited (Mar&eacute;chal): RMS &le;
+            0.071 {"λ"}, Strehl &ge; 0.8.
           </div>
         </>
       )}

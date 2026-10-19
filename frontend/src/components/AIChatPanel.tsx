@@ -8,7 +8,13 @@
 
 import { useEffect, useState } from "react";
 import type { OpticalSystem } from "../types";
-import { interpretPrompt, executeAICommand, getAIProvider, type AICommandResponse, type AIProviderInfo } from "../api";
+import {
+  interpretPrompt,
+  executeAICommand,
+  getAIProvider,
+  type AICommandResponse,
+  type AIProviderInfo,
+} from "../api";
 
 interface AIChatPanelProps {
   system: OpticalSystem;
@@ -57,11 +63,18 @@ export function AIChatPanel({ system, onSystemUpdate }: AIChatPanelProps) {
       const summary = responses.map((r) => r.message).join(" ");
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: summary || `Executed ${interpreted.commands.length} command(s).` },
+        {
+          role: "assistant",
+          text:
+            summary || `Executed ${interpreted.commands.length} command(s).`,
+        },
       ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI request failed";
-      setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${msg}` }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: `Error: ${msg}` },
+      ]);
     } finally {
       setBusy(false);
     }
@@ -73,7 +86,9 @@ export function AIChatPanel({ system, onSystemUpdate }: AIChatPanelProps) {
         <h3 className="text-sm font-medium text-gray-700">AI Assistant</h3>
         {provider && (
           <span className="text-[10px] text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
-            {provider.use_ollama ? `Ollama (${provider.model})` : "Rule-based parser"}
+            {provider.use_ollama
+              ? `Ollama (${provider.model})`
+              : "Rule-based parser"}
           </span>
         )}
       </div>
@@ -81,7 +96,8 @@ export function AIChatPanel({ system, onSystemUpdate }: AIChatPanelProps) {
       <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
         {messages.length === 0 && (
           <p className="text-xs text-gray-500">
-            Try: &ldquo;move lens_1 to 150mm&rdquo;, &ldquo;set object height to 5mm&rdquo;, or &ldquo;analyze the system&rdquo;
+            Try: &ldquo;move lens_1 to 150mm&rdquo;, &ldquo;set object height to
+            5mm&rdquo;, or &ldquo;analyze the system&rdquo;
           </p>
         )}
         {messages.map((msg, i) => (

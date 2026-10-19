@@ -50,7 +50,9 @@ export function ComparisonPanel({ system }: ComparisonPanelProps) {
 
   return (
     <div className="p-4 border-t border-gray-200">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">System Comparison</h2>
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">
+        System Comparison
+      </h2>
 
       <div className="space-y-3">
         <button
@@ -64,7 +66,9 @@ export function ComparisonPanel({ system }: ComparisonPanelProps) {
           <>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Label A</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Label A
+                </label>
                 <input
                   type="text"
                   value={labelA}
@@ -73,7 +77,9 @@ export function ComparisonPanel({ system }: ComparisonPanelProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Label B</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Label B
+                </label>
                 <input
                   type="text"
                   value={labelB}
@@ -95,23 +101,33 @@ export function ComparisonPanel({ system }: ComparisonPanelProps) {
 
         {result && (
           <div className="p-3 bg-gray-50 rounded border">
-            <div className="text-xs text-gray-500 uppercase mb-2">Comparison Results</div>
+            <div className="text-xs text-gray-500 uppercase mb-2">
+              Comparison Results
+            </div>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-gray-500">
                   <th className="text-left py-0.5">Metric</th>
-                  <th className="text-right py-0.5">{result.summary_a.label}</th>
-                  <th className="text-right py-0.5">{result.summary_b.label}</th>
+                  <th className="text-right py-0.5">
+                    {result.summary_a.label}
+                  </th>
+                  <th className="text-right py-0.5">
+                    {result.summary_b.label}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {result.rows.map((row, i) => (
                   <tr key={i} className="border-t border-gray-200">
                     <td className="py-0.5 text-gray-600">{row.metric}</td>
-                    <td className={`py-0.5 text-right ${row.advantage === "a" ? "font-bold text-green-700" : ""}`}>
+                    <td
+                      className={`py-0.5 text-right ${row.advantage === "a" ? "font-bold text-green-700" : ""}`}
+                    >
                       {typeof row.a === "number" ? row.a.toFixed(3) : row.a}
                     </td>
-                    <td className={`py-0.5 text-right ${row.advantage === "b" ? "font-bold text-green-700" : ""}`}>
+                    <td
+                      className={`py-0.5 text-right ${row.advantage === "b" ? "font-bold text-green-700" : ""}`}
+                    >
                       {typeof row.b === "number" ? row.b.toFixed(3) : row.b}
                     </td>
                   </tr>

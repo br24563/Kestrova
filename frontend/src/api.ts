@@ -47,7 +47,12 @@ export interface SavedSystemResponse {
 
 // AI command types
 export type AICommand =
-  | { action: "modify_component"; component_id: string; field: string; value: number }
+  | {
+      action: "modify_component";
+      component_id: string;
+      field: string;
+      value: number;
+    }
   | { action: "add_component"; component: unknown }
   | { action: "remove_component"; component_id: string }
   | { action: "set_object"; position?: number; height?: number }
@@ -105,7 +110,9 @@ async function errorDetail(response: Response): Promise<string> {
 export async function getDefaultSystem(): Promise<SystemResponse> {
   const response = await fetch(`${API_BASE}/system/default`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch default system: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to fetch default system: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -125,7 +132,8 @@ export async function traceRays(
 ): Promise<RayTraceResult> {
   const request: TraceRequest = { system };
   if (numRays !== undefined) request.num_rays = numRays;
-  if (apertureFraction !== undefined) request.aperture_fraction = apertureFraction;
+  if (apertureFraction !== undefined)
+    request.aperture_fraction = apertureFraction;
 
   const response = await fetch(`${API_BASE}/trace`, {
     method: "POST",
@@ -154,7 +162,8 @@ export async function analyzeSystem(
 ): Promise<AnalysisResult> {
   const request: AnalyzeRequest = { system };
   if (numRays !== undefined) request.num_rays = numRays;
-  if (apertureFraction !== undefined) request.aperture_fraction = apertureFraction;
+  if (apertureFraction !== undefined)
+    request.aperture_fraction = apertureFraction;
 
   const response = await fetch(`${API_BASE}/analyze`, {
     method: "POST",
@@ -184,7 +193,9 @@ export async function validateSystem(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to validate system: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to validate system: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -296,7 +307,9 @@ export async function analyzeAberration(
     body: JSON.stringify({ system, wavelengths }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze aberration: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to analyze aberration: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -309,7 +322,9 @@ export async function analyzeAberration(
 export async function getAIProvider(): Promise<AIProviderInfo> {
   const response = await fetch(`${API_BASE}/ai/provider`);
   if (!response.ok) {
-    throw new Error(`Failed to get AI provider: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to get AI provider: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -331,7 +346,9 @@ export async function interpretPrompt(
     body: JSON.stringify({ system, prompt }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to interpret prompt: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to interpret prompt: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -353,7 +370,9 @@ export async function executeAICommand(
     body: JSON.stringify({ system, command }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to execute AI command: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to execute AI command: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -374,7 +393,9 @@ export async function analyzeDiffraction(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze diffraction: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to analyze diffraction: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -395,7 +416,9 @@ export async function analyzeSeidel(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze Seidel aberrations: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to analyze Seidel aberrations: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -415,7 +438,9 @@ export async function runToleranceAnalysis(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to run tolerance analysis: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to run tolerance analysis: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -435,7 +460,9 @@ export async function compareSystems(
     body: JSON.stringify(request),
   });
   if (!response.ok) {
-    throw new Error(`Failed to compare systems: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to compare systems: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -505,7 +532,7 @@ export interface GhostAnalysisResult {
     surfaces: number[];
     reflection_count: number;
     relative_intensity: number;
-    image_position_offset: number | null;  // ghost focus offset from the image plane (m)
+    image_position_offset: number | null; // ghost focus offset from the image plane (m)
     is_in_field: boolean;
     description: string;
   }>;
@@ -517,8 +544,11 @@ export async function analyzeGhosts(
   nReflections: number = 2,
   threshold: number = 1e-4,
 ): Promise<GhostAnalysisResult> {
-  return postJson("/analyze/ghosts",
-    { system, n_reflections: nReflections, threshold }, "analyze ghosts");
+  return postJson(
+    "/analyze/ghosts",
+    { system, n_reflections: nReflections, threshold },
+    "analyze ghosts",
+  );
 }
 
 export interface StrayLightResult {
@@ -550,7 +580,9 @@ export async function analyzeStrayLight(
     }),
   });
   if (!response.ok) {
-    throw new Error(`Failed to analyze stray light: ${await errorDetail(response)}`);
+    throw new Error(
+      `Failed to analyze stray light: ${await errorDetail(response)}`,
+    );
   }
   return response.json();
 }
@@ -576,7 +608,11 @@ export async function computePST(
 }
 
 /** POST JSON to the backend, surfacing FastAPI's error detail on failure. */
-async function postJson<T>(path: string, body: unknown, what: string): Promise<T> {
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  what: string,
+): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -590,7 +626,7 @@ async function postJson<T>(path: string, body: unknown, what: string): Promise<T
 
 /** The full field that field fractions refer to. */
 export interface FieldExtent {
-  field_max: number;          // degrees for an object at infinity, else meters
+  field_max: number; // degrees for an object at infinity, else meters
   field_unit: "deg" | "m";
 }
 
@@ -610,8 +646,11 @@ export async function analyzeRayFan(
   fieldFraction: number,
   numRays: number = 21,
 ): Promise<RayFanResult> {
-  return postJson("/analyze/ray-fan",
-    { system, field_fraction: fieldFraction, num_rays: numRays }, "compute ray fan");
+  return postJson(
+    "/analyze/ray-fan",
+    { system, field_fraction: fieldFraction, num_rays: numRays },
+    "compute ray fan",
+  );
 }
 
 /** OPD cuts along the pupil axes (meters, null = vignetted). */
@@ -631,8 +670,11 @@ export async function analyzeOPDFan(
   fieldFraction: number,
   numRays: number = 41,
 ): Promise<OPDFanResult> {
-  return postJson("/analyze/opd-fan",
-    { system, field_fraction: fieldFraction, num_rays: numRays }, "compute OPD");
+  return postJson(
+    "/analyze/opd-fan",
+    { system, field_fraction: fieldFraction, num_rays: numRays },
+    "compute OPD",
+  );
 }
 
 /** Real-ray field curves; foci relative to the paraxial image (meters). */
@@ -643,15 +685,18 @@ export interface FieldCurvesResult extends FieldExtent {
   astigmatism: number[];
   medial_focus: number[];
   petzval: (number | null)[];
-  distortion: number[];       // fraction of the paraxial image height
+  distortion: number[]; // fraction of the paraxial image height
 }
 
 export async function analyzeFieldCurves(
   system: OpticalSystem,
   numFields: number = 11,
 ): Promise<FieldCurvesResult> {
-  return postJson("/analyze/field-curves",
-    { system, num_fields: numFields }, "compute field curves");
+  return postJson(
+    "/analyze/field-curves",
+    { system, num_fields: numFields },
+    "compute field curves",
+  );
 }
 
 /** Chromatic aberration at the given wavelengths (meters), with backend errors. */
@@ -659,7 +704,11 @@ export async function analyzeChromatic(
   system: OpticalSystem,
   wavelengths: number[],
 ): Promise<ChromaticAberrationResult> {
-  return postJson("/analyze/aberration", { system, wavelengths }, "analyze chromatic aberration");
+  return postJson(
+    "/analyze/aberration",
+    { system, wavelengths },
+    "analyze chromatic aberration",
+  );
 }
 
 /** Engineering report (Markdown) generated by the backend. */
@@ -667,7 +716,11 @@ export async function generateReport(
   system: OpticalSystem,
   includeSvg: boolean = false,
 ): Promise<{ markdown: string }> {
-  return postJson("/report", { system_a: system, include_svg: includeSvg }, "generate report");
+  return postJson(
+    "/report",
+    { system_a: system, include_svg: includeSvg },
+    "generate report",
+  );
 }
 
 /** An optimization constraint operand as the backend evaluates it. */
@@ -691,7 +744,11 @@ export async function evaluateConstraints(
   system: OpticalSystem,
   constraints: ConstraintSpec[],
 ): Promise<{ constraints: ConstraintValue[] }> {
-  return postJson("/optimize/constraints", { system, constraints }, "evaluate constraints");
+  return postJson(
+    "/optimize/constraints",
+    { system, constraints },
+    "evaluate constraints",
+  );
 }
 
 export interface HybridOptimizeRequest {
@@ -719,7 +776,9 @@ export interface HybridOptimizeResult {
   success: boolean;
 }
 
-export async function hybridOptimize(request: HybridOptimizeRequest): Promise<HybridOptimizeResult> {
+export async function hybridOptimize(
+  request: HybridOptimizeRequest,
+): Promise<HybridOptimizeResult> {
   return postJson("/optimize/hybrid", request, "run hybrid optimization");
 }
 
@@ -744,8 +803,14 @@ export interface HighYieldOptimizeResult {
   success: boolean;
 }
 
-export async function highYieldOptimize(request: HighYieldOptimizeRequest): Promise<HighYieldOptimizeResult> {
-  return postJson("/optimize/high-yield", request, "run high-yield optimization");
+export async function highYieldOptimize(
+  request: HighYieldOptimizeRequest,
+): Promise<HighYieldOptimizeResult> {
+  return postJson(
+    "/optimize/high-yield",
+    request,
+    "run high-yield optimization",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -753,8 +818,14 @@ export async function highYieldOptimize(request: HighYieldOptimizeRequest): Prom
 // ---------------------------------------------------------------------------
 
 /** The surface-by-surface prescription of a component-based system. */
-export async function lensFromSystem(system: OpticalSystem): Promise<{ lens: LensData }> {
-  return postJson("/lens/from-system", { system }, "convert system to lens data");
+export async function lensFromSystem(
+  system: OpticalSystem,
+): Promise<{ lens: LensData }> {
+  return postJson(
+    "/lens/from-system",
+    { system },
+    "convert system to lens data",
+  );
 }
 
 /**
@@ -774,6 +845,9 @@ export async function optimizeLens(
   bounds: Record<string, [number, number]> = {},
   maxEvaluations: number = 300,
 ): Promise<LensOptimizeResult> {
-  return postJson("/lens/optimize", { lens, bounds, max_evaluations: maxEvaluations },
-    "optimize lens data");
+  return postJson(
+    "/lens/optimize",
+    { lens, bounds, max_evaluations: maxEvaluations },
+    "optimize lens data",
+  );
 }

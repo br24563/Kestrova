@@ -30,7 +30,9 @@ export function useAnalysis<T>(run: () => Promise<T>, deps: unknown[]) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
@@ -41,7 +43,11 @@ export function useAnalysis<T>(run: () => Promise<T>, deps: unknown[]) {
 export const FIELD_FRACTIONS = [0, 0.5, 0.7, 1];
 
 /** "5.00°" or "10.00 mm": the actual field at a fraction of the full field. */
-export function describeField(extent: FieldExtent, fraction: number, unit: LengthUnit): string {
+export function describeField(
+  extent: FieldExtent,
+  fraction: number,
+  unit: LengthUnit,
+): string {
   const v = extent.field_max * fraction;
   return extent.field_unit === "deg"
     ? `${v.toFixed(2)}°`

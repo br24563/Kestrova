@@ -28,7 +28,10 @@ export function SpotDiagram({ analysis, displayUnit }: SpotDiagramProps) {
   }
 
   const pts = analysis.spot_points;
-  const extent = Math.max(...pts.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))), 1e-12);
+  const extent = Math.max(
+    ...pts.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))),
+    1e-12,
+  );
 
   const size = 240;
   const padding = 30;
@@ -36,7 +39,10 @@ export function SpotDiagram({ analysis, displayUnit }: SpotDiagramProps) {
   const scale = plot / (2 * extent);
   const cx0 = padding + plot / 2;
   const cy0 = padding + plot / 2;
-  const toSvg = ([x, y]: [number, number]) => [cx0 + x * scale, cy0 - y * scale];
+  const toSvg = ([x, y]: [number, number]) => [
+    cx0 + x * scale,
+    cy0 - y * scale,
+  ];
 
   const exportSvg = () => {
     const svgElement = document.getElementById("spot-diagram-svg");
@@ -68,26 +74,76 @@ export function SpotDiagram({ analysis, displayUnit }: SpotDiagramProps) {
       </div>
       <div className="mb-2">
         <span className="text-xs text-gray-500">
-          RMS Spot Radius: {fromMeters(analysis.rms_spot_radius, displayUnit).toFixed(4)} {unitLabel}
+          RMS Spot Radius:{" "}
+          {fromMeters(analysis.rms_spot_radius, displayUnit).toFixed(4)}{" "}
+          {unitLabel}
         </span>
       </div>
       <div className="border border-gray-200 rounded bg-white overflow-auto">
-        <svg id="spot-diagram-svg" width={size} height={size} className="mx-auto">
-          <rect x={padding} y={padding} width={plot} height={plot} fill="#f8fafc" stroke="#e2e8f0" strokeWidth={1} />
-          <line x1={padding} y1={cy0} x2={padding + plot} y2={cy0} stroke="#94a3b8" strokeWidth={1} strokeDasharray="3,3" />
-          <line x1={cx0} y1={padding} x2={cx0} y2={padding + plot} stroke="#94a3b8" strokeWidth={1} strokeDasharray="3,3" />
+        <svg
+          id="spot-diagram-svg"
+          width={size}
+          height={size}
+          className="mx-auto"
+        >
+          <rect
+            x={padding}
+            y={padding}
+            width={plot}
+            height={plot}
+            fill="#f8fafc"
+            stroke="#e2e8f0"
+            strokeWidth={1}
+          />
+          <line
+            x1={padding}
+            y1={cy0}
+            x2={padding + plot}
+            y2={cy0}
+            stroke="#94a3b8"
+            strokeWidth={1}
+            strokeDasharray="3,3"
+          />
+          <line
+            x1={cx0}
+            y1={padding}
+            x2={cx0}
+            y2={padding + plot}
+            stroke="#94a3b8"
+            strokeWidth={1}
+            strokeDasharray="3,3"
+          />
           {pts.map((point, i) => {
             const [cx, cy] = toSvg(point);
-            return <circle key={i} cx={cx} cy={cy} r={2} fill="#3b82f6" fillOpacity={0.7} />;
+            return (
+              <circle
+                key={i}
+                cx={cx}
+                cy={cy}
+                r={2}
+                fill="#3b82f6"
+                fillOpacity={0.7}
+              />
+            );
           })}
-          <text x={size / 2} y={size - 8} textAnchor="middle" fontSize={10} fill="#94a3b8">
-            x, y relative to centroid; box half-width {fromMeters(extent, displayUnit).toPrecision(3)} {unitLabel}
+          <text
+            x={size / 2}
+            y={size - 8}
+            textAnchor="middle"
+            fontSize={10}
+            fill="#94a3b8"
+          >
+            x, y relative to centroid; box half-width{" "}
+            {fromMeters(extent, displayUnit).toPrecision(3)} {unitLabel}
           </text>
         </svg>
       </div>
       <div className="mt-2 text-xs text-gray-500">
         <div>Number of rays: {analysis.spot_points.length}</div>
-        <div>Largest ray offset from centroid: {fromMeters(extent, displayUnit).toPrecision(4)} {unitLabel}</div>
+        <div>
+          Largest ray offset from centroid:{" "}
+          {fromMeters(extent, displayUnit).toPrecision(4)} {unitLabel}
+        </div>
       </div>
     </div>
   );

@@ -29,7 +29,11 @@ interface ComponentEditorProps {
   selectedComponentId: string | null;
   displayUnit: LengthUnit;
   onSelectComponent: (id: string | null) => void;
-  onUpdateComponent: (id: string, field: string, value: number | string) => void;
+  onUpdateComponent: (
+    id: string,
+    field: string,
+    value: number | string,
+  ) => void;
   onUpdateObject: (field: string, value: number) => void;
   onUpdateImagePlane: (position: number) => void;
   onUpdateAnalysisSettings: (field: string, value: number | string[]) => void;
@@ -75,7 +79,11 @@ export function ComponentEditor({
           onChange={(e) => {
             const val = parseFloat(e.target.value);
             if (!isNaN(val)) {
-              onUpdateComponent(selectedComponent!.id, field, toMeters(val, displayUnit));
+              onUpdateComponent(
+                selectedComponent!.id,
+                field,
+                toMeters(val, displayUnit),
+              );
             }
           }}
           className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
@@ -94,25 +102,33 @@ export function ComponentEditor({
       <div className="mb-4 p-3 bg-gray-50 rounded border">
         <h3 className="text-sm font-medium text-gray-700 mb-2">Object</h3>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Position ({unitLabel})</label>
+          <label className="block text-xs text-gray-600 mb-1">
+            Position ({unitLabel})
+          </label>
           <input
-            type="number" step="any"
+            type="number"
+            step="any"
             value={fromMeters(system.object.position, displayUnit)}
             onChange={(e) => {
               const val = parseFloat(e.target.value);
-              if (!isNaN(val)) onUpdateObject("position", toMeters(val, displayUnit));
+              if (!isNaN(val))
+                onUpdateObject("position", toMeters(val, displayUnit));
             }}
             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
           />
         </div>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Height ({unitLabel})</label>
+          <label className="block text-xs text-gray-600 mb-1">
+            Height ({unitLabel})
+          </label>
           <input
-            type="number" step="any"
+            type="number"
+            step="any"
             value={fromMeters(system.object.height, displayUnit)}
             onChange={(e) => {
               const val = parseFloat(e.target.value);
-              if (!isNaN(val)) onUpdateObject("height", toMeters(val, displayUnit));
+              if (!isNaN(val))
+                onUpdateObject("height", toMeters(val, displayUnit));
             }}
             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
           />
@@ -165,28 +181,41 @@ export function ComponentEditor({
                 key={comp.id}
                 onClick={() => onSelectComponent(comp.id)}
                 className={`p-2 border rounded cursor-pointer text-sm transition-colors ${
-                  isSelected ? "border-optical-500 bg-optical-50" : "border-gray-200 hover:border-gray-300"
+                  isSelected
+                    ? "border-optical-500 bg-optical-50"
+                    : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div className="flex justify-between items-center">
-                  <span className="font-medium">{comp.id} ({comp.type})</span>
+                  <span className="font-medium">
+                    {comp.id} ({comp.type})
+                  </span>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={(e) => { e.stopPropagation(); onReorderComponent(comp.id, "up"); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onReorderComponent(comp.id, "up");
+                      }}
                       className="text-gray-400 hover:text-gray-600 text-xs px-1"
                       title="Move up"
                     >
                       ↑
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); onReorderComponent(comp.id, "down"); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onReorderComponent(comp.id, "down");
+                      }}
                       className="text-gray-400 hover:text-gray-600 text-xs px-1"
                       title="Move down"
                     >
                       ↓
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); onRemoveComponent(comp.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveComponent(comp.id);
+                      }}
                       className="text-red-500 hover:text-red-700 text-xs"
                     >
                       ✕
@@ -195,21 +224,52 @@ export function ComponentEditor({
                 </div>
                 {isLens && (
                   <div className="text-xs text-gray-500 mt-1">
-                    f={fromMeters((comp as ThinLens).focal_length, displayUnit).toFixed(1)}{unitLabel},
-                    D={fromMeters((comp as ThinLens).aperture_diameter, displayUnit).toFixed(1)}{unitLabel}
+                    f=
+                    {fromMeters(
+                      (comp as ThinLens).focal_length,
+                      displayUnit,
+                    ).toFixed(1)}
+                    {unitLabel}, D=
+                    {fromMeters(
+                      (comp as ThinLens).aperture_diameter,
+                      displayUnit,
+                    ).toFixed(1)}
+                    {unitLabel}
                   </div>
                 )}
                 {comp.type === "spherical_surface" && (
                   <div className="text-xs text-gray-500 mt-1">
-                    R={fromMeters((comp as SphericalSurface).radius, displayUnit).toFixed(1)}{unitLabel},
-                    t={fromMeters((comp as SphericalSurface).thickness, displayUnit).toFixed(1)}{unitLabel}
+                    R=
+                    {fromMeters(
+                      (comp as SphericalSurface).radius,
+                      displayUnit,
+                    ).toFixed(1)}
+                    {unitLabel}, t=
+                    {fromMeters(
+                      (comp as SphericalSurface).thickness,
+                      displayUnit,
+                    ).toFixed(1)}
+                    {unitLabel}
                   </div>
                 )}
                 {comp.type === "thick_lens" && (
                   <div className="text-xs text-gray-500 mt-1">
-                    R1={fromMeters((comp as ThickLens).radius1, displayUnit).toFixed(1)}{unitLabel},
-                    R2={fromMeters((comp as ThickLens).radius2, displayUnit).toFixed(1)}{unitLabel},
-                    t={fromMeters((comp as ThickLens).thickness, displayUnit).toFixed(1)}{unitLabel}
+                    R1=
+                    {fromMeters(
+                      (comp as ThickLens).radius1,
+                      displayUnit,
+                    ).toFixed(1)}
+                    {unitLabel}, R2=
+                    {fromMeters(
+                      (comp as ThickLens).radius2,
+                      displayUnit,
+                    ).toFixed(1)}
+                    {unitLabel}, t=
+                    {fromMeters(
+                      (comp as ThickLens).thickness,
+                      displayUnit,
+                    ).toFixed(1)}
+                    {unitLabel}
                   </div>
                 )}
               </div>
@@ -225,26 +285,50 @@ export function ComponentEditor({
             Properties: {selectedComponent.id}
           </h3>
           <div className="mb-2">
-            <label className="block text-xs text-gray-600 mb-1">Position ({unitLabel})</label>
+            <label className="block text-xs text-gray-600 mb-1">
+              Position ({unitLabel})
+            </label>
             <input
-              type="number" step="any"
+              type="number"
+              step="any"
               value={fromMeters(selectedComponent.position, displayUnit)}
               onChange={(e) => {
                 const val = parseFloat(e.target.value);
-                if (!isNaN(val)) onUpdateComponent(selectedComponent.id, "position", toMeters(val, displayUnit));
+                if (!isNaN(val))
+                  onUpdateComponent(
+                    selectedComponent.id,
+                    "position",
+                    toMeters(val, displayUnit),
+                  );
               }}
               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
             />
           </div>
           {selectedComponent.type === "thin_lens" && (
             <>
-              {formatLensField("Focal Length", "focal_length", (selectedComponent as ThinLens).focal_length)}
-              {formatLensField("Aperture Diameter", "aperture_diameter", (selectedComponent as ThinLens).aperture_diameter)}
+              {formatLensField(
+                "Focal Length",
+                "focal_length",
+                (selectedComponent as ThinLens).focal_length,
+              )}
+              {formatLensField(
+                "Aperture Diameter",
+                "aperture_diameter",
+                (selectedComponent as ThinLens).aperture_diameter,
+              )}
               <div className="mb-3">
-                <label className="block text-xs text-gray-600 mb-1">Material</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Material
+                </label>
                 <select
                   value={(selectedComponent as ThinLens).material}
-                  onChange={(e) => onUpdateComponent(selectedComponent.id, "material", e.target.value)}
+                  onChange={(e) =>
+                    onUpdateComponent(
+                      selectedComponent.id,
+                      "material",
+                      e.target.value,
+                    )
+                  }
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 >
                   <option value="N-BK7">N-BK7</option>
@@ -258,13 +342,29 @@ export function ComponentEditor({
           )}
           {selectedComponent.type === "spherical_surface" && (
             <>
-              {formatLensField("Radius of Curvature", "radius", (selectedComponent as SphericalSurface).radius)}
-              {formatLensField("Thickness", "thickness", (selectedComponent as SphericalSurface).thickness)}
+              {formatLensField(
+                "Radius of Curvature",
+                "radius",
+                (selectedComponent as SphericalSurface).radius,
+              )}
+              {formatLensField(
+                "Thickness",
+                "thickness",
+                (selectedComponent as SphericalSurface).thickness,
+              )}
               <div className="mb-3">
-                <label className="block text-xs text-gray-600 mb-1">Material</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Material
+                </label>
                 <select
                   value={(selectedComponent as SphericalSurface).material}
-                  onChange={(e) => onUpdateComponent(selectedComponent.id, "material", e.target.value)}
+                  onChange={(e) =>
+                    onUpdateComponent(
+                      selectedComponent.id,
+                      "material",
+                      e.target.value,
+                    )
+                  }
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 >
                   <option value="N-BK7">N-BK7</option>
@@ -278,15 +378,39 @@ export function ComponentEditor({
           )}
           {selectedComponent.type === "thick_lens" && (
             <>
-              {formatLensField("Radius 1", "radius1", (selectedComponent as ThickLens).radius1)}
-              {formatLensField("Radius 2", "radius2", (selectedComponent as ThickLens).radius2)}
-              {formatLensField("Thickness", "thickness", (selectedComponent as ThickLens).thickness)}
-              {formatLensField("Aperture Diameter", "aperture_diameter", (selectedComponent as ThickLens).aperture_diameter)}
+              {formatLensField(
+                "Radius 1",
+                "radius1",
+                (selectedComponent as ThickLens).radius1,
+              )}
+              {formatLensField(
+                "Radius 2",
+                "radius2",
+                (selectedComponent as ThickLens).radius2,
+              )}
+              {formatLensField(
+                "Thickness",
+                "thickness",
+                (selectedComponent as ThickLens).thickness,
+              )}
+              {formatLensField(
+                "Aperture Diameter",
+                "aperture_diameter",
+                (selectedComponent as ThickLens).aperture_diameter,
+              )}
               <div className="mb-3">
-                <label className="block text-xs text-gray-600 mb-1">Material</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Material
+                </label>
                 <select
                   value={(selectedComponent as ThickLens).material}
-                  onChange={(e) => onUpdateComponent(selectedComponent.id, "material", e.target.value)}
+                  onChange={(e) =>
+                    onUpdateComponent(
+                      selectedComponent.id,
+                      "material",
+                      e.target.value,
+                    )
+                  }
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 >
                   <option value="N-BK7">N-BK7</option>
@@ -300,22 +424,37 @@ export function ComponentEditor({
           )}
           {selectedComponent.type === "aperture" && (
             <>
-              {formatLensField("Diameter", "diameter", (selectedComponent as ApertureStop).diameter)}
+              {formatLensField(
+                "Diameter",
+                "diameter",
+                (selectedComponent as ApertureStop).diameter,
+              )}
             </>
           )}
           {selectedComponent.type === "mirror" && (
             <>
-              {formatLensField("Width", "width", (selectedComponent as Mirror).width)}
-              {formatLensField("Radius of Curvature (0 = flat)", "radius", (selectedComponent as Mirror).radius ?? 0)}
+              {formatLensField(
+                "Width",
+                "width",
+                (selectedComponent as Mirror).width,
+              )}
+              {formatLensField(
+                "Radius of Curvature (0 = flat)",
+                "radius",
+                (selectedComponent as Mirror).radius ?? 0,
+              )}
               <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Conic Constant</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Conic Constant
+                </label>
                 <input
                   type="number"
                   step="any"
                   value={(selectedComponent as Mirror).conic ?? 0}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value);
-                    if (!isNaN(val)) onUpdateComponent(selectedComponent.id, "conic", val);
+                    if (!isNaN(val))
+                      onUpdateComponent(selectedComponent.id, "conic", val);
                   }}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 />
@@ -329,9 +468,12 @@ export function ComponentEditor({
       <div className="mb-4 p-3 bg-gray-50 rounded border">
         <h3 className="text-sm font-medium text-gray-700 mb-2">Image Plane</h3>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Position ({unitLabel})</label>
+          <label className="block text-xs text-gray-600 mb-1">
+            Position ({unitLabel})
+          </label>
           <input
-            type="number" step="any"
+            type="number"
+            step="any"
             value={fromMeters(system.image_plane.position, displayUnit)}
             onChange={(e) => {
               const val = parseFloat(e.target.value);
@@ -344,22 +486,40 @@ export function ComponentEditor({
 
       {/* Analysis Settings */}
       <div className="mb-4 p-3 bg-gray-50 rounded border">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Analysis Settings</h3>
+        <h3 className="text-sm font-medium text-gray-700 mb-2">
+          Analysis Settings
+        </h3>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Number of Rays</label>
+          <label className="block text-xs text-gray-600 mb-1">
+            Number of Rays
+          </label>
           <input
-            type="number" min="1" max="101"
+            type="number"
+            min="1"
+            max="101"
             value={system.analysis_settings.num_rays}
-            onChange={(e) => onUpdateAnalysisSettings("num_rays", parseInt(e.target.value))}
+            onChange={(e) =>
+              onUpdateAnalysisSettings("num_rays", parseInt(e.target.value))
+            }
             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
           />
         </div>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Aperture Fraction</label>
+          <label className="block text-xs text-gray-600 mb-1">
+            Aperture Fraction
+          </label>
           <input
-            type="range" min="0" max="1" step="0.05"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
             value={system.analysis_settings.aperture_fraction}
-            onChange={(e) => onUpdateAnalysisSettings("aperture_fraction", parseFloat(e.target.value))}
+            onChange={(e) =>
+              onUpdateAnalysisSettings(
+                "aperture_fraction",
+                parseFloat(e.target.value),
+              )
+            }
             className="w-full"
           />
           <span className="text-xs text-gray-500">
@@ -367,11 +527,21 @@ export function ComponentEditor({
           </span>
         </div>
         <div className="mb-2">
-          <label className="block text-xs text-gray-600 mb-1">Wavelength (nm)</label>
+          <label className="block text-xs text-gray-600 mb-1">
+            Wavelength (nm)
+          </label>
           <input
-            type="number" min="380" max="780" step="1"
+            type="number"
+            min="380"
+            max="780"
+            step="1"
             value={Math.round(system.analysis_settings.wavelength * 1e9)}
-            onChange={(e) => onUpdateAnalysisSettings("wavelength", parseFloat(e.target.value) / 1e9)}
+            onChange={(e) =>
+              onUpdateAnalysisSettings(
+                "wavelength",
+                parseFloat(e.target.value) / 1e9,
+              )
+            }
             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
           />
         </div>

@@ -36,8 +36,14 @@ const FIELDS_BY_TYPE: Record<string, string[]> = {
   spherical_surface: ["position", "radius", "thickness"],
 };
 
-export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: OptimizationPanelProps) {
-  const [componentId, setComponentId] = useState<string>(system.components[0]?.id ?? "");
+export function OptimizationPanel({
+  system,
+  displayUnit,
+  onApplyOptimized,
+}: OptimizationPanelProps) {
+  const [componentId, setComponentId] = useState<string>(
+    system.components[0]?.id ?? "",
+  );
   const [field, setField] = useState<string>("position");
   const [objective, setObjective] = useState<OptimizeObjective>("rms_spot");
   const [target, setTarget] = useState<string>("");
@@ -58,13 +64,19 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
 
   const comps = system.components.filter(
     (c): c is EditableComponent =>
-      c.type === "thin_lens" || c.type === "thick_lens" || c.type === "spherical_surface",
+      c.type === "thin_lens" ||
+      c.type === "thick_lens" ||
+      c.type === "spherical_surface",
   );
 
   // The selection can be stale after the system changes (e.g. a new preset).
-  const activeId = comps.some((c) => c.id === componentId) ? componentId : comps[0]?.id ?? "";
+  const activeId = comps.some((c) => c.id === componentId)
+    ? componentId
+    : (comps[0]?.id ?? "");
   const selectedComp = comps.find((c) => c.id === activeId);
-  const fields = selectedComp ? FIELDS_BY_TYPE[selectedComp.type] ?? ["position"] : ["position"];
+  const fields = selectedComp
+    ? (FIELDS_BY_TYPE[selectedComp.type] ?? ["position"])
+    : ["position"];
   const activeField = fields.includes(field) ? field : fields[0];
   const activeSweepField = fields.includes(sweepField) ? sweepField : fields[0];
 
@@ -82,7 +94,9 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
     // Default bounds if not provided
     let lo = parseFloat(minVal);
     let hi = parseFloat(maxVal);
-    const current = selectedComp ? Number(selectedComp[activeField as keyof EditableComponent]) : 0.01;
+    const current = selectedComp
+      ? Number(selectedComp[activeField as keyof EditableComponent])
+      : 0.01;
     if (isNaN(lo)) lo = current * 0.01;
     if (isNaN(hi)) hi = current * 2;
 
@@ -94,7 +108,10 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
       const res = await optimizeSystem({
         system,
         objective,
-        target: objective !== "rms_spot" && target !== "" ? parseFloat(target) : undefined,
+        target:
+          objective !== "rms_spot" && target !== ""
+            ? parseFloat(target)
+            : undefined,
         params: [{ component_id: activeId, field: activeField }],
         bounds: [[lo, hi]],
       });
@@ -149,14 +166,18 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
           {/* Component + Field */}
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Component</label>
+              <label className="block text-xs text-gray-600 mb-1">
+                Component
+              </label>
               <select
                 value={activeId}
                 onChange={(e) => handleComponentChange(e.target.value)}
                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
               >
                 {comps.map((c) => (
-                  <option key={c.id} value={c.id}>{c.id}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.id}
+                  </option>
                 ))}
               </select>
             </div>
@@ -168,7 +189,9 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
               >
                 {fields.map((f) => (
-                  <option key={f} value={f}>{f}</option>
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
                 ))}
               </select>
             </div>
@@ -177,10 +200,14 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
           {/* Objective */}
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Objective</label>
+              <label className="block text-xs text-gray-600 mb-1">
+                Objective
+              </label>
               <select
                 value={objective}
-                onChange={(e) => setObjective(e.target.value as OptimizeObjective)}
+                onChange={(e) =>
+                  setObjective(e.target.value as OptimizeObjective)
+                }
                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
               >
                 <option value="rms_spot">Minimize RMS spot</option>
@@ -190,9 +217,12 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
             </div>
             {objective !== "rms_spot" && (
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Target</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Target
+                </label>
                 <input
-                  type="number" step="any"
+                  type="number"
+                  step="any"
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
                   placeholder={objective === "efl" ? `${displayUnit}` : "mag"}
@@ -205,9 +235,12 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
           {/* Bounds */}
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Min ({displayUnit})</label>
+              <label className="block text-xs text-gray-600 mb-1">
+                Min ({displayUnit})
+              </label>
               <input
-                type="number" step="any"
+                type="number"
+                step="any"
                 value={minVal}
                 onChange={(e) => setMinVal(e.target.value)}
                 placeholder="auto"
@@ -215,9 +248,12 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Max ({displayUnit})</label>
+              <label className="block text-xs text-gray-600 mb-1">
+                Max ({displayUnit})
+              </label>
               <input
-                type="number" step="any"
+                type="number"
+                step="any"
                 value={maxVal}
                 onChange={(e) => setMaxVal(e.target.value)}
                 placeholder="auto"
@@ -240,15 +276,26 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
             <div className="mt-3 p-2 bg-gray-50 rounded border text-xs space-y-1">
               <div className="flex justify-between">
                 <span className="text-gray-600">Optimal value</span>
-                <span className="font-medium">{fromMeters(result.params[0] ?? 0, displayUnit).toFixed(3)} {displayUnit}</span>
+                <span className="font-medium">
+                  {fromMeters(result.params[0] ?? 0, displayUnit).toFixed(3)}{" "}
+                  {displayUnit}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Objective</span>
-                <span className="font-medium">{result.objective.toExponential(3)}</span>
+                <span className="font-medium">
+                  {result.objective.toExponential(3)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Converged</span>
-                <span className={result.success ? "text-green-600" : "text-yellow-600"}>{result.success ? "Yes" : "No"}</span>
+                <span
+                  className={
+                    result.success ? "text-green-600" : "text-yellow-600"
+                  }
+                >
+                  {result.success ? "Yes" : "No"}
+                </span>
               </div>
               <button
                 onClick={() => onApplyOptimized(result.system)}
@@ -261,24 +308,33 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
 
           {/* Parameter Sweep */}
           <div className="mt-4 pt-3 border-t border-gray-200">
-            <h4 className="text-xs font-medium text-gray-700 mb-2">Parameter Sweep</h4>
+            <h4 className="text-xs font-medium text-gray-700 mb-2">
+              Parameter Sweep
+            </h4>
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Field</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Field
+                </label>
                 <select
                   value={activeSweepField}
                   onChange={(e) => setSweepField(e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 >
                   {fields.map((f) => (
-                    <option key={f} value={f}>{f}</option>
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Count</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Count
+                </label>
                 <input
-                  type="number" min="2"
+                  type="number"
+                  min="2"
                   value={sweepCount}
                   onChange={(e) => setSweepCount(e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
@@ -287,18 +343,24 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
             </div>
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">Start ({displayUnit})</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Start ({displayUnit})
+                </label>
                 <input
-                  type="number" step="any"
+                  type="number"
+                  step="any"
                   value={sweepStart}
                   onChange={(e) => setSweepStart(e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-600 mb-1">End ({displayUnit})</label>
+                <label className="block text-xs text-gray-600 mb-1">
+                  End ({displayUnit})
+                </label>
                 <input
-                  type="number" step="any"
+                  type="number"
+                  step="any"
                   value={sweepEnd}
                   onChange={(e) => setSweepEnd(e.target.value)}
                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
@@ -313,15 +375,21 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
               {sweepBusy ? "Sweeping..." : "Run Sweep"}
             </button>
 
-            {sweepError && <p className="text-xs text-red-500 mt-2">{sweepError}</p>}
+            {sweepError && (
+              <p className="text-xs text-red-500 mt-2">{sweepError}</p>
+            )}
 
             {sweepResults && (
               <div className="mt-3 p-2 bg-gray-50 rounded border text-xs">
-                <div className="font-medium text-gray-700 mb-1">Sweep Results</div>
+                <div className="font-medium text-gray-700 mb-1">
+                  Sweep Results
+                </div>
                 <table className="w-full text-left">
                   <thead>
                     <tr className="text-gray-500">
-                      <th className="py-0.5 pr-2">{activeSweepField} ({displayUnit})</th>
+                      <th className="py-0.5 pr-2">
+                        {activeSweepField} ({displayUnit})
+                      </th>
                       <th className="py-0.5 pr-2">EFL ({displayUnit})</th>
                       <th className="py-0.5 pr-2">Mag</th>
                       <th className="py-0.5">RMS ({displayUnit})</th>
@@ -330,10 +398,25 @@ export function OptimizationPanel({ system, displayUnit, onApplyOptimized }: Opt
                   <tbody>
                     {sweepResults.map((p, i) => (
                       <tr key={i} className="border-t border-gray-200">
-                        <td className="py-0.5 pr-2">{fromMeters(p.value, displayUnit).toFixed(3)}</td>
-                        <td className="py-0.5 pr-2">{fmtLen(p.analysis.effective_focal_length, displayUnit, 3)}</td>
-                        <td className="py-0.5 pr-2">{fmtNum(p.analysis.magnification, 3)}</td>
-                        <td className="py-0.5">{fromMeters(p.analysis.rms_spot_radius, displayUnit).toFixed(3)}</td>
+                        <td className="py-0.5 pr-2">
+                          {fromMeters(p.value, displayUnit).toFixed(3)}
+                        </td>
+                        <td className="py-0.5 pr-2">
+                          {fmtLen(
+                            p.analysis.effective_focal_length,
+                            displayUnit,
+                            3,
+                          )}
+                        </td>
+                        <td className="py-0.5 pr-2">
+                          {fmtNum(p.analysis.magnification, 3)}
+                        </td>
+                        <td className="py-0.5">
+                          {fromMeters(
+                            p.analysis.rms_spot_radius,
+                            displayUnit,
+                          ).toFixed(3)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
