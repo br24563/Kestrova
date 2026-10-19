@@ -24,6 +24,9 @@ import type {
   ToleranceRequest,
   ComparisonResult,
   CompareRequest,
+  LensData,
+  LensResolveResult,
+  LensOptimizeResult,
 } from "./types";
 
 // Persistence types
@@ -743,4 +746,34 @@ export interface HighYieldOptimizeResult {
 
 export async function highYieldOptimize(request: HighYieldOptimizeRequest): Promise<HighYieldOptimizeResult> {
   return postJson("/optimize/high-yield", request, "run high-yield optimization");
+}
+
+// ---------------------------------------------------------------------------
+// Lens data (surface-by-surface prescription)
+// ---------------------------------------------------------------------------
+
+/** The surface-by-surface prescription of a component-based system. */
+export async function lensFromSystem(system: OpticalSystem): Promise<{ lens: LensData }> {
+  return postJson("/lens/from-system", { system }, "convert system to lens data");
+}
+
+/**
+ * Apply pickups and solves and fill automatic semi-diameters; returns the
+ * resolved lens, its component-based system and first-order properties.
+ */
+export async function resolveLens(lens: LensData): Promise<LensResolveResult> {
+  return postJson("/lens/resolve", { lens }, "resolve lens data");
+}
+
+/**
+ * Damped least squares over the lens variables. Bounds are keyed
+ * "<surface index>.<parameter>" (meters).
+ */
+export async function optimizeLens(
+  lens: LensData,
+  bounds: Record<string, [number, number]> = {},
+  maxEvaluations: number = 300,
+): Promise<LensOptimizeResult> {
+  return postJson("/lens/optimize", { lens, bounds, max_evaluations: maxEvaluations },
+    "optimize lens data");
 }
