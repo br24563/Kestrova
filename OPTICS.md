@@ -182,6 +182,21 @@ n2/s' - n1/s = (n2 - n1) / R
 BFL = f * (1 - (n - 1) * t / (n * R1))
 ```
 
+## Fields and Wavelengths
+
+A system may carry a Code V style field table: points in x and y as object
+heights, field angles (direction tangents tan x, tan y) or paraxial image
+heights, each with a weight and vignetting factors VUX, VLX, VUY, VLY that
+limit its pupil to -(1 - VL) .. (1 - VU). Wavelengths may be weighted.
+Without a table the fields are 0, 0.7 and 1 of the object height along y.
+Field analyses and the optimizer's ray-error merit use the table and the
+weights; off-axis tangential MTF is taken along each field's image
+direction.
+
+RMS spot sizes integrate over the pupil area by Gaussian quadrature
+(G. W. Forbes, JOSA A 5, 1943, 1988): ring radii at Gauss-Legendre nodes
+in r^2, each ray weighted by its share of the pupil area.
+
 ## Aberrations and Image Quality
 
 - **Seidel (third-order) sums** S1 to S5, CL and CT follow Welford,

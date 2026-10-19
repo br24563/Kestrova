@@ -94,12 +94,31 @@ export interface AnalysisSettings {
 // Optical System
 // ---------------------------------------------------------------------------
 
+/** One field point (Code V field table); units follow `field_type`. */
+export interface FieldPoint {
+  x: number;
+  y: number;
+  weight?: number;
+  vux?: number; // Code V vignetting factors, each in [0, 1)
+  vlx?: number;
+  vuy?: number;
+  vly?: number;
+}
+
+export type FieldType = "object_height" | "angle" | "paraxial_image_height";
+
 export interface OpticalSystem {
   components: OpticalComponent[];
   wavelengths: number[];
   object: OpticalObject;
   image_plane: ImagePlane;
   analysis_settings: AnalysisSettings;
+  /** Field table; null/absent = 0, 0.7 and 1 of the object height. */
+  fields?: FieldPoint[] | null;
+  /** Units of the field points; null = angle at infinity, else object height. */
+  field_type?: FieldType | null;
+  /** One weight per wavelength; null = equal. */
+  wavelength_weights?: number[] | null;
 }
 
 // ---------------------------------------------------------------------------

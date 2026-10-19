@@ -213,6 +213,28 @@ class Object(BaseModel):
     orientation: float = Field(default=0.0, description="Object orientation (radians)")
 
 
+class FieldPoint(BaseModel):
+    """
+    One field point, as in Code V's field table.
+
+    ``x`` and ``y`` are in the units of the system's ``field_type``: object
+    height (m), angle (rad, the direction tangents being tan x and tan y)
+    or paraxial image height (m). ``weight`` weights the field in
+    optimization and in field-averaged results. The vignetting factors
+    shrink the pupil for this field the way Code V's VUX, VLX, VUY and VLY
+    do: the pupil spans -(1 - vlx) .. (1 - vux) in x and -(1 - vly) ..
+    (1 - vuy) in y.
+    """
+
+    x: float = 0.0
+    y: float = 0.0
+    weight: float = Field(default=1.0, ge=0.0)
+    vux: float = Field(default=0.0, ge=0.0, lt=1.0)
+    vlx: float = Field(default=0.0, ge=0.0, lt=1.0)
+    vuy: float = Field(default=0.0, ge=0.0, lt=1.0)
+    vly: float = Field(default=0.0, ge=0.0, lt=1.0)
+
+
 class ImagePlane(BaseModel):
     """
     The image plane where the image is formed.
@@ -284,6 +306,20 @@ class OpticalSystem(BaseModel):
         default_factory=AnalysisSettings,
         description="Settings for ray tracing and analysis",
     )
+    fields: Optional[list[FieldPoint]] = Field(
+        default=None,
+        description="Field points (None = on axis, 0.7 and full field along y)",
+    )
+    field_type: Optional[Literal["object_height", "angle", "paraxial_image_height"]] = (
+        Field(
+            default=None,
+            description="Units of the field points (None = angle for an object at "
+            "infinity, else object height)",
+        )
+    )
+    wavelength_weights: Optional[list[float]] = Field(
+        default=None, description="Weight of each wavelength (None = equal)"
+    )
 
     @field_validator("wavelengths")
     @classmethod
@@ -306,6 +342,27 @@ class OpticalSystem(BaseModel):
         ids = [c.id for c in self.components]
         if len(ids) != len(set(ids)):
             raise ValueError("Component IDs must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def validate_fields_and_weights(self):
+        if self.fields is not None:
+            if not self.fields:
+                raise ValueError(
+                    "Give at least one field point (or leave fields unset)"
+                )
+            if sum(f.weight for f in self.fields) <= 0:
+                raise ValueError("At least one field needs a positive weight")
+        if self.wavelength_weights is not None:
+            if len(self.wavelength_weights) != len(self.wavelengths):
+                raise ValueError("Give one weight per wavelength")
+            if (
+                any(w < 0 for w in self.wavelength_weights)
+                or sum(self.wavelength_weights) <= 0
+            ):
+                raise ValueError(
+                    "Wavelength weights must be non-negative and not all zero"
+                )
         return self
 
 

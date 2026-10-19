@@ -39,6 +39,40 @@ Health check endpoint.
 }
 ```
 
+### Fields and wavelength weights
+
+Any `system` (and any `lens`) may carry a field table and wavelength
+weights; without them results are unchanged.
+
+```json
+{
+  "fields": [ { "x": 0, "y": 0 },
+              { "x": 0, "y": 0.0698, "weight": 2, "vuy": 0.2, "vly": 0.1 } ],
+  "field_type": "angle",
+  "wavelength_weights": [1, 2, 1]
+}
+```
+
+`field_type` is `object_height` (m, finite object), `angle` (rad, object
+at infinity; direction tangents tan x, tan y) or `paraxial_image_height`
+(m); null picks angle or object height from the object distance. The
+vignetting factors `vux`, `vlx`, `vuy`, `vly` limit the pupil to
+-(1 - vl) .. (1 - vu) as in Code V. Without a table the fields are 0, 0.7
+and 1 of the object height along y.
+
+#### POST /api/analyze/fields
+
+`{ "system", "rings": 8 }` → per field: real chief ray and paraxial image
+position, distortion, wavelength-weighted RMS spot and centroid (pupil
+integrated by Gaussian quadrature), each wavelength's RMS and the vignetted
+fraction; plus `weighted_rms_spot` = sqrt(sum w rms^2 / sum w).
+
+#### POST /api/analyze/field-mtf
+
+`{ "system", "field": 1, "frequencies": [10, 20, 40], "grid": 64 }` →
+wavelength-weighted diffraction MTF of one field, tangential along the
+field's image direction and sagittal across it (cycles/mm).
+
 ### Lens Data (surface-by-surface prescription)
 
 A `lens` is a Code V / Zemax style surface table. Each surface has

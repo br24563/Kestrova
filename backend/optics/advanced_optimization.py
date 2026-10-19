@@ -216,9 +216,15 @@ def ray_aberration_residuals(
 ) -> np.ndarray:
     """
     Residual vector of transverse ray errors (x and y, meters) relative to
-    the chief ray at the image plane, over a hexapolar pupil sampling at
-    several fields and wavelengths, each divided by sqrt(number of rays) so
-    the sum of squares is the mean-square spot size.
+    the reference ray (centre of the field's pupil) at the image plane, over
+    a Gaussian-quadrature pupil sampling (``rings`` rings) at several fields
+    and wavelengths, each multiplied by sqrt(its share of pupil area) so the
+    sum of squares is the mean-square spot size about the reference ray.
+
+    Fields: the system's field table when it has one (with its weights and
+    vignetting factors), else ``field_fractions`` of the object height
+    along y. Field and wavelength weights scale each block's squares by
+    weight / mean weight, so equal weights leave the result unchanged.
 
     With ``vignetting`` (default), a ray clipped by any clear aperture gets
     a residual equal to the entrance pupil diameter, which pushes the
@@ -228,25 +234,38 @@ def ray_aberration_residuals(
     total internal reflection) still get the penalty.
     """
     from . import raytrace as rt
+    from .fields import ResolvedField, pupil_samples, resolve_fields
 
+    if system.fields is not None:
+        tracing, fields = resolve_fields(system)
+    else:
+        tracing = system
+        fields = [
+            ResolvedField(k, 0.0, ff, 0.0, ff, 1.0, (0.0, 0.0, 0.0, 0.0))
+            for k, ff in enumerate(field_fractions)
+            if not (ff and not system.object.height)
+        ]
+    f_mean = sum(f.weight for f in fields) / len(fields)
     wavelengths = wavelengths or [system.analysis_settings.wavelength]
-    px, py = rt.pupil_grid(rings, "hexapolar")
+    sys_w = dict(
+        zip(
+            system.wavelengths,
+            system.wavelength_weights or [1.0] * len(system.wavelengths),
+        )
+    )
+    w_list = [sys_w.get(wl, 1.0) for wl in wavelengths]
+    w_mean = sum(w_list) / len(w_list)
     res = []
-    for wl in wavelengths:
-        seq = rt.build_sequence(system, wl)
-        fo = rt.first_order(system, seq=seq)
-        for ff in field_fractions:
-            if ff and not system.object.height:
+    for wl, w_wl in zip(wavelengths, w_list):
+        seq = rt.build_sequence(tracing, wl)
+        fo = rt.first_order(tracing, seq=seq)
+        for f in fields:
+            scale = math.sqrt((f.weight / f_mean) * (w_wl / w_mean))
+            if scale == 0:
                 continue
+            px, py, pw = pupil_samples(rings, f.vignetting)
             b, _, _ = rt.trace_field_rays(
-                system,
-                0.0,
-                ff,
-                np.concatenate([[0.0], px]),
-                np.concatenate([[0.0], py]),
-                seq=seq,
-                fo=fo,
-                clip=vignetting,
+                tracing, f.hx, f.hy, px, py, seq=seq, fo=fo, clip=vignetting
             )
             P = rt._to_local(
                 seq.image_origin, seq.image_rotation, b.image, b.directions
@@ -260,9 +279,9 @@ def ray_aberration_residuals(
                 big = 2.0 * fo.entrance_pupil_semi_diameter
                 ex = np.where(bad, big, ex)
                 ey = np.where(bad, big, ey)
-            n = len(ex)
-            res.append(ex / math.sqrt(n))
-            res.append(ey / math.sqrt(n))
+            root_w = np.sqrt(pw[1:])
+            res.append(scale * root_w * ex)
+            res.append(scale * root_w * ey)
     return np.concatenate(res)
 
 

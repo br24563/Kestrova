@@ -76,17 +76,31 @@ def image_space_na(
     return seq.n_image * math.sqrt(max(0.0, 1.0 - cos_u * cos_u))
 
 
+def vignetted_pupil(vignetting: Optional[tuple]) -> tuple:
+    """(cx, cy, ax, ay): centre and semi-axes of the vignetted pupil ellipse
+    for Code V factors (vux, vlx, vuy, vly), in normalised stop units."""
+    if not vignetting:
+        return 0.0, 0.0, 1.0, 1.0
+    vux, vlx, vuy, vly = vignetting
+    return (vlx - vux) / 2, (vly - vuy) / 2, (2 - vux - vlx) / 2, (2 - vuy - vly) / 2
+
+
 def wavefront_grid(
     system: OpticalSystem,
     field_fraction: float = 0.0,
     n: int = 64,
     wavelength: Optional[float] = None,
     defocus: float = 0.0,
+    field_x: float = 0.0,
+    vignetting: Optional[tuple] = None,
 ) -> WavefrontGrid:
     """
-    OPD on an n x n pupil grid for the field point at ``field_fraction`` of
-    the object height. ``defocus`` moves the image plane along the axis
-    (meters, in the direction of travel) before measuring.
+    OPD on an n x n pupil grid for the field point (``field_x``,
+    ``field_fraction``), fractions of the object height. ``defocus`` moves
+    the image plane along the axis (meters, in the direction of travel)
+    before measuring. ``vignetting`` = (vux, vlx, vuy, vly) limits the pupil
+    to Code V's vignetted ellipse; the grid stays in stop coordinates so the
+    PSF and MTF scale is unchanged.
     """
     if wavelength is None:
         wavelength = system.analysis_settings.wavelength
@@ -104,10 +118,11 @@ def wavefront_grid(
     fo = rt.first_order(system, seq=seq)
     g = np.linspace(-1.0, 1.0, n)
     PX, PY = np.meshgrid(g, g)
-    inside = PX**2 + PY**2 <= 1.0 + 1e-12
+    cx, cy, ax, ay = vignetted_pupil(vignetting)
+    inside = ((PX - cx) / ax) ** 2 + ((PY - cy) / ay) ** 2 <= 1.0 + 1e-12
     W = np.full((n, n), np.nan)
     w, ok, _ = rt.opd(
-        system, 0.0, field_fraction, PX[inside], PY[inside], seq=seq, fo=fo
+        system, field_x, field_fraction, PX[inside], PY[inside], seq=seq, fo=fo
     )
     vals = np.where(ok, w, np.nan)
     W[inside] = vals
@@ -171,10 +186,32 @@ class MTFResult:
     otf_sagittal: np.ndarray
 
 
-def mtf(grid: WavefrontGrid, pad: int = 2) -> MTFResult:
+def _otf_along(otf: np.ndarray, k: np.ndarray, angle: float) -> np.ndarray:
+    """OTF at shifts k samples along direction ``angle`` (from +y toward +x),
+    by bilinear interpolation of the periodic OTF array."""
+    N = otf.shape[0]
+    fy, fx = k * math.cos(angle), k * math.sin(angle)
+    y0, x0 = np.floor(fy).astype(int), np.floor(fx).astype(int)
+    ty, tx = fy - y0, fx - x0
+
+    def at(iy, ix):
+        return otf[iy % N, ix % N]
+
+    return (
+        (1 - ty) * (1 - tx) * at(y0, x0)
+        + ty * (1 - tx) * at(y0 + 1, x0)
+        + (1 - ty) * tx * at(y0, x0 + 1)
+        + ty * tx * at(y0 + 1, x0 + 1)
+    )
+
+
+def mtf(grid: WavefrontGrid, pad: int = 2, azimuth: float = 0.0) -> MTFResult:
     """
     OTF as the normalised autocorrelation of the pupil function, sliced along
-    the tangential (y) and sagittal (x) frequency axes up to the cutoff.
+    the tangential and sagittal frequency directions up to the cutoff. The
+    tangential direction is +y rotated by ``azimuth`` toward +x (the image
+    direction of the field point for a field off the y axis); azimuth 0
+    gives the y (tangential) and x (sagittal) axes exactly.
     """
     P, N, d_alpha = _pupil_field(grid, pad)
     F = np.fft.fft2(P)
@@ -185,8 +222,13 @@ def mtf(grid: WavefrontGrid, pad: int = 2) -> MTFResult:
     k = np.arange(n)
     freq = k * d_alpha / grid.wavelength
     cutoff = 2.0 * grid.na_image / grid.wavelength
-    tan = otf[k, 0]
-    sag = otf[0, k]
+    if azimuth == 0.0:
+        tan = otf[k, 0]
+        sag = otf[0, k]
+    else:
+        kf = k.astype(float)
+        tan = _otf_along(otf, kf, azimuth)
+        sag = _otf_along(otf, kf, azimuth + math.pi / 2)
     return MTFResult(freq, np.abs(tan), np.abs(sag), cutoff, tan, sag)
 
 
@@ -205,18 +247,31 @@ def polychromatic_mtf(
     weights: Optional[list] = None,
     n: int = 64,
     frequencies: Optional[np.ndarray] = None,
+    field_x: float = 0.0,
+    vignetting: Optional[tuple] = None,
+    azimuth: float = 0.0,
 ) -> dict:
     """
     Polychromatic MTF: weighted sum of the complex OTFs of each wavelength
     (each normalised to 1 at zero frequency), interpolated onto common
-    frequencies.
+    frequencies. Weights default to the system's wavelength weights.
     """
     if wavelengths is None:
         wavelengths = list(system.wavelengths)
+        if weights is None and system.wavelength_weights is not None:
+            weights = list(system.wavelength_weights)
     if weights is None:
         weights = [1.0] * len(wavelengths)
     wsum = float(sum(weights))
-    results = [mtf(wavefront_grid(system, field_fraction, n, wl)) for wl in wavelengths]
+    results = [
+        mtf(
+            wavefront_grid(
+                system, field_fraction, n, wl, field_x=field_x, vignetting=vignetting
+            ),
+            azimuth=azimuth,
+        )
+        for wl in wavelengths
+    ]
     fmax = max(r.cutoff for r in results)
     if frequencies is None:
         frequencies = np.linspace(0.0, fmax, 101)

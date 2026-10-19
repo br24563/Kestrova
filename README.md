@@ -54,7 +54,11 @@ prebuilt installers are published yet; build it from source.
 - **Diffraction**: FFT PSF and MTF from the real wavefront, Strehl ratio,
   encircled energy, diffraction-limit (Maréchal) test
 - **Chromatic**: longitudinal and lateral colour
-- **Spot diagrams**: real-ray 2D spots
+- **Spot diagrams**: real-ray 2D spots; RMS radii by Gaussian pupil quadrature
+- **Fields**: Code V style field tables (object height, angle or image
+  height; x and y; weights; vignetting factors) and wavelength weights,
+  with per-field spot, distortion and MTF (API: `/api/analyze/fields`,
+  `/api/analyze/field-mtf`)
 - **Illumination**: vignetting and relative illumination from the projected
   solid angle of the real ray bundle
 
