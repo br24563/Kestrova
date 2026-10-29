@@ -15,12 +15,15 @@ Run with:
 
 import sys
 import os
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 # Add the backend directory to the Python path
@@ -370,9 +373,32 @@ async def health_check():
     }
 
 
-@app.get("/")
+def _frontend_dir() -> Optional[Path]:
+    """The built web interface (index.html), if present: KESTROVA_FRONTEND_DIR,
+    the bundle of a frozen desktop build, or frontend/dist in the repo."""
+    candidates = []
+    if os.environ.get("KESTROVA_FRONTEND_DIR"):
+        candidates.append(Path(os.environ["KESTROVA_FRONTEND_DIR"]))
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(getattr(sys, "_MEIPASS", "")) / "frontend")
+    candidates.append(Path(__file__).resolve().parents[2] / "frontend" / "dist")
+    return next((c for c in candidates if (c / "index.html").is_file()), None)
+
+
+FRONTEND_DIR = _frontend_dir()
+
+
+@app.get("/", include_in_schema=False)
 async def root():
-    """Root endpoint - returns API information."""
+    """The web interface when it is built, otherwise the API information."""
+    if FRONTEND_DIR is not None:
+        return FileResponse(FRONTEND_DIR / "index.html")
+    return await api_info()
+
+
+@app.get("/api")
+async def api_info():
+    """API information."""
     return {
         "name": "AI Optical Design Engineer API",
         "version": "0.1.0",
@@ -2659,3 +2685,9 @@ async def ai_providers():
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# The built web interface's other files (scripts, styles, icons). Mounted
+# last, so every API route above takes precedence.
+if FRONTEND_DIR is not None:
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

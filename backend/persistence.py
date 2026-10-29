@@ -9,25 +9,49 @@ The database stores each system as a JSON string, which is the
 serialized form of the Pydantic OpticalSystem model. This keeps the
 schema simple and forward-compatible as the data model evolves.
 
-Database file location: backend/optical_systems.db (configurable).
+Database file location: ``$KESTROVA_DATA_DIR/optical_systems.db`` when that
+variable is set (the desktop app sets it to its user-data folder), the
+operating system's per-user data folder in a frozen build, and
+backend/optical_systems.db when run from source.
 """
 
 import json
+import os
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-# Default database location (relative to this file's directory)
-DEFAULT_DB_PATH = Path(__file__).resolve().parent / "optical_systems.db"
+
+def data_dir() -> Path:
+    """Where user data is kept (see the module docstring)."""
+    if os.environ.get("KESTROVA_DATA_DIR"):
+        base = Path(os.environ["KESTROVA_DATA_DIR"])
+    elif getattr(sys, "frozen", False):
+        if sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", Path.home())) / "Kestrova"
+        elif sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support" / "Kestrova"
+        else:
+            xdg = os.environ.get("XDG_DATA_HOME") or str(
+                Path.home() / ".local" / "share"
+            )
+            base = Path(xdg) / "kestrova"
+    else:
+        return Path(__file__).resolve().parent
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+DEFAULT_DB_PATH = data_dir() / "optical_systems.db"
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
     """Open a connection to the SQLite database and ensure the schema exists."""
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS systems (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -35,8 +59,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
-        """
-    )
+        """)
     conn.commit()
     return conn
 
@@ -49,6 +72,7 @@ def _now() -> str:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def save_system(
     name: str,
@@ -73,9 +97,7 @@ def save_system(
     try:
         now = _now()
         # Check if a system with this name already exists
-        row = conn.execute(
-            "SELECT id FROM systems WHERE name = ?", (name,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM systems WHERE name = ?", (name,)).fetchone()
         if row:
             conn.execute(
                 "UPDATE systems SET system_json = ?, updated_at = ? WHERE id = ?",

@@ -3,17 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Optical Design Engineer</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; img-src 'self'" />
+  <title>Kestrova</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      background: #0f172a;
       color: #e2e8f0;
       display: flex;
       justify-content: center;
@@ -21,137 +17,27 @@
       height: 100vh;
       overflow: hidden;
     }
-    
-    .loading-container {
-      text-align: center;
-      animation: fadeIn 0.5s ease-out;
+    .loading { text-align: center; }
+    .loading img { width: 96px; height: 96px; }
+    .title { font-size: 28px; font-weight: 600; margin-top: 16px; }
+    .status { font-size: 14px; color: #94a3b8; margin-top: 8px; }
+    .bar {
+      width: 200px; height: 4px; margin: 20px auto 0; overflow: hidden;
+      background: rgba(255, 255, 255, 0.1); border-radius: 2px;
     }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
+    .bar div {
+      width: 40%; height: 100%; background: #fbbf24; border-radius: 2px;
+      animation: slide 1.4s ease-in-out infinite;
     }
-    
-    .logo {
-      font-size: 64px;
-      margin-bottom: 24px;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-    }
-    
-    .title {
-      font-size: 28px;
-      font-weight: 300;
-      margin-bottom: 8px;
-      color: #f8fafc;
-    }
-    
-    .subtitle {
-      font-size: 14px;
-      color: #94a3b8;
-      margin-bottom: 40px;
-    }
-    
-    .spinner {
-      width: 48px;
-      height: 48px;
-      border: 3px solid rgba(255, 255, 255, 0.1);
-      border-top-color: #3b82f6;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 24px;
-    }
-    
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    
-    .status {
-      font-size: 13px;
-      color: #64748b;
-      min-height: 20px;
-    }
-    
-    .progress-bar {
-      width: 200px;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 2px;
-      margin: 20px auto 0;
-      overflow: hidden;
-    }
-    
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-      border-radius: 2px;
-      animation: progress 2s ease-in-out infinite;
-    }
-    
-    @keyframes progress {
-      0% { width: 0%; }
-      50% { width: 70%; }
-      100% { width: 100%; }
-    }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
   </style>
 </head>
 <body>
-  <div class="loading-container">
-    <div class="logo">🔬</div>
-    <div class="title">AI Optical Design Engineer</div>
-    <div class="subtitle">Professional Optical Design Software</div>
-    <div class="spinner"></div>
-    <div class="status" id="status">Initializing optical engine...</div>
-    <div class="progress-bar">
-      <div class="progress-fill"></div>
-    </div>
+  <div class="loading">
+    <img src="../assets/icon.png" alt="" />
+    <div class="title">Kestrova</div>
+    <div class="status">Starting the optics engine…</div>
+    <div class="bar"><div></div></div>
   </div>
-  
-  <script>
-    const statusEl = document.getElementById('status');
-    
-    // Check if we're running in Electron
-    if (window.electronAPI) {
-      const statusMessages = [
-        'Initializing optical engine...',
-        'Loading materials database...',
-        'Starting ray tracing engine...',
-        'Preparing user interface...',
-        'Almost ready...'
-      ];
-      
-      let messageIndex = 0;
-      const messageInterval = setInterval(() => {
-        messageIndex = (messageIndex + 1) % statusMessages.length;
-        statusEl.textContent = statusMessages[messageIndex];
-      }, 800);
-      
-      // Check backend status
-      async function checkBackend() {
-        try {
-          const status = await window.electronAPI.getBackendStatus();
-          if (status.status === 'running') {
-            clearInterval(messageInterval);
-            statusEl.textContent = 'Application ready!';
-            // The actual app will be loaded by Electron
-          } else {
-            setTimeout(checkBackend, 1000);
-          }
-        } catch (error) {
-          setTimeout(checkBackend, 1000);
-        }
-      }
-      
-      // Start checking
-      setTimeout(checkBackend, 500);
-    } else {
-      // Not in Electron, redirect to frontend dev server
-      window.location.href = 'http://localhost:5173';
-    }
-  </script>
 </body>
 </html>

@@ -11,7 +11,9 @@ This project uses GitHub Actions for continuous integration and continuous deplo
 Runs on every push and pull request to main/master branches.
 
 **Jobs:**
-- **backend-tests**: Tests Python backend across Python 3.11 and 3.12
+- **backend-tests**: Tests the Python backend on Ubuntu (Python 3.11 and
+  3.12), Windows and macOS (3.12); one failing platform does not cancel
+  the others
   - Runs all pytest tests with coverage in one pass
   - Fails below 80% coverage of `optics/` (a ratchet at the current level;
     raised as tests are added)
@@ -44,18 +46,20 @@ Runs code quality checks.
 - ESLint: Linting for TypeScript/React
 - Prettier: Code formatting check
 
-### 3. Release (`.github/workflows/release.yml`)
+### 3. Desktop builds (`.github/workflows/desktop.yml`)
 
-Creates releases when tags are pushed.
+Builds the desktop installers on Windows, macOS on Apple Silicon
+(`macos-15`) and macOS on Intel (`macos-15-intel`):
 
-**Steps:**
-1. Run all tests
-2. Build frontend
-3. Create release archive
-4. Create GitHub Release
-5. Upload release asset
+1. Build the web interface
+2. Freeze the backend with PyInstaller (`backend/kestrova-server.spec`)
+3. Smoke-test the frozen backend (it must start and answer `/api/health`)
+4. Package with electron-builder (signed when the signing secrets exist;
+   see `desktop-app/README.md`)
+5. Upload the installers as run artifacts
 
-**Trigger:** Push tags matching `v*`
+**Triggers:** version tags `v*` (then a GitHub Release is published with
+the installers), manual runs, and pull requests that change the packaging.
 
 ### 4. Dependabot (`.github/dependabot.yml`)
 

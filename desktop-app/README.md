@@ -1,105 +1,76 @@
-# AI Optical Design Engineer - Desktop App
+# Kestrova desktop app
 
-Electron wrapper for easy one-click launch of the optical design software.
+An Electron shell around the optics engine. On launch it starts the bundled
+backend (`kestrova-server`, the Python backend frozen with PyInstaller) on a
+free local port, waits for it, and opens the web interface the backend
+serves. The engine exits with the app: it watches the app's process, so
+this holds even if the app crashes.
 
-## Features
+- Projects and the engine log (`backend.log`) are kept in the app's
+  user-data folder: `%APPDATA%\Kestrova` on Windows,
+  `~/Library/Application Support/Kestrova` on macOS.
+- Nothing needs to be installed besides the app: the engine includes its own
+  Python, NumPy, SciPy and Numba.
 
-- ✅ One-click launch - no terminal needed
-- ✅ Bundled Python backend
-- ✅ System tray integration
-- ✅ Native window with menu bar
-- ✅ Auto-start backend with health check
-- ✅ Error handling with user-friendly messages
-- ✅ Cross-platform: Windows, Mac, Linux
+## Downloads
 
-## Installation
+Installers are built by the `Desktop builds` workflow
+(`.github/workflows/desktop.yml`) on real Windows and macOS machines. Push a
+version tag (`git tag v0.3.0 && git push origin v0.3.0`) to publish them on
+the repository's Releases page; the workflow can also be run by hand from
+the Actions tab, and the installers are then attached to the run.
 
-### Pre-built Binaries
+| Platform | File |
+|---|---|
+| Windows 10/11 (x64) | `Kestrova-<version>-win-x64.exe` |
+| macOS, Apple Silicon | `Kestrova-<version>-mac-arm64.dmg` |
+| macOS, Intel | `Kestrova-<version>-mac-x64.dmg` |
 
-Download from the [Releases](https://github.com/USERNAME/ai-optical-design-engineer/releases) page:
+### Unsigned builds
 
-- **Windows**: `AI-Optical-Design-Engineer-Setup-x.x.x.exe`
-- **Mac**: `AI-Optical-Design-Engineer-x.x.x.dmg`
-- **Linux**: `AI-Optical-Design-Engineer-x.x.x.AppImage`
+Until signing certificates are added (below), the installers are unsigned:
 
-### Build from Source
+- **Windows** shows a SmartScreen warning: choose *More info*, then
+  *Run anyway*.
+- **macOS** refuses to open the app at first: right-click it in
+  Applications, choose *Open*, then *Open* again (or allow it in System
+  Settings → Privacy & Security).
+
+## Building on your own machine
+
+Each platform must be built on that platform (the frozen engine is native
+code). Needs Python 3.12 and Node.js 20.
 
 ```bash
-# Install dependencies
-cd desktop-app
-npm install
-
-# Build frontend
-cd ../frontend
-npm run build
-
-# Build desktop app
-cd ../desktop-app
-npm run build        # Build for current platform
-npm run build:win    # Windows
-npm run build:mac    # Mac
-npm run build:linux  # Linux
+cd frontend && npm ci && npm run build            # the web interface
+cd ../backend && pip install -r requirements.txt pyinstaller
+pyinstaller --noconfirm --clean kestrova-server.spec   # -> backend/dist/kestrova-server
+cd ../desktop-app && npm ci
+npx electron-builder --win    # or --mac; output in desktop-app/dist-electron
 ```
 
-Output will be in `desktop-app/dist-electron/`.
+On Windows without Developer Mode, add `-c.win.signAndEditExecutable=false`
+(electron-builder's signing tools need permission to create symbolic links);
+the executable then lacks its embedded icon and version information.
 
 ## Development
 
 ```bash
-# Terminal 1: Backend
-cd backend
-source venv/bin/activate
-uvicorn api.main:app --reload
-
-# Terminal 2: Frontend  
-cd frontend
-npm run dev
-
-# Terminal 3: Electron
-desktop-app
-npm start
+cd desktop-app && npm ci && npm run dev
 ```
 
-## Architecture
+This starts the Vite dev server and the app; the app runs the backend from
+source on port 8000 with the Python on `PATH` (or `$KESTROVA_PYTHON`).
 
-```
-desktop-app/
-├── electron/
-│   ├── main.js          # Electron main process
-│   └── preload.js       # Preload script for IPC
-├── src/
-│   └── index.html       # Loading screen
-├── assets/              # Icons and resources
-└── package.json         # Build configuration
-```
+## Signing (optional)
 
-## Building Installers
+Add these repository secrets and the workflow signs the builds:
 
-### Windows (NSIS)
-```bash
-npm run build:win
-```
+- **macOS** (needs an Apple Developer account): `MAC_CERT_P12` (a base64
+  Developer ID Application certificate), `MAC_CERT_PASSWORD`, and for
+  notarization `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
+- **Windows**: `WIN_CERT_P12` (a base64 code-signing certificate) and
+  `WIN_CERT_PASSWORD`.
 
-Creates:
-- `AI-Optical-Design-Engineer-Setup-x.x.x.exe` (installer)
-- `AI-Optical-Design-Engineer-x.x.x-portable.exe` (portable)
-
-### Mac (DMG)
-```bash
-npm run build:mac
-```
-
-Creates:
-- `AI-Optical-Design-Engineer-x.x.x.dmg`
-
-### Linux (AppImage)
-```bash
-npm run build:linux
-```
-
-Creates:
-- `AI-Optical-Design-Engineer-x.x.x.AppImage`
-
-## License
-
-MIT
+The icon is drawn by `tools/make_icon.py` (`assets/icon.png`;
+electron-builder derives the `.ico` and `.icns` from it).
