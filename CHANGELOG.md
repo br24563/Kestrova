@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
+### Added (desktop)
+- Windows and macOS (Apple Silicon and Intel) installers with the optics
+  engine bundled (Python, NumPy, SciPy and Numba frozen with PyInstaller),
+  built and smoke-tested in CI and published for version tags. Unsigned
+  for now. Projects are kept in the per-user data folder.
+- Backend tests run on Ubuntu, Windows and macOS.
+
 ### Fixed (accuracy and data integrity)
 - Glass data rebuilt from the vendors' own catalog files: 820 SCHOTT, OHARA,
   HOYA and CDGM glasses (the 0.2.0 entry's "321 materials" and per-kg costs
@@ -108,17 +117,3 @@ All notable changes to this project will be documented in this file.
 - SQLite persistence
 - REST API
 - React frontend
-
----
-
-## [Unreleased]
-
-### Planned
-- Aspheric surfaces
-- Diffractive optical elements
-- GRIN materials
-- Non-sequential ray tracing
-- Physical optics
-- Polarization analysis
-- CAD export
-- PDF reports

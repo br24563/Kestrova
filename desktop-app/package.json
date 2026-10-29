@@ -1,6 +1,6 @@
 {
   "name": "kestrova",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Kestrova optical design software",
   "main": "electron/main.js",
   "author": "Brendan Ryan",

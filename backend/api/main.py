@@ -297,10 +297,12 @@ class SafeJSONResponse(_BaseJSONResponse):
         return super().render(_json_safe(content))
 
 
+from optics import __version__ as _optics_version  # noqa: E402
+
 app = FastAPI(
     title="AI Optical Design Engineer API",
     description="A local-first optical design and ray-tracing engine.",
-    version="0.1.0",
+    version=_optics_version,
     default_response_class=SafeJSONResponse,
 )
 
@@ -360,7 +362,7 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "0.2.0",
+        "version": _optics_version,
         "features": {
             "ray_tracing": True,
             "analysis": True,
@@ -401,7 +403,7 @@ async def api_info():
     """API information."""
     return {
         "name": "AI Optical Design Engineer API",
-        "version": "0.1.0",
+        "version": _optics_version,
         "description": "A local-first optical design and ray-tracing engine.",
         "endpoints": {
             "GET /api/system/default": "Get the default optical system",

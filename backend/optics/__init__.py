@@ -48,7 +48,7 @@ Modules:
                 distortion, and a full sensor model (noise, full well, ADC)
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 # Re-export key functions and classes for convenience
 from .units import (

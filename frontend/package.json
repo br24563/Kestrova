@@ -1,6 +1,6 @@
 {
   "name": "ai-optical-design-engineer",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "AI Optical Design Engineer - A local-first optical design and ray-tracing application",
   "scripts": {
