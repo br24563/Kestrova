@@ -6,7 +6,7 @@ numpy>=1.26.0
 # No prebuilt llvmlite exists for Intel Macs, so it is skipped there.
 numba>=0.60; sys_platform != "darwin" or platform_machine != "x86_64"
 scipy>=1.12.0
-sympy>=1.12
+sympy>=1.14.0
 pydantic>=2.6.0
 pytest>=8.0.0
 httpx>=0.27.0
