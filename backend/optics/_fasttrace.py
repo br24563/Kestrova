@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import sys
 
 from typing import Any
 
@@ -237,10 +238,14 @@ def _kernel_impl(
     return pts, dout, opl_out, valid, img, sopl
 
 
+#: Numba's on-disk cache is keyed on the source file, which a frozen
+#: (PyInstaller) build does not have: compile at first use there instead.
+_CACHE = not getattr(sys, "frozen", False)
+
 if AVAILABLE:  # pragma: no branch
     # prange is an ordinary range in the serial compilation
-    _kernel_serial = numba.njit(cache=True)(_kernel_impl)
-    _kernel_parallel = numba.njit(parallel=True, cache=True)(_kernel_impl)
+    _kernel_serial = numba.njit(cache=_CACHE)(_kernel_impl)
+    _kernel_parallel = numba.njit(parallel=True, cache=_CACHE)(_kernel_impl)
 
 
 def trace(seq, p0, d0, clip: bool):

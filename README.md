@@ -24,8 +24,11 @@ See [QUICKSTART.md](./QUICKSTART.md) for detailed instructions.
 
 ### Desktop app
 
-An Electron wrapper lives in [desktop-app/](./desktop-app/README.md). No
-prebuilt installers are published yet; build it from source.
+Windows and macOS (Apple Silicon and Intel) installers, with the optics
+engine bundled, are built by CI and published on the Releases page for each
+version tag; see [desktop-app/README.md](./desktop-app/README.md). They are
+unsigned for now, so Windows SmartScreen and macOS Gatekeeper ask for
+confirmation on first launch.
 
 ---
 
