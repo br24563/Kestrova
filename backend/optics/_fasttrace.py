@@ -18,6 +18,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+import threading
 
 from typing import Any
 
@@ -242,6 +243,10 @@ def _kernel_impl(
 #: (PyInstaller) build does not have: compile at first use there instead.
 _CACHE = not getattr(sys, "frozen", False)
 
+#: One caller at a time: the kernels hold the GIL anyway (no nogil), and
+#: concurrent calls from several Python threads abort the process on macOS.
+_LOCK = threading.Lock()
+
 if AVAILABLE:  # pragma: no branch
     # prange is an ordinary range in the serial compilation
     _kernel_serial = numba.njit(cache=_CACHE)(_kernel_impl)
@@ -254,23 +259,24 @@ def trace(seq, p0, d0, clip: bool):
     p0 = np.ascontiguousarray(p0, dtype=float)
     d0 = np.ascontiguousarray(d0, dtype=float)
     kernel = _kernel_parallel if len(p0) >= PARALLEL_MIN_RAYS else _kernel_serial
-    pts, d, opl, valid, img, sopl = kernel(
-        p0,
-        d0,
-        kind,
-        c,
-        k,
-        origin,
-        rot,
-        ident,
-        semi,
-        n1,
-        n2,
-        float(seq.surfaces[0].n_before),
-        np.ascontiguousarray(seq.image_origin, dtype=float),
-        np.ascontiguousarray(seq.image_rotation, dtype=float),
-        bool(clip),
-    )
+    with _LOCK:
+        pts, d, opl, valid, img, sopl = kernel(
+            p0,
+            d0,
+            kind,
+            c,
+            k,
+            origin,
+            rot,
+            ident,
+            semi,
+            n1,
+            n2,
+            float(seq.surfaces[0].n_before),
+            np.ascontiguousarray(seq.image_origin, dtype=float),
+            np.ascontiguousarray(seq.image_rotation, dtype=float),
+            bool(clip),
+        )
     n_cur = seq.surfaces[0].n_before
     for s in seq.surfaces:
         n_cur = s.n_after

@@ -2,7 +2,9 @@ fastapi>=0.110.0
 uvicorn>=0.29.0
 python-multipart>=0.0.9
 numpy>=1.26.0
-numba>=0.60  # optional: compiled ray trace (optics/_fasttrace.py); NumPy is used without it
+# optional: compiled ray trace (optics/_fasttrace.py); NumPy is used without it.
+# No prebuilt llvmlite exists for Intel Macs, so it is skipped there.
+numba>=0.60; sys_platform != "darwin" or platform_machine != "x86_64"
 scipy>=1.12.0
 sympy>=1.12
 pydantic>=2.6.0
