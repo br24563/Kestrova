@@ -1,6 +1,6 @@
 fastapi>=0.110.0
 uvicorn>=0.29.0
-python-multipart>=0.0.9
+python-multipart>=0.0.32
 numpy>=1.26.0
 # optional: compiled ray trace (optics/_fasttrace.py); NumPy is used without it.
 # No prebuilt llvmlite exists for Intel Macs, so it is skipped there.
