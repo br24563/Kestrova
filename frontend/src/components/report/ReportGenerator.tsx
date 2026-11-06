@@ -133,7 +133,7 @@ th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left;}
 th{background:#f3f4f6;}
 </style></head><body>
 ${markdownToHtml(report)}
-<p><em>Generated ${escapeHtml(new Date().toLocaleString())} by AI Optical Design Engineer</em></p>
+<p><em>Generated ${escapeHtml(new Date().toLocaleString())} by Kestrova</em></p>
 </body></html>`;
     download(html, "text/html", "optical-design-report.html");
   };

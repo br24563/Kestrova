@@ -1,5 +1,5 @@
 /**
- * API client for the AI Optical Design Engineer backend.
+ * API client for the Kestrova backend.
  *
  * This module provides functions to communicate with the FastAPI backend.
  * The backend runs on http://localhost:8000 by default.
@@ -919,5 +919,76 @@ export async function monteCarloLens(
     "/lens/tolerance/monte-carlo",
     { lens, tolerances, compensators, trials },
     "run Monte Carlo tolerance check",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Diffraction MTF (wavelength-weighted, over the field table)
+// ---------------------------------------------------------------------------
+
+/** FFT autocorrelation of the sampled pupil, or Hopkins direct integration. */
+export type MtfMethod = "fft" | "hopkins";
+
+export interface MtfCurves {
+  field: number;
+  method: MtfMethod;
+  frequency_cyc_per_mm: number[];
+  tangential: number[];
+  sagittal: number[];
+  diffraction_limit: number[];
+  cutoff_cyc_per_mm: number;
+}
+
+export interface ThroughFocusMtf {
+  field: number;
+  method: MtfMethod;
+  frequency_cyc_per_mm: number;
+  defocus_mm: number[];
+  tangential: number[];
+  sagittal: number[];
+  best_focus_mm: { tangential: number; sagittal: number; mean: number };
+  half_peak_range_mm: number;
+  /** The peak is at an end of the scan: it may lie beyond. */
+  peak_at_scan_edge?: boolean;
+}
+
+export interface MtfVsField {
+  method: MtfMethod;
+  field_fraction: number[];
+  frequencies_cyc_per_mm: number[];
+  tangential: number[][]; // one row per frequency
+  sagittal: number[][];
+}
+
+export async function analyzeMtf(
+  system: OpticalSystem,
+  field: number,
+  method: MtfMethod,
+): Promise<MtfCurves> {
+  return postJson("/analyze/mtf", { system, field, method }, "compute the MTF");
+}
+
+export async function analyzeThroughFocusMtf(
+  system: OpticalSystem,
+  frequencyMm: number,
+  field: number,
+  method: MtfMethod,
+): Promise<ThroughFocusMtf> {
+  return postJson(
+    "/analyze/through-focus-mtf",
+    { system, frequency_mm: frequencyMm, field, method },
+    "compute the through-focus MTF",
+  );
+}
+
+export async function analyzeMtfVsField(
+  system: OpticalSystem,
+  frequenciesMm: number[],
+  method: MtfMethod,
+): Promise<MtfVsField> {
+  return postJson(
+    "/analyze/mtf-vs-field",
+    { system, frequencies_mm: frequenciesMm, method },
+    "compute the MTF across the field",
   );
 }

@@ -67,6 +67,16 @@ position, distortion, wavelength-weighted RMS spot and centroid (pupil
 integrated by Gaussian quadrature), each wavelength's RMS and the vignetted
 fraction; plus `weighted_rms_spot` = sqrt(sum w rms^2 / sum w).
 
+#### POST /api/analyze/mtf, /through-focus-mtf, /mtf-vs-field
+
+Wavelength-weighted diffraction MTF over the field table, by `method`
+"fft" (pupil autocorrelation) or "hopkins" (direct integration of the pupil
+overlap with the real wavefront; matches the diffraction-limited closed
+form to ~1e-4). `/mtf` gives tangential, sagittal and diffraction-limit
+curves for a `field`; `/through-focus-mtf` the MTF at `frequency_mm` against
+image-plane shift (default scan finds the peak, flags `peak_at_scan_edge`);
+`/mtf-vs-field` the MTF at `frequencies_mm` from axis to edge.
+
 #### POST /api/analyze/field-mtf
 
 `{ "system", "field": 1, "frequencies": [10, 20, 40], "grid": 64 }` →

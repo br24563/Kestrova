@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
   sensitivity table, predicted distribution, inverse limits from a budget,
   and an exact Monte Carlo check).
 
+- MTF tab: wavelength-weighted MTF curves, through-focus MTF and MTF
+  across the field, by FFT or Hopkins direct integration
+  (`/api/analyze/mtf`, `/through-focus-mtf`, `/mtf-vs-field`).
+- The app shows the name Kestrova and its real version.
+
 ### Fixed
 - Tolerancing reports the nominal lens's own refocus separately from what
   tolerances add (`nominal`, `max_change`); `max_abs` mixed the two.

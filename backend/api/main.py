@@ -16,7 +16,7 @@ Run with:
 import sys
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 
@@ -1065,6 +1065,93 @@ async def analyze_field_mtf(request: FieldMtfRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class MtfRequest(BaseModel):
+    system: OpticalSystem
+    field: int = Field(0, ge=0, description="Field-table entry")
+    frequencies_mm: Optional[list[float]] = Field(
+        None, description="cycles/mm (default: 41 up to the cutoff)"
+    )
+    method: Literal["fft", "hopkins"] = "fft"
+    grid: int = Field(64, ge=16, le=256, description="FFT pupil grid")
+    quadrature: int = Field(48, ge=8, le=128, description="Hopkins nodes per axis")
+
+
+class ThroughFocusRequest(BaseModel):
+    system: OpticalSystem
+    frequency_mm: float = Field(..., gt=0)
+    field: int = Field(0, ge=0)
+    defocus_min_mm: Optional[float] = None
+    defocus_max_mm: Optional[float] = None
+    points: int = Field(21, ge=3, le=101)
+    method: Literal["fft", "hopkins"] = "fft"
+
+
+class MtfVsFieldRequest(BaseModel):
+    system: OpticalSystem
+    frequencies_mm: list[float] = Field(default_factory=lambda: [10.0, 30.0, 50.0])
+    points: int = Field(11, ge=2, le=41)
+    method: Literal["fft", "hopkins"] = "fft"
+
+
+@app.post("/api/analyze/mtf")
+async def analyze_mtf(request: MtfRequest):
+    """
+    Wavelength-weighted diffraction MTF of one field-table entry,
+    tangential and sagittal, with the diffraction limit. ``method`` "fft"
+    autocorrelates the sampled pupil; "hopkins" integrates the pupil overlap
+    directly with the real wavefront at each quadrature point.
+    """
+    from optics.mtf_analysis import mtf_curves
+
+    try:
+        return mtf_curves(
+            request.system,
+            request.field,
+            request.frequencies_mm,
+            request.method,
+            request.grid,
+            request.quadrature,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/through-focus-mtf")
+async def analyze_through_focus_mtf(request: ThroughFocusRequest):
+    """Wavelength-weighted MTF at one frequency against image-plane position
+    (default +-4 lambda N'^2), with the best focus."""
+    from optics.mtf_analysis import through_focus_mtf as tf_mtf
+
+    rng = None
+    if request.defocus_min_mm is not None and request.defocus_max_mm is not None:
+        rng = (request.defocus_min_mm * 1e-3, request.defocus_max_mm * 1e-3)
+    try:
+        return tf_mtf(
+            request.system,
+            request.frequency_mm,
+            request.field,
+            rng,
+            request.points,
+            request.method,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/mtf-vs-field")
+async def analyze_mtf_vs_field(request: MtfVsFieldRequest):
+    """Wavelength-weighted tangential and sagittal MTF at each frequency
+    from the axis to the largest field (vignetting from the field table)."""
+    from optics.mtf_analysis import mtf_vs_field
+
+    try:
+        return mtf_vs_field(
+            request.system, request.frequencies_mm, request.points, request.method
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/validate", response_model=SystemResponse)
 async def validate(system: OpticalSystem):
     """
@@ -1638,8 +1725,10 @@ async def analyze_illumination(request: IlluminationRequest):
 
     The vignetting factor is measured by tracing real ray bundles through
     the actual apertures, then combined with the cos^4 obliquity law and
-    normalised to 1.0 on axis. The MTF maps use the same equivalent-Gaussian
-    blur model as the image simulator, so the two agree by construction.
+    normalised to 1.0 on axis. The MTF maps are the diffraction MTF (FFT of
+    the real-ray pupil function) at the analysis wavelength; for the
+    wavelength-weighted MTF over the field table, see /api/analyze/mtf,
+    /api/analyze/through-focus-mtf and /api/analyze/mtf-vs-field.
 
     Args:
         request: Contains the system and the sampling parameters.

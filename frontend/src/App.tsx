@@ -1,5 +1,5 @@
 /**
- * Main application component for the AI Optical Design Engineer.
+ * Main application component for Kestrova.
  *
  * This component manages the application state and renders the
  * optical system editor, optical bench visualization, analysis panel,
@@ -48,6 +48,7 @@ import { ComparisonPanel } from "./components/ComparisonPanel";
 import { RayFanPlot } from "./components/analysis/RayFanPlot";
 import { OPDPlot } from "./components/analysis/OPDPlot";
 import { FieldCurvaturePlot } from "./components/analysis/FieldCurvaturePlot";
+import { MtfPlot } from "./components/analysis/MtfPlot";
 import { ChromaticAberrationPlot } from "./components/analysis/ChromaticAberrationPlot";
 import { GhostAnalysisPanel } from "./components/analysis/GhostAnalysisPanel";
 import { AdvancedOptimizationPanel } from "./components/optimization/AdvancedOptimizationPanel";
@@ -67,6 +68,7 @@ const ANALYSIS_TABS = [
   { id: "ray-fan", label: "Ray Fan" },
   { id: "opd", label: "OPD" },
   { id: "field", label: "Field Curvature" },
+  { id: "mtf", label: "MTF" },
   { id: "chromatic", label: "Chromatic" },
   { id: "ghosts", label: "Ghosts" },
   { id: "optimize", label: "Advanced Optimization" },
@@ -565,10 +567,7 @@ function App() {
   if (loading && !system) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
-        <LoadingSpinner
-          size="lg"
-          message="Loading AI Optical Design Engineer..."
-        />
+        <LoadingSpinner size="lg" message="Loading Kestrova..." />
       </div>
     );
   }
@@ -587,7 +586,7 @@ function App() {
       <header className="bg-gradient-to-r from-optical-700 to-optical-800 text-white p-4 shadow-md">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">AI Optical Design Engineer</h1>
+            <h1 className="text-2xl font-bold">Kestrova</h1>
             <p className="text-sm opacity-80">
               Local-first optical design and ray-tracing simulator
             </p>
@@ -837,6 +836,9 @@ function App() {
               {analysisTab === "field" && (
                 <FieldCurvaturePlot system={system} displayUnit={displayUnit} />
               )}
+              {analysisTab === "mtf" && (
+                <MtfPlot system={system} displayUnit={displayUnit} />
+              )}
               {analysisTab === "chromatic" && (
                 <ChromaticAberrationPlot
                   system={system}
@@ -882,7 +884,7 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-gray-100 text-gray-600 text-xs p-2 text-center">
-        AI Optical Design Engineer v0.2.0 — Optical Design & Analysis Suite
+        Kestrova v{__APP_VERSION__} — Optical Design & Analysis Suite
       </footer>
     </div>
   );
