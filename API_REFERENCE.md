@@ -187,7 +187,10 @@ Returns, all in waves:
 - `predicted`: mean, std, the 50 / 84.13 / 97.72 / 99.87 % percentiles and
   the cumulative curve, from Monte Carlo on a fitted model of the wavefront
   that is quadratic in each tolerance and linear in the compensators;
-- `predicted_fields` and `compensators` statistics;
+- `predicted_fields`, and for each compensator its `nominal` value (the
+  nominal lens's own refocus: its best focus need not be the image plane),
+  the `mean`, `std` and `max_abs` over the builds, and `max_change`, the
+  largest change from `nominal`;
 - with `rss_budget`, `inverse_limits`: the limit at which each tolerance
   alone uses an equal share of the budget.
 

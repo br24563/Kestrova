@@ -509,6 +509,46 @@ export interface LensData {
   wavelengths: number[];
   first_surface_position: number;
   analysis_settings: AnalysisSettings;
+  /** Held exactly by the optimizer (absent = none). */
+  constraints?: LensConstraint[];
+}
+
+/** Properties the optimizer can hold (mirrors lens_data.ConstraintKind). */
+export type LensConstraintKind =
+  | "efl"
+  | "bfl"
+  | "working_f_number"
+  | "magnification"
+  | "total_track"
+  | "center_thickness"
+  | "edge_thickness";
+
+/** Constraints that refer to one surface (its thickness to the next). */
+export const SURFACE_CONSTRAINTS: LensConstraintKind[] = [
+  "center_thickness",
+  "edge_thickness",
+];
+
+/** A target or limits on a system property (lengths in meters). */
+export interface LensConstraint {
+  kind: LensConstraintKind;
+  surface?: number | null;
+  target?: number | null;
+  minimum?: number | null;
+  maximum?: number | null;
+}
+
+/** A constraint with its current value. */
+export interface LensConstraintStatus extends LensConstraint {
+  value: number;
+  satisfied: boolean;
+}
+
+/** One optimizer cycle. */
+export interface LensOptimizeHistory {
+  merit: number; // sum of squared residuals (m^2 for the default merit)
+  violation: number;
+  damping: number;
 }
 
 export interface LensFirstOrder {
@@ -536,6 +576,110 @@ export interface LensOptimizeResult extends LensResolveResult {
   rms_spot_before: number; // meters
   rms_spot_after: number; // meters
   evaluations: number;
+  iterations?: number;
+  constraints?: LensConstraintStatus[];
+  history?: LensOptimizeHistory[];
   success: boolean;
   message: string;
+}
+
+/** A model-glass replacement chosen by glass snapping. */
+export interface GlassSubstitution {
+  surface: number;
+  model: string;
+  glass: string;
+}
+
+// Fast tolerancing (mirrors optics/tolerancing.py)
+
+export type ToleranceKind =
+  | "DLF"
+  | "DLR"
+  | "DLT"
+  | "DLN"
+  | "DLV"
+  | "DSX"
+  | "DSY"
+  | "TRX"
+  | "TRY"
+  | "DLX"
+  | "DLY"
+  | "BTX"
+  | "BTY";
+
+/** Tolerances that move a group of surfaces (an element). */
+export const ELEMENT_TOLERANCES: ToleranceKind[] = ["DLX", "DLY", "BTX", "BTY"];
+
+export type ToleranceDistribution = "uniform" | "gaussian" | "end_point";
+
+/** One tolerance: the parameter may be in error by up to +-limit. */
+export interface LensTolerance {
+  kind: ToleranceKind;
+  surface: number;
+  last_surface?: number | null;
+  /** fringes (DLF), m (DLR, DLT, decenters), rad (tilts), index, Abbe */
+  limit: number;
+  distribution?: ToleranceDistribution;
+  test_wavelength?: number;
+  test_diameter?: number | null;
+}
+
+export interface LensCompensator {
+  kind: "back_focus" | "thickness";
+  surface?: number | null;
+  limit?: number | null; // m
+}
+
+export interface ToleranceSensitivity {
+  tolerance: string;
+  kind: ToleranceKind;
+  surface: number;
+  last_surface: number | null;
+  limit: number;
+  rms_plus: number; // waves
+  rms_minus: number;
+  change_plus: number;
+  change_minus: number;
+}
+
+/** Percentiles keyed "50.0", "84.13", "97.72", "99.87" (waves). */
+export type TolerancePercentiles = Record<string, number>;
+
+export interface LensToleranceResult {
+  units: "waves";
+  nominal_rms: number;
+  nominal_field_rms: number[];
+  sensitivities: ToleranceSensitivity[];
+  rss_increase: number;
+  predicted: {
+    mean: number;
+    std: number;
+    percentiles: TolerancePercentiles;
+    cumulative: { probability: number[]; rms: number[] };
+  };
+  predicted_fields: TolerancePercentiles[];
+  compensators: {
+    compensator: string;
+    nominal?: number; // the nominal lens's own refocus (m)
+    mean: number;
+    std: number;
+    max_abs: number;
+    max_change?: number; // largest change from nominal over the builds (m)
+  }[];
+  trials: number;
+  inverse_limits?: {
+    tolerance: string;
+    limit: number;
+    analysed_limit: number;
+    extrapolated: boolean;
+  }[];
+}
+
+export interface LensMonteCarloResult {
+  trials: number;
+  failed_trials: number;
+  rms: number[];
+  mean: number;
+  std: number;
+  percentiles: TolerancePercentiles;
 }

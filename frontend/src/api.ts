@@ -27,6 +27,12 @@ import type {
   LensData,
   LensResolveResult,
   LensOptimizeResult,
+  LensConstraintStatus,
+  GlassSubstitution,
+  LensTolerance,
+  LensCompensator,
+  LensToleranceResult,
+  LensMonteCarloResult,
 } from "./types";
 
 // Persistence types
@@ -849,5 +855,69 @@ export async function optimizeLens(
     "/lens/optimize",
     { lens, bounds, max_evaluations: maxEvaluations },
     "optimize lens data",
+  );
+}
+
+/** Each constraint of the lens with its current value. */
+export async function evaluateLensConstraints(
+  lens: LensData,
+): Promise<{ constraints: LensConstraintStatus[] }> {
+  return postJson("/lens/constraints", { lens }, "evaluate lens constraints");
+}
+
+/** Replace every model glass by the nearest catalog glass. */
+export async function snapLensGlasses(
+  lens: LensData,
+  vendors: string[] | null = null,
+): Promise<{ lens: LensData; substitutions: GlassSubstitution[] }> {
+  return postJson(
+    "/lens/snap-glasses",
+    { lens, vendors },
+    "snap model glasses to catalog glasses",
+  );
+}
+
+/** A starting tolerance set for every element (edit before use). */
+export async function lensToleranceDefaults(
+  lens: LensData,
+): Promise<{ tolerances: LensTolerance[] }> {
+  return postJson(
+    "/lens/tolerance/defaults",
+    { lens },
+    "build default tolerances",
+  );
+}
+
+/** Fast tolerancing: sensitivities and the predicted RMS wavefront distribution. */
+export async function toleranceLens(
+  lens: LensData,
+  tolerances: LensTolerance[] | null,
+  compensators: LensCompensator[] | null,
+  options: { trials?: number; rssBudget?: number | null } = {},
+): Promise<LensToleranceResult> {
+  return postJson(
+    "/lens/tolerance",
+    {
+      lens,
+      tolerances,
+      compensators,
+      trials: options.trials ?? 20000,
+      rss_budget: options.rssBudget ?? null,
+    },
+    "run tolerance analysis",
+  );
+}
+
+/** Exact Monte Carlo (each trial traced and refocused) to check the prediction. */
+export async function monteCarloLens(
+  lens: LensData,
+  tolerances: LensTolerance[] | null,
+  compensators: LensCompensator[] | null,
+  trials: number = 50,
+): Promise<LensMonteCarloResult> {
+  return postJson(
+    "/lens/tolerance/monte-carlo",
+    { lens, tolerances, compensators, trials },
+    "run Monte Carlo tolerance check",
   );
 }

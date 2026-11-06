@@ -29,8 +29,50 @@ export const SURFACE_PARAMETERS: Record<SurfaceType, string[]> = {
   component: ["thickness"],
 };
 
+/** Model-glass parameters (a surface whose material is "MODEL:<nd>:<vd>"). */
+export const GLASS_PARAMETERS = ["glass_nd", "glass_vd"];
+
+/** (nd, Vd) of a model glass name, or null for any other material. */
+export function parseModelGlass(
+  material: string | null | undefined,
+): [number, number] | null {
+  const m = /^MODEL:([^:]+):([^:]+)$/i.exec((material ?? "").trim());
+  if (!m) return null;
+  const nd = Number(m[1]);
+  const vd = Number(m[2]);
+  return Number.isFinite(nd) && Number.isFinite(vd) ? [nd, vd] : null;
+}
+
+/** The material name of a model glass (as optics.materials.model_glass_name). */
+export function modelGlassName(nd: number, vd: number): string {
+  return `MODEL:${Number(nd.toPrecision(12))}:${Number(vd.toPrecision(12))}`;
+}
+
 export function hasParameter(surface: LensSurface, param: string): boolean {
+  if (GLASS_PARAMETERS.includes(param)) {
+    return (
+      (surface.surface_type === "standard" ||
+        surface.surface_type === "even_asphere") &&
+      parseModelGlass(surface.material) !== null
+    );
+  }
   return SURFACE_PARAMETERS[surface.surface_type].includes(param);
+}
+
+/**
+ * The surface with a new material; nd / Vd flags are dropped when the new
+ * material is not a model glass (the backend rejects them otherwise).
+ */
+export function setMaterial(
+  surface: LensSurface,
+  material: string | null,
+): LensSurface {
+  let next: LensSurface = { ...surface, material };
+  if (parseModelGlass(material) === null) {
+    for (const p of GLASS_PARAMETERS)
+      next = setModifier(next, p, { kind: "fixed" });
+  }
+  return next;
 }
 
 export function newSurface(): LensSurface {

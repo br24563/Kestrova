@@ -7,15 +7,21 @@
  * the parameter fixed, a variable for the optimizer, a paraxial solve or a
  * pickup from another surface. Resolve applies solves and pickups on the
  * backend and hands the resulting component system to the rest of the app;
- * Optimize runs damped least squares over the variables.
+ * Optimize runs constrained damped least squares over the variables while
+ * holding the constraints below the table. A model glass ("MODEL:nd:vd")
+ * can have its nd and Vd varied, then be snapped to the nearest catalog
+ * glass. The tolerancing panel predicts the as-built performance.
  */
 
 import { useState } from "react";
 import type {
+  GlassSubstitution,
+  LensConstraintStatus,
   LensData,
   LensSurface,
   LengthUnit,
   LensFirstOrder,
+  LensOptimizeResult,
   LensResolveResult,
   OpticalSystem,
   SolveKind,
@@ -30,18 +36,30 @@ import {
   RADIUS_SOLVES,
   THICKNESS_SOLVES,
 } from "../../types";
-import { lensFromSystem, optimizeLens, resolveLens } from "../../api";
+import {
+  evaluateLensConstraints,
+  lensFromSystem,
+  optimizeLens,
+  resolveLens,
+  snapLensGlasses,
+} from "../../api";
 import {
   countVariables,
   deleteSurface,
   getModifier,
+  GLASS_PARAMETERS,
   hasParameter,
   insertSurface,
+  parseModelGlass,
+  setMaterial,
   setModifier,
   setStop,
   SURFACE_PARAMETERS,
   type Modifier,
 } from "./lensEdit";
+import { ConstraintsEditor } from "./ConstraintsEditor";
+import { OptimizeReport } from "./OptimizeReport";
+import { LensTolerancePanel } from "./LensTolerancePanel";
 
 interface LensDataEditorProps {
   lens: LensData | null;
@@ -69,6 +87,8 @@ const PARAM_LABELS: Record<string, string> = {
   conic: "Conic",
   semi_diameter: "Semi-diameter",
   focal_length: "Focal length",
+  glass_nd: "Glass nd",
+  glass_vd: "Glass Vd",
 };
 
 const SOLVE_LABELS: Record<SolveKind, string> = {
@@ -161,9 +181,9 @@ export function LensDataEditor({
     row: number;
     param: string;
   } | null>(null);
-  const [busy, setBusy] = useState<"resolve" | "optimize" | "import" | null>(
-    null,
-  );
+  const [busy, setBusy] = useState<
+    "resolve" | "optimize" | "import" | "constraints" | "snap" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [firstOrder, setFirstOrder] = useState<LensFirstOrder | null>(null);
   const [rms, setRms] = useState<{
@@ -172,6 +192,11 @@ export function LensDataEditor({
     evaluations: number;
   } | null>(null);
   const [maxEvaluations, setMaxEvaluations] = useState("300");
+  const [optResult, setOptResult] = useState<LensOptimizeResult | null>(null);
+  const [statuses, setStatuses] = useState<LensConstraintStatus[] | null>(null);
+  const [substitutions, setSubstitutions] = useState<
+    GlassSubstitution[] | null
+  >(null);
 
   const unit = LENGTH_UNIT_LABELS[displayUnit];
 
@@ -325,6 +350,8 @@ export function LensDataEditor({
         after: result.rms_spot_after,
         evaluations: result.evaluations,
       });
+      setOptResult(result);
+      setStatuses(result.constraints ?? null);
       setFirstOrder(result.first_order);
       onResolved(result);
     } catch (err) {
@@ -334,7 +361,36 @@ export function LensDataEditor({
     }
   };
 
+  const checkConstraints = async () => {
+    setBusy("constraints");
+    setError(null);
+    try {
+      setStatuses((await evaluateLensConstraints(lens)).constraints);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Constraint check failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const snapGlasses = async () => {
+    setBusy("snap");
+    setError(null);
+    try {
+      const out = await snapLensGlasses(lens);
+      setSubstitutions(out.substitutions);
+      update(out.lens);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Glass snapping failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const nVariables = countVariables(lens);
+  const hasModelGlass = lens.surfaces.some(
+    (s) => parseModelGlass(s.material) !== null,
+  );
 
   const flagButton = (row: number, param: string) => {
     const s = lens.surfaces[row];
@@ -619,23 +675,40 @@ export function LensDataEditor({
                   </td>
                   <td className="px-1 w-24">
                     {editable && !paraxial ? (
-                      <Cell
-                        ariaLabel={`Material, surface ${row}`}
-                        align="left"
-                        value={s.material ?? ""}
-                        title='Medium after the surface: a glass name, "MIRROR", or blank for air'
-                        onCommit={(t) => {
-                          const m = t.trim();
-                          updateSurface(row, {
-                            material:
+                      <div className="flex items-center gap-0.5">
+                        <Cell
+                          ariaLabel={`Material, surface ${row}`}
+                          align="left"
+                          value={s.material ?? ""}
+                          title='Medium after the surface: a glass name, "MIRROR", blank for air, or a model glass "MODEL:nd:vd" whose nd and Vd can vary'
+                          onCommit={(t) => {
+                            const m = t.trim();
+                            const material =
                               m === "" || m.toLowerCase() === "air"
                                 ? null
                                 : m.toLowerCase() === "mirror"
                                   ? "MIRROR"
-                                  : m,
-                          });
-                        }}
-                      />
+                                  : m;
+                            update({
+                              ...lens,
+                              surfaces: lens.surfaces.map((x, k) =>
+                                k === row ? setMaterial(x, material) : x,
+                              ),
+                            });
+                          }}
+                        />
+                        {GLASS_PARAMETERS.map((p) =>
+                          hasParameter(s, p) ? (
+                            <span
+                              key={p}
+                              className="flex items-center text-[10px] text-gray-400"
+                            >
+                              {p === "glass_nd" ? "n" : "V"}
+                              {flagButton(row, p)}
+                            </span>
+                          ) : null,
+                        )}
+                      </div>
                     ) : (
                       <span className="text-gray-400 px-1">
                         {paraxial ? (s.ideal_lens_glass ?? "") : ""}
@@ -783,6 +856,45 @@ export function LensDataEditor({
         )}
       </div>
 
+      {optResult && (
+        <OptimizeReport result={optResult} displayUnit={displayUnit} />
+      )}
+
+      <ConstraintsEditor
+        lens={lens}
+        displayUnit={displayUnit}
+        statuses={statuses}
+        busy={busy !== null}
+        onChange={(constraints) => {
+          setStatuses(null);
+          update({ ...lens, constraints });
+        }}
+        onCheck={checkConstraints}
+      />
+
+      {hasModelGlass && (
+        <div className="flex flex-wrap items-center gap-2 mt-3 text-xs">
+          <button
+            onClick={snapGlasses}
+            disabled={busy !== null}
+            className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+            title="Replace each model glass by the nearest catalog glass (0.01 in nd counts as 1 in Vd); then optimize again"
+          >
+            {busy === "snap" ? "Snapping..." : "Snap model glasses to catalog"}
+          </button>
+          <span className="text-gray-400">then optimize again</span>
+        </div>
+      )}
+      {substitutions && substitutions.length > 0 && (
+        <ul className="mt-1 text-xs text-gray-600" data-testid="substitutions">
+          {substitutions.map((sub) => (
+            <li key={sub.surface}>
+              Surface {sub.surface}: {sub.model} → <strong>{sub.glass}</strong>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {firstOrder && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-600">
           <span>
@@ -802,6 +914,8 @@ export function LensDataEditor({
           </span>
         </div>
       )}
+
+      <LensTolerancePanel lens={lens} displayUnit={displayUnit} />
     </div>
   );
 }
@@ -887,7 +1001,8 @@ function ModifierEditor({
         {(["fixed", "variable", "solve", "pickup"] as const).map((kind) => {
           const disabled =
             (kind === "solve" && solveKinds.length === 0) ||
-            (kind === "pickup" && others.length === 0);
+            (kind === "pickup" &&
+              (others.length === 0 || GLASS_PARAMETERS.includes(param)));
           return (
             <label
               key={kind}
@@ -1080,7 +1195,11 @@ function ModifierEditor({
 
       {m.kind === "variable" && (
         <p className="text-gray-500">
-          The optimizer may change this parameter.
+          The optimizer may change this parameter
+          {GLASS_PARAMETERS.includes(param)
+            ? ", keeping the glass within the range of real catalog glasses"
+            : ""}
+          .
         </p>
       )}
     </div>
