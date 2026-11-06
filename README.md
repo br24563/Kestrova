@@ -46,7 +46,9 @@ confirmation on first launch.
   the catalog glass map, and snapping to the nearest real glass, plus fast
   Code V-style tolerancing (sensitivities, predicted RMS wavefront
   distribution with compensators, inverse sensitivity) checked against
-  exact Monte Carlo (API only for now; see `/api/lens/*`)
+  exact Monte Carlo. All of it is in the lens data editor: constraint rows,
+  nd/Vd variables on model glasses, an optimization report with convergence,
+  and a tolerancing panel (also available through `/api/lens/*`)
 - Ideal (paraxial) thin lenses, thick lenses, spherical surfaces, mirrors
   (spherical and conic), aperture stops
 - Aspheres (even, odd, Forbes Q), Zernike, toroidal and diffractive surfaces,

@@ -249,6 +249,15 @@ class TestFastAnalysis:
 
             assert max(change(d), change(-d)) == pytest.approx(share, rel=1e-6)
 
+    def test_refocus_is_reported_relative_to_the_nominal_best_focus(self, setup):
+        lens, tols, a = setup
+        c = a.compensators[0]
+        G = a._G[:, 0]
+        # unconstrained least-squares refocus of the nominal wavefront
+        assert c["nominal"] == pytest.approx(-(a._r0 @ G) / (G @ G), rel=1e-9)
+        assert c["max_change"] <= c["max_abs"] + abs(c["nominal"]) + 1e-15
+        assert c["std"] <= c["max_change"]
+
     def test_compensator_limit_is_respected(self):
         lens = doublet()
         tols = [tl.Tolerance(kind="DLT", surface=1, limit=5e-4)]

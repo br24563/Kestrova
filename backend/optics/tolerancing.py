@@ -455,7 +455,7 @@ def analyze(
         A[k] = (rp - rm) / (2 * t.limit)
         B[k] = (rp + rm - 2 * r0) / (2 * t.limit**2)
         traced.append((rp, rm))
-    (r0c,), _ = _compensate(r0[None, :], G, limits)
+    (r0c,), Z0 = _compensate(r0[None, :], G, limits)
     base = float(np.linalg.norm(r0c))
     rows = []
     for t, (rp, rm) in zip(tolerances, traced):
@@ -515,9 +515,13 @@ def analyze(
                 "compensator": (
                     c.kind if c.surface is None else f"thickness S{c.surface}"
                 ),
+                # the refocus of the nominal lens itself (best focus need
+                # not be the image plane), and what tolerances add to it
+                "nominal": float(Z0[0, k]),
                 "mean": float(Z[:, k].mean()),
                 "std": float(Z[:, k].std()),
                 "max_abs": float(np.max(np.abs(Z[:, k]))),
+                "max_change": float(np.max(np.abs(Z[:, k] - Z0[0, k]))),
             }
             for k, c in enumerate(compensators)
         ],

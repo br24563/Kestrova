@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Lens data editor: constraint rows (EFL, BFL, working F-number,
+  magnification, track, centre and edge thickness) with a current-value
+  check; nd / Vd variables on model glasses and snapping to catalog glass;
+  an optimization report (constraints, RMS before and after, convergence
+  chart); a tolerancing panel (default or edited tolerances, refocus limit,
+  sensitivity table, predicted distribution, inverse limits from a budget,
+  and an exact Monte Carlo check).
+
+### Fixed
+- Tolerancing reports the nominal lens's own refocus separately from what
+  tolerances add (`nominal`, `max_change`); `max_abs` mixed the two.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added (desktop)
