@@ -67,6 +67,35 @@ position, distortion, wavelength-weighted RMS spot and centroid (pupil
 integrated by Gaussian quadrature), each wavelength's RMS and the vignetted
 fraction; plus `weighted_rms_spot` = sqrt(sum w rms^2 / sum w).
 
+#### POST /api/analyze/mtf, /through-focus-mtf, /mtf-vs-field
+
+Wavelength-weighted diffraction MTF over the field table, by `method`
+"fft" (pupil autocorrelation) or "hopkins" (direct integration of the pupil
+overlap with the real wavefront; matches the diffraction-limited closed
+form to ~1e-4). `/mtf` gives tangential, sagittal and diffraction-limit
+curves for a `field`; `/through-focus-mtf` the MTF at `frequency_mm` against
+image-plane shift (default scan finds the peak, flags `peak_at_scan_edge`);
+`/mtf-vs-field` the MTF at `frequencies_mm` from axis to edge.
+
+#### POST /api/analyze/psf
+
+`{ "system", "field": 0, "grid": 64, "image_size": 65, "extent_airy": null }`
+→ the wavelength-weighted diffraction PSF of a field-table entry (peak 1)
+about the reference chief ray, with `encircled` and `ensquared` energy
+against `radius_mm`, the `diffraction_limited_encircled` energy
+(1 − J0² − J1²), `radius_80_mm`, `airy_radius_mm` and the Strehl ratio per
+wavelength. The view fits the energy unless `extent_airy` is given.
+`exceeds_window` is true when the blur is wider than the diffraction
+calculation's window: the image is aberration-limited and the spot diagram
+describes it.
+
+#### POST /api/analyze/field-plots
+
+`{ "system", "points": 11 }` → against field: `distortion` (relative to the
+paraxial image height), `ftheta_distortion` (object at infinity:
+(y − fθ)/fθ), `lateral_colour_mm` (chief-ray offset of each wavelength from
+the reference, real rays) and `relative_illumination` with `cos4`.
+
 #### POST /api/analyze/field-mtf
 
 `{ "system", "field": 1, "frequencies": [10, 20, 40], "grid": 64 }` →
