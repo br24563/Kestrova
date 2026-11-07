@@ -9,7 +9,9 @@ All notable changes to this project will be documented in this file.
   surface prescription, keeping wavelength weights, the full field table
   with weights and vignetting, model glasses, coordinate breaks and (Code V)
   the image solve and variables; anything not carried over is reported
-  (`/api/lens/import`, `/api/lens/export`).
+  (`/api/lens/import`, `/api/lens/export`). In the lens editor: "Open .seq
+  / .zmx" (the lens is resolved straight away) and "Save .seq" / "Save .zmx",
+  with the warnings listed under the table.
 
 ### Added
 - Lens data editor: constraint rows (EFL, BFL, working F-number,

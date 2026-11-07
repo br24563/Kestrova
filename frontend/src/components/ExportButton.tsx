@@ -75,7 +75,8 @@ function exportCsv(data: object, filename: string) {
   downloadBlob(blob, `${filename}.csv`);
 }
 
-function downloadBlob(blob: Blob, filename: string) {
+/** Save a blob as a file through the browser's download. */
+export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
