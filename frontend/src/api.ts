@@ -1043,3 +1043,39 @@ export async function analyzeFieldPlots(
     "compute the field plots",
   );
 }
+
+// ---------------------------------------------------------------------------
+// Lens files (Code V .seq, Zemax .zmx)
+// ---------------------------------------------------------------------------
+
+export type LensFileFormat = "seq" | "zmx";
+
+/** Read a Code V or Zemax lens file; warnings list what was not carried over. */
+export async function importLensFile(
+  file: File,
+): Promise<{ lens: LensData; warnings: string[] }> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${API_BASE}/lens/import`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Failed to open the lens file: ${await errorDetail(response)}`,
+    );
+  }
+  return response.json();
+}
+
+/** A Code V or Zemax lens file of the prescription. */
+export async function exportLensFile(
+  lens: LensData,
+  format: LensFileFormat,
+): Promise<{ filename: string; content: string; warnings: string[] }> {
+  return postJson(
+    "/lens/export",
+    { lens, format },
+    format === "seq" ? "write the Code V file" : "write the Zemax file",
+  );
+}

@@ -13,7 +13,7 @@
  * glass. The tolerancing panel predicts the as-built performance.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   GlassSubstitution,
   LensConstraintStatus,
@@ -38,6 +38,8 @@ import {
 } from "../../types";
 import {
   evaluateLensConstraints,
+  exportLensFile,
+  importLensFile,
   lensFromSystem,
   optimizeLens,
   resolveLens,
@@ -60,6 +62,8 @@ import {
 import { ConstraintsEditor } from "./ConstraintsEditor";
 import { OptimizeReport } from "./OptimizeReport";
 import { LensTolerancePanel } from "./LensTolerancePanel";
+import { downloadBlob } from "../ExportButton";
+import type { LensFileFormat } from "../../api";
 
 interface LensDataEditorProps {
   lens: LensData | null;
@@ -182,8 +186,20 @@ export function LensDataEditor({
     param: string;
   } | null>(null);
   const [busy, setBusy] = useState<
-    "resolve" | "optimize" | "import" | "constraints" | "snap" | null
+    | "resolve"
+    | "optimize"
+    | "import"
+    | "constraints"
+    | "snap"
+    | "open"
+    | "save"
+    | null
   >(null);
+  const [fileNote, setFileNote] = useState<{
+    message: string;
+    warnings: string[];
+  } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [firstOrder, setFirstOrder] = useState<LensFirstOrder | null>(null);
   const [rms, setRms] = useState<{
@@ -218,6 +234,59 @@ export function LensDataEditor({
     }
   };
 
+  const openFile = async (file: File) => {
+    setBusy("open");
+    setError(null);
+    try {
+      const { lens: opened, warnings } = await importLensFile(file);
+      onImported(opened);
+      setFirstOrder(null);
+      setRms(null);
+      setFlagCell(null);
+      setFileNote({ message: `Opened ${file.name}`, warnings });
+      try {
+        const result = await resolveLens(opened);
+        setFirstOrder(result.first_order);
+        onResolved(result);
+      } catch (err) {
+        setError(
+          `Opened, but it could not be resolved: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open the file");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openButton = (
+    <>
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".seq,.zmx"
+        aria-label="Lens file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) openFile(file);
+        }}
+      />
+      <button
+        onClick={() => fileInput.current?.click()}
+        disabled={busy !== null}
+        title="Open a Code V (.seq) or Zemax (.zmx) lens file"
+        className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+      >
+        {busy === "open" ? "Opening..." : "Open .seq / .zmx"}
+      </button>
+    </>
+  );
+
   if (!lens) {
     return (
       <div className="p-4 text-sm text-gray-500">
@@ -228,7 +297,8 @@ export function LensDataEditor({
           disabled={busy !== null}
         >
           Convert the current system
-        </button>
+        </button>{" "}
+        or {openButton}
         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       </div>
     );
@@ -356,6 +426,23 @@ export function LensDataEditor({
       onResolved(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Optimization failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveFile = async (format: LensFileFormat) => {
+    setBusy("save");
+    setError(null);
+    try {
+      const out = await exportLensFile(lens, format);
+      downloadBlob(
+        new Blob([out.content], { type: "text/plain" }),
+        out.filename,
+      );
+      setFileNote({ message: `Saved ${out.filename}`, warnings: out.warnings });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the file");
     } finally {
       setBusy(null);
     }
@@ -491,6 +578,23 @@ export function LensDataEditor({
             className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
           >
             {busy === "import" ? "Converting..." : "From components"}
+          </button>
+          {openButton}
+          <button
+            onClick={() => saveFile("seq")}
+            disabled={busy !== null}
+            title="Save as a Code V sequence file"
+            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+          >
+            Save .seq
+          </button>
+          <button
+            onClick={() => saveFile("zmx")}
+            disabled={busy !== null}
+            title="Save as a Zemax lens file"
+            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+          >
+            Save .zmx
           </button>
           <button
             onClick={resolve}
@@ -815,6 +919,18 @@ export function LensDataEditor({
         <p className="text-xs text-red-500 mt-2" role="alert">
           {error}
         </p>
+      )}
+      {fileNote && (
+        <div className="text-xs text-gray-600 mt-2" data-testid="file-note">
+          {fileNote.message}
+          {fileNote.warnings.length > 0 && (
+            <ul className="list-disc ml-5 text-amber-700">
+              {fileNote.warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <div className="flex flex-wrap items-center gap-3 mt-3">

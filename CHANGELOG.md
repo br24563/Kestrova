@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (file interchange)
+- Code V (.seq) and Zemax (.zmx) lens files read into and written from the
+  surface prescription, keeping wavelength weights, the full field table
+  with weights and vignetting, model glasses, coordinate breaks and (Code V)
+  the image solve and variables; anything not carried over is reported
+  (`/api/lens/import`, `/api/lens/export`). In the lens editor: "Open .seq
+  / .zmx" (the lens is resolved straight away) and "Save .seq" / "Save .zmx",
+  with the warnings listed under the table.
+
 ### Added
 - Lens data editor: constraint rows (EFL, BFL, working F-number,
   magnification, track, centre and edge thickness) with a current-value

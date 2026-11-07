@@ -97,9 +97,11 @@ confirmation on first launch.
 - Optional local LLM through Ollama or an OpenAI-compatible endpoint
 
 ### Import/Export
-- **Zemax** .ZMX and **Code V** .SEQ import/export of sequential
-  prescriptions (ideal thin lenses export to Zemax as paraxial surfaces;
-  Code V has no equivalent, so they are refused)
+- **Zemax** .ZMX and **Code V** .SEQ open and save in the lens editor,
+  keeping wavelength weights, the field table with weights and vignetting,
+  model glasses, coordinate breaks and Code V's image solve and variables;
+  anything not carried over is listed (ideal thin lenses export to Zemax as
+  paraxial surfaces; Code V has no equivalent, so they are refused)
 - **CAD**: STL, OBJ and PLY meshes of the lens elements (STEP and IGES are
   not supported)
 - **Drawings**: SVG lens drawings and ISO 10110 drawings (tolerances only

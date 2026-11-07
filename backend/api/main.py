@@ -1198,6 +1198,65 @@ async def analyze_field_plots(request: FieldPlotsRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class LensExportRequest(BaseModel):
+    lens: _ld.LensData
+    format: Literal["seq", "zmx"] = Field(
+        ..., description="seq: Code V sequence file; zmx: Zemax text lens file"
+    )
+
+
+@app.post("/api/lens/import")
+async def lens_import(file: UploadFile = File(...)):
+    """
+    Read a Code V (.seq) or Zemax (.zmx, text) lens file into a lens
+    prescription. ``warnings`` lists what the file contains that was not
+    interpreted.
+    """
+    from optics.io.lensfile import read_lens_file
+
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("utf-16")  # OpticStudio may save UTF-16
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=400, detail="The file is not a text lens file"
+            )
+    try:
+        result = read_lens_file(text, file.filename or "")
+        return {"lens": result.lens, "warnings": result.warnings}
+    except (ValueError, KeyError, IndexError) as e:
+        raise HTTPException(status_code=400, detail=f"Could not read the file: {e}")
+
+
+@app.post("/api/lens/export")
+async def lens_export(request: LensExportRequest):
+    """A Code V or Zemax lens file of the prescription: ``content`` (text),
+    a suggested ``filename`` and ``warnings`` for anything written as plain
+    values (solves and pickups the format cannot express here)."""
+    from optics.io.lensfile import write_codev, write_zemax
+
+    try:
+        write = write_codev if request.format == "seq" else write_zemax
+        content, warnings = write(request.lens)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    stem = (
+        "".join(
+            ch if ch.isalnum() or ch in "-_" else "_"
+            for ch in (request.lens.name or "lens")
+        ).strip("_")
+        or "lens"
+    )
+    return {
+        "filename": f"{stem}.{request.format}",
+        "content": content,
+        "warnings": warnings,
+    }
+
+
 @app.post("/api/validate", response_model=SystemResponse)
 async def validate(system: OpticalSystem):
     """

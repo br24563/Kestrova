@@ -236,6 +236,24 @@ trial, the mean, std and percentiles, and the compensation applied.
 `{ "lens" }` → a starting tolerance set for every element. The values are
 editable starting points, not a standard.
 
+#### POST /api/lens/import
+
+Multipart upload of a Code V sequence file (`.seq`) or a Zemax text lens
+file (`.zmx`) → `{"lens", "warnings"}`. The lens keeps the surfaces
+(standard, even asphere, Zemax paraxial, coordinate breaks), catalog and
+model glasses (Code V `nd:vd`, Zemax `___BLANK`), stop, clear apertures,
+entrance pupil, wavelengths with weights, the field table with weights and
+vignetting, and Code V's image solve (`PIM`) and variables (`CCY`/`THC`).
+`warnings` lists commands or keywords the file contains that were not
+interpreted.
+
+#### POST /api/lens/export
+
+`{ "lens", "format": "seq" | "zmx" }` → `{"filename", "content",
+"warnings"}`. Solves and pickups the format cannot express here are written
+as their current values and listed in `warnings`. Code V has no paraxial
+(ideal lens) surface, so such a lens can only be written as `.zmx`.
+
 #### POST /api/lens/constraints
 
 `{ "lens" }` → `{"constraints": [...]}`, each with its current `value` and
