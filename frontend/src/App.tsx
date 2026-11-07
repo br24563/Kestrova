@@ -49,6 +49,8 @@ import { RayFanPlot } from "./components/analysis/RayFanPlot";
 import { OPDPlot } from "./components/analysis/OPDPlot";
 import { FieldCurvaturePlot } from "./components/analysis/FieldCurvaturePlot";
 import { MtfPlot } from "./components/analysis/MtfPlot";
+import { PsfPlot } from "./components/analysis/PsfPlot";
+import { FieldPlotsPanel } from "./components/analysis/FieldPlotsPanel";
 import { ChromaticAberrationPlot } from "./components/analysis/ChromaticAberrationPlot";
 import { GhostAnalysisPanel } from "./components/analysis/GhostAnalysisPanel";
 import { AdvancedOptimizationPanel } from "./components/optimization/AdvancedOptimizationPanel";
@@ -69,6 +71,8 @@ const ANALYSIS_TABS = [
   { id: "opd", label: "OPD" },
   { id: "field", label: "Field Curvature" },
   { id: "mtf", label: "MTF" },
+  { id: "psf", label: "PSF" },
+  { id: "field-plots", label: "Distortion & Colour" },
   { id: "chromatic", label: "Chromatic" },
   { id: "ghosts", label: "Ghosts" },
   { id: "optimize", label: "Advanced Optimization" },
@@ -838,6 +842,12 @@ function App() {
               )}
               {analysisTab === "mtf" && (
                 <MtfPlot system={system} displayUnit={displayUnit} />
+              )}
+              {analysisTab === "psf" && (
+                <PsfPlot system={system} displayUnit={displayUnit} />
+              )}
+              {analysisTab === "field-plots" && (
+                <FieldPlotsPanel system={system} displayUnit={displayUnit} />
               )}
               {analysisTab === "chromatic" && (
                 <ChromaticAberrationPlot

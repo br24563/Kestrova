@@ -129,6 +129,52 @@ the pupil edge at the axial and full fields for all wavelengths. A lens
 converts to the component model below (and back) without changing the
 optics.
 
+### Diffraction MTF
+
+The MTF is the modulus of the optical transfer function, the normalised
+autocorrelation of the pupil function P = A exp(i 2 pi W / lambda) over the
+real-ray wavefront W. Kestrova computes it two independent ways
+(`optics/pupil.py`, `optics/mtf_analysis.py`):
+
+- **FFT**: P sampled on a square grid in normalised stop coordinates,
+  zero-padded, autocorrelated by FFT and sliced along the tangential and
+  sagittal directions. Fast; its accuracy is limited by the grid.
+- **Hopkins direct integration** (Hopkins 1957): for each frequency, the
+  overlap integral (1/A) of P(p + s/2) P*(p - s/2) over the lens-shaped
+  overlap of the pupil and its shifted copy, by Gauss-Legendre quadrature,
+  with W traced at the quadrature points themselves. No grid and no
+  aliasing.
+
+A shift of one pupil diameter corresponds to the cutoff 2 NA' / lambda.
+For an aberration-free circular pupil both match
+(2/pi)(acos x - x sqrt(1 - x^2)), x = nu / nu_c: Hopkins to about 1e-4 with
+48 nodes per axis, the FFT to about 3e-3 on a 64-sample grid. With a
+quarter wave of defocus both agree with the analytic defocus OTF to 2e-3.
+Polychromatic MTF is the weighted sum of each wavelength's complex OTF.
+
+**PSF and energy.** The PSF is the FFT of the pupil function; for several
+wavelengths each is shifted by its chief-ray position (lateral colour),
+normalised to unit energy and weighted. Encircled and ensquared energy are
+summed on each wavelength's native FFT grid about the polychromatic
+centroid; for an aberration-free pupil they match 1 − J0² − J1² to about
+1.5 % (the square pupil grid approximating the circle). The FFT window
+spans about ±26 Airy radii for a 64-sample pupil: a blur wider than that
+(strongly aberrated lenses) is flagged rather than silently wrapped around.
+
+**Field plots.** Distortion is the real chief-ray height relative to the
+paraxial height; F-θ distortion (object at infinity) is relative to f·θ, so
+an ideal lens, which maps f·tanθ, shows (tanθ − θ)/θ. Lateral colour is
+each wavelength's real chief-ray height minus the reference wavelength's,
+in the reference paraxial image plane.
+
+**Through focus.** The best focus at a given frequency lies between the
+paraxial focus and beyond the minimum-RMS-wavefront focus; for an
+uncorrected lens these are far apart and the MTF can have several local
+peaks. The default scan therefore searches that whole region coarsely and
+then scans +-4 lambda N'^2 about the highest point, following the peak if it
+lands on an edge. For a corrected lens this reduces to +-4 lambda N'^2
+about the image plane.
+
 ### Tolerancing
 
 `optics/tolerancing.py` tolerances a prescription the way Code V's TOR

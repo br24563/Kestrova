@@ -1152,6 +1152,52 @@ async def analyze_mtf_vs_field(request: MtfVsFieldRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class FieldPsfRequest(BaseModel):
+    system: OpticalSystem
+    field: int = Field(0, ge=0)
+    grid: int = Field(64, ge=16, le=256, description="Pupil grid")
+    image_size: int = Field(65, ge=17, le=257)
+    extent_airy: Optional[float] = Field(
+        None, gt=0, le=100, description="View half-width in Airy radii (default: fits)"
+    )
+
+
+class FieldPlotsRequest(BaseModel):
+    system: OpticalSystem
+    points: int = Field(11, ge=2, le=41)
+
+
+@app.post("/api/analyze/psf")
+async def analyze_psf(request: FieldPsfRequest):
+    """Wavelength-weighted diffraction PSF of one field-table entry with
+    encircled and ensquared energy and the diffraction-limited encircled
+    energy."""
+    from optics.image_quality import field_psf
+
+    try:
+        return field_psf(
+            request.system,
+            request.field,
+            request.grid,
+            image_size=request.image_size,
+            extent_airy=request.extent_airy,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/analyze/field-plots")
+async def analyze_field_plots(request: FieldPlotsRequest):
+    """Distortion, F-theta distortion (object at infinity), lateral colour
+    per wavelength and relative illumination against field."""
+    from optics.image_quality import field_plots
+
+    try:
+        return field_plots(request.system, request.points)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/validate", response_model=SystemResponse)
 async def validate(system: OpticalSystem):
     """

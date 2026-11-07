@@ -992,3 +992,54 @@ export async function analyzeMtfVsField(
     "compute the MTF across the field",
   );
 }
+
+// ---------------------------------------------------------------------------
+// PSF, encircled energy and field plots
+// ---------------------------------------------------------------------------
+
+export interface FieldPsf {
+  field: number;
+  axis_mm: number[];
+  psf: number[][]; // peak = 1
+  centroid_mm: [number, number];
+  radius_mm: number[];
+  encircled: number[];
+  ensquared: number[];
+  diffraction_limited_encircled: number[];
+  radius_80_mm: number | null;
+  airy_radius_mm: number;
+  strehl: { wavelength: number; strehl: number }[];
+  energy_total: number;
+  window_mm?: number;
+  /** The PSF is wider than the diffraction calculation's window. */
+  exceeds_window?: boolean;
+}
+
+export interface FieldPlots {
+  field_fractions: number[];
+  field_angle_deg: number[] | null;
+  distortion: number[];
+  ftheta_distortion: number[] | null;
+  reference_wavelength: number;
+  lateral_colour_mm: { wavelength: number; offset_mm: number[] }[];
+  relative_illumination: number[];
+  cos4: number[];
+}
+
+export async function analyzePsf(
+  system: OpticalSystem,
+  field: number,
+): Promise<FieldPsf> {
+  return postJson("/analyze/psf", { system, field }, "compute the PSF");
+}
+
+export async function analyzeFieldPlots(
+  system: OpticalSystem,
+  points: number = 11,
+): Promise<FieldPlots> {
+  return postJson(
+    "/analyze/field-plots",
+    { system, points },
+    "compute the field plots",
+  );
+}

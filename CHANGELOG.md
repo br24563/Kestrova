@@ -16,6 +16,13 @@ All notable changes to this project will be documented in this file.
 - MTF tab: wavelength-weighted MTF curves, through-focus MTF and MTF
   across the field, by FFT or Hopkins direct integration
   (`/api/analyze/mtf`, `/through-focus-mtf`, `/mtf-vs-field`).
+- PSF tab: wavelength-weighted diffraction PSF per field (linear or log),
+  encircled and ensquared energy against the diffraction limit, 80 %
+  energy radius and Strehl per wavelength; blur wider than the diffraction
+  window is flagged (`/api/analyze/psf`).
+- Distortion & Colour tab: distortion, F-θ distortion, lateral colour per
+  wavelength and relative illumination against field
+  (`/api/analyze/field-plots`).
 - The app shows the name Kestrova and its real version.
 
 ### Fixed
