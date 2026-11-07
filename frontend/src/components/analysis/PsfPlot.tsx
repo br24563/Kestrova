@@ -110,7 +110,7 @@ export function PsfPlot({ system }: PsfPlotProps) {
       {data?.exceeds_window && (
         <p className="text-amber-700" data-testid="psf-window-warning">
           This image is aberration-limited: its blur is wider than the
-          diffraction calculation's window (±
+          diffraction calculation&apos;s window (±
           {((data.window_mm ?? 0) * 1e3).toFixed(0)} µm), so the PSF and energy
           shown are incomplete. The spot diagram describes it better.
         </p>
