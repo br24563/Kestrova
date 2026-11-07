@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
 ### Added (file interchange)
 - Code V (.seq) and Zemax (.zmx) lens files read into and written from the
   surface prescription, keeping wavelength weights, the full field table

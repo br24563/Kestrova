@@ -118,7 +118,9 @@ describe("FieldPlotsPanel", () => {
       cos4: [1, 0.94, 0.78],
     });
     render(<FieldPlotsPanel system={system} displayUnit="mm" />);
-    await waitFor(() => document.getElementById("field-distortion"));
+    await waitFor(() =>
+      expect(document.getElementById("field-distortion")).toBeTruthy(),
+    );
     expect(screen.getByText(/dashed: F-θ/)).toBeTruthy();
     expect(screen.getByText(/relative to 587.6 nm/)).toBeTruthy();
     expect(document.getElementById("field-colour")).toBeTruthy();
