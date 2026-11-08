@@ -41,7 +41,16 @@ import numpy as np
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from . import raytrace as rt
-from .advanced_surfaces import AsphericSurface, CoordinateBreak, OddAsphericSurface
+from .advanced_surfaces import (
+    AsphericSurface,
+    CoordinateBreak,
+    DiffractiveOpticalElement,
+    OddAsphericSurface,
+    QAsphericSurface,
+    ToricSurface,
+    XYPolynomialSurface,
+    ZernikeSurface,
+)
 from .models import (
     AnalysisSettings,
     ApertureStop,
@@ -67,6 +76,11 @@ SurfaceType = Literal[
     "standard",
     "even_asphere",
     "odd_asphere",
+    "q_asphere",
+    "toroid",
+    "zernike",
+    "xy_polynomial",
+    "diffractive",
     "paraxial",
     "coordinate_break",
     "component",
@@ -80,6 +94,29 @@ RADIUS_SOLVES = ("marginal_angle", "chief_angle", "f_number")
 _ASPHERE_ORDERS = tuple(range(4, 22, 2))  # A4 .. A20
 _ASPHERE_PARAMS = tuple(f"asphere_{k}" for k in _ASPHERE_ORDERS)
 _ODD_ORDERS = tuple(range(3, 21, 2))  # A3 .. A19 of an odd asphere
+#: Forbes Q terms q_0 .. q_12, standard (Noll) Zernike terms z_1 .. z_37,
+#: XY polynomial terms x<i>y<j> with 1 <= i + j <= 10 and diffractive phase
+#: terms phase_2 .. phase_20 (r^2 .. r^20).
+_Q_PARAMS = tuple(f"q_{m}" for m in range(13))
+_ZERNIKE_PARAMS = tuple(f"z_{j}" for j in range(1, 38))
+XY_MAX_ORDER = 10
+_XY_PARAMS = tuple(
+    f"x{i}y{n - i}" for n in range(1, XY_MAX_ORDER + 1) for i in range(n, -1, -1)
+)
+_PHASE_ORDERS = tuple(range(2, 22, 2))
+_PHASE_PARAMS = tuple(f"phase_{k}" for k in _PHASE_ORDERS)
+#: Surface types whose shape is a base conic plus extra terms (they share
+#: radius, conic and the clear-aperture fields of a standard surface).
+SHAPED_TYPES = (
+    "standard",
+    "even_asphere",
+    "odd_asphere",
+    "q_asphere",
+    "toroid",
+    "zernike",
+    "xy_polynomial",
+    "diffractive",
+)
 _CB_PARAMS = ("decenter_x", "decenter_y", "decenter_z", "tilt_x", "tilt_y", "tilt_z")
 
 #: Parameters each surface type has (all numeric).
@@ -94,6 +131,20 @@ PARAMETERS: dict[str, tuple[str, ...]] = {
     + GLASS_PARAMS,
     "odd_asphere": ("radius", "thickness", "conic", "semi_diameter")
     + tuple(f"asphere_{k}" for k in sorted(_ASPHERE_ORDERS + _ODD_ORDERS))
+    + GLASS_PARAMS,
+    "q_asphere": ("radius", "thickness", "conic", "semi_diameter")
+    + _Q_PARAMS
+    + GLASS_PARAMS,
+    "toroid": ("radius", "radius_x", "thickness", "conic", "semi_diameter")
+    + GLASS_PARAMS,
+    "zernike": ("radius", "thickness", "conic", "semi_diameter")
+    + _ZERNIKE_PARAMS
+    + GLASS_PARAMS,
+    "xy_polynomial": ("radius", "thickness", "conic", "semi_diameter")
+    + _XY_PARAMS
+    + GLASS_PARAMS,
+    "diffractive": ("radius", "thickness", "conic", "semi_diameter")
+    + _PHASE_PARAMS
     + GLASS_PARAMS,
     "paraxial": ("focal_length", "thickness", "semi_diameter"),
     "coordinate_break": ("thickness",) + _CB_PARAMS,
@@ -146,6 +197,41 @@ class LensSurface(BaseModel):
         default_factory=list,
         description="Odd asphere terms A3, A5, ... (r^3, r^5, ...); odd_asphere only",
     )
+    radius_x: float = Field(
+        default=0.0,
+        description="Toroid: radius in the x-z plane (0 = flat, a cylinder)",
+    )
+    norm_radius: Optional[float] = Field(
+        default=None,
+        description="Normalisation radius of Q, Zernike and XY polynomial terms (m)",
+    )
+    q_type: Literal["qbfs", "qcon"] = "qbfs"
+    q_coefficients: list[float] = Field(
+        default_factory=list, description="Forbes Q terms q_0, q_1, ... (m)"
+    )
+    zernike_coefficients: list[float] = Field(
+        default_factory=list,
+        description="Standard (Noll) Zernike sag terms Z1, Z2, ... (m)",
+    )
+    xy_coefficients: dict[str, float] = Field(
+        default_factory=dict,
+        description='XY polynomial terms by name, "x<i>y<j>": C_ij (m)',
+    )
+    phase_coefficients: list[float] = Field(
+        default_factory=list,
+        description="Diffractive phase terms (rad) of r^2, r^4, ... (r in m)",
+    )
+    diffraction_order: int = 1
+    obscuration_semi: Optional[float] = Field(
+        default=None, description="Radius of a central circular obscuration (m)"
+    )
+    aperture_shape: Literal["circular", "rectangular", "elliptical"] = "circular"
+    aperture_half_x: Optional[float] = Field(
+        default=None, description="Half-width in x of a rectangular/elliptical aperture"
+    )
+    aperture_half_y: Optional[float] = Field(
+        default=None, description="Half-width in y of a rectangular/elliptical aperture"
+    )
     thickness: float = 0.0
     material: Optional[str] = Field(
         default=None, description='Medium after (None = air, "MIRROR" reflects)'
@@ -185,6 +271,30 @@ class LensSurface(BaseModel):
             raise ValueError("A paraxial surface needs a focal_length")
         if self.surface_type == "component" and not self.component:
             raise ValueError("A 'component' surface needs its component data")
+        if self.surface_type in ("q_asphere", "zernike", "xy_polynomial") and not (
+            self.norm_radius and self.norm_radius > 0
+        ):
+            raise ValueError(
+                f"A {self.surface_type} surface needs a positive norm_radius"
+            )
+        for key in self.xy_coefficients:
+            if key not in _XY_PARAMS:
+                raise ValueError(
+                    f"'{key}' is not an XY polynomial term (x<i>y<j>, "
+                    f"1 <= i + j <= {XY_MAX_ORDER})"
+                )
+        if self.aperture_shape != "circular" and not (
+            self.aperture_half_x
+            and self.aperture_half_y
+            and self.aperture_half_x > 0
+            and self.aperture_half_y > 0
+        ):
+            raise ValueError(
+                f"A {self.aperture_shape} aperture needs positive aperture_half_x "
+                "and aperture_half_y"
+            )
+        if self.is_stop and (self.aperture_shape != "circular"):
+            raise ValueError("The aperture stop must be circular")
         if self.material is not None and self.material.lower() == "air":
             self.material = None
         for name in self.variables:
@@ -373,6 +483,13 @@ def get_parameter(surface: LensSurface, name: str) -> float:
     if name.startswith("asphere_"):
         coeffs, k = _coefficient_slot(surface, name)
         return coeffs[k] if k < len(coeffs) else 0.0
+    slot = _term_slot(name)
+    if slot is not None:
+        field_name, k = slot
+        if field_name == "xy_coefficients":
+            return float(surface.xy_coefficients.get(name, 0.0))
+        coeffs = getattr(surface, field_name)
+        return coeffs[k] if k < len(coeffs) else 0.0
     if name in GLASS_PARAMS:
         from .materials import parse_model_glass
 
@@ -384,6 +501,20 @@ def get_parameter(surface: LensSurface, name: str) -> float:
     if value is None:
         raise ValueError(f"'{name}' is not set on surface '{surface.label}'")
     return float(value)
+
+
+def _term_slot(name: str) -> Optional[tuple[str, int]]:
+    """(field, index) holding a Q, Zernike, XY or phase term parameter, or
+    None for any other parameter."""
+    if name in _Q_PARAMS:
+        return "q_coefficients", int(name[2:])
+    if name in _ZERNIKE_PARAMS:
+        return "zernike_coefficients", int(name[2:]) - 1
+    if name in _PHASE_PARAMS:
+        return "phase_coefficients", _PHASE_ORDERS.index(int(name[6:]))
+    if name in _XY_PARAMS:
+        return "xy_coefficients", 0
+    return None
 
 
 def _coefficient_slot(surface: LensSurface, name: str) -> tuple[list[float], int]:
@@ -405,6 +536,17 @@ def _set(surface: LensSurface, name: str, value: float) -> None:
             surface.odd_coefficients = coeffs
         else:
             surface.aspheric_coefficients = coeffs
+    elif _term_slot(name) is not None:
+        field_name, k = _term_slot(name)  # type: ignore[misc]
+        if field_name == "xy_coefficients":
+            terms = dict(surface.xy_coefficients)
+            terms[name] = float(value)
+            surface.xy_coefficients = terms
+        else:
+            coeffs = list(getattr(surface, field_name))
+            coeffs += [0.0] * (k + 1 - len(coeffs))
+            coeffs[k] = float(value)
+            setattr(surface, field_name, coeffs)
     elif name in GLASS_PARAMS:
         from .materials import model_glass_name, parse_model_glass
 
@@ -459,6 +601,111 @@ def _object(lens: LensData) -> tuple[float, float]:
     if lens.object_distance is None:
         return FAR_OBJECT, FAR_OBJECT * math.tan(lens.field_angle)
     return lens.object_distance, lens.object_height
+
+
+_NEW_SHAPES = ("q_asphere", "toroid", "zernike", "xy_polynomial", "diffractive")
+
+
+def _has_aperture_extras(s: LensSurface) -> bool:
+    return bool(s.obscuration_semi) or s.aperture_shape != "circular"
+
+
+def _aperture_fields(s: LensSurface) -> dict:
+    return {
+        "obscuration_diameter": 2 * s.obscuration_semi if s.obscuration_semi else None,
+        "aperture_shape": s.aperture_shape,
+        "aperture_half_x": s.aperture_half_x,
+        "aperture_half_y": s.aperture_half_y,
+    }
+
+
+def xy_terms(s: LensSurface) -> list[tuple[int, int, float]]:
+    """The XY polynomial terms of a surface as (i, j, C_ij)."""
+    out = []
+    for key, a in s.xy_coefficients.items():
+        i, j = key[1:].split("y")
+        out.append((int(i), int(j), float(a)))
+    return out
+
+
+def _shaped_component(s: LensSurface, cid: str, z: float, aperture: float):
+    """The engine component of a Q, toroid, Zernike, XY or diffractive row."""
+    material = s.material or "air"
+    common: dict[str, Any] = dict(
+        id=cid, position=z, aperture_diameter=aperture, material=material
+    )
+    if s.surface_type == "q_asphere":
+        assert s.norm_radius is not None
+        return QAsphericSurface(
+            **common,
+            radius=s.radius,
+            conic=s.conic,
+            q_type="Qcon" if s.q_type == "qcon" else "Qbfs",
+            coefficients=list(s.q_coefficients),
+            norm_radius=s.norm_radius,
+        )
+    if s.surface_type == "toroid":
+        return ToricSurface(
+            **common,
+            radius_tangential=s.radius,
+            radius_sagittal=s.radius_x,
+            conic=s.conic,
+        )
+    if s.surface_type == "zernike":
+        assert s.norm_radius is not None
+        return ZernikeSurface(
+            **common,
+            radius=s.radius,
+            conic=s.conic,
+            zernike_coeffs=list(s.zernike_coefficients),
+            norm_radius=s.norm_radius,
+        )
+    if s.surface_type == "xy_polynomial":
+        assert s.norm_radius is not None
+        return XYPolynomialSurface(
+            **common,
+            radius=s.radius,
+            conic=s.conic,
+            terms=xy_terms(s),
+            norm_radius=s.norm_radius,
+        )
+    return DiffractiveOpticalElement(
+        **common,
+        radius=s.radius,
+        conic=s.conic,
+        phase_coeffs=list(s.phase_coefficients),
+        diffraction_order=s.diffraction_order,
+    )
+
+
+def surface_shape(s: LensSurface):
+    """The traced shape (local sag) of a surface row with a shape."""
+    if s.surface_type not in SHAPED_TYPES:
+        raise ValueError(f"A {s.surface_type} surface has no sag")
+    if s.surface_type in _NEW_SHAPES:
+        comp = _shaped_component(s, "s", 0.0, 1.0)
+    elif s.surface_type == "odd_asphere":
+        comp = OddAsphericSurface(
+            id="s",
+            position=0.0,
+            radius=s.radius,
+            conic=s.conic,
+            aspheric_coeffs=list(s.aspheric_coefficients),
+            odd_coeffs=[0.0] + list(s.odd_coefficients),
+        )
+    else:
+        comp = AsphericSurface(
+            id="s",
+            position=0.0,
+            radius=s.radius,
+            conic=s.conic,
+            aspheric_coeffs=(
+                list(s.aspheric_coefficients)
+                if s.surface_type == "even_asphere"
+                else []
+            ),
+        )
+    return rt._shape_for(comp)
 
 
 def _build(
@@ -557,6 +804,18 @@ def _build(
             labels[i] = cid
             i += 1
             continue
+        if s.surface_type in _NEW_SHAPES:
+            if s.material == "MIRROR":
+                raise ValueError(
+                    f"Surface {i}: {s.surface_type} mirrors are not supported yet"
+                )
+            cid = _unique(cid_base, used)
+            owner[i] = len(comps)
+            comps.append(_shaped_component(s, cid, zs[i], 2 * required_semi(i)))
+            labels[i] = cid
+            medium = s.material
+            i += 1
+            continue
         # standard / even_asphere / odd_asphere
         odd = s.surface_type == "odd_asphere" and any(s.odd_coefficients)
         aspheric = odd or (
@@ -596,6 +855,8 @@ def _build(
             and s.material != "MIRROR"
             and nxt.material == medium
             and s.thickness * direction > 0
+            and not _has_aperture_extras(s)
+            and not _has_aperture_extras(nxt)
         )
         if pair:
             assert nxt is not None
@@ -640,6 +901,9 @@ def _build(
             i += 2
             continue
         dummy = s.radius == 0 and s.conic == 0 and not aspheric and s.material == medium
+        if dummy and _has_aperture_extras(s) and i != stop:
+            # a flat baffle: keep a surface to carry the aperture
+            dummy = False
         if dummy:
             if i == stop:
                 cid = _unique(cid_base, used)
@@ -692,6 +956,10 @@ def _build(
         labels[i] = cid
         medium = s.material
         i += 1
+
+    for i, k in owner.items():
+        if _has_aperture_extras(surfaces[i]):
+            comps[k] = comps[k].model_copy(update=_aperture_fields(surfaces[i]))
 
     obj_dist, obj_height = _object(lens)
     z0 = lens.first_surface_position
@@ -974,6 +1242,56 @@ def _component_label(c) -> list[str]:
     return [c.id]
 
 
+def _row_from_shaped(c, medium: Optional[str]) -> LensSurface:
+    common: dict = dict(
+        label=c.id, material=medium, semi_diameter=c.aperture_diameter / 2
+    )
+    if isinstance(c, QAsphericSurface):
+        return LensSurface(
+            **common,
+            surface_type="q_asphere",
+            radius=c.radius,
+            conic=c.conic,
+            q_type="qcon" if (c.q_type or "").lower() == "qcon" else "qbfs",
+            q_coefficients=list(c.coefficients),
+            norm_radius=c.norm_radius,
+        )
+    if isinstance(c, ToricSurface):
+        return LensSurface(
+            **common,
+            surface_type="toroid",
+            radius=c.radius_tangential,
+            radius_x=c.radius_sagittal,
+            conic=c.conic,
+        )
+    if isinstance(c, ZernikeSurface):
+        return LensSurface(
+            **common,
+            surface_type="zernike",
+            radius=c.radius,
+            conic=c.conic,
+            zernike_coefficients=list(c.zernike_coeffs),
+            norm_radius=c.norm_radius,
+        )
+    if isinstance(c, XYPolynomialSurface):
+        return LensSurface(
+            **common,
+            surface_type="xy_polynomial",
+            radius=c.radius,
+            conic=c.conic,
+            xy_coefficients={f"x{i}y{j}": a for i, j, a in c.terms},
+            norm_radius=c.norm_radius,
+        )
+    return LensSurface(
+        **common,
+        surface_type="diffractive",
+        radius=c.radius,
+        conic=c.conic,
+        phase_coefficients=list(c.phase_coeffs),
+        diffraction_order=c.diffraction_order,
+    )
+
+
 def from_system(system: OpticalSystem) -> LensData:
     """The surface-by-surface prescription of an existing system."""
     comps = rt.ordered_components(system)
@@ -1021,6 +1339,21 @@ def from_system(system: OpticalSystem) -> LensData:
                 )
             )
             zs += [c.position, c.position + direction * c.thickness]
+        elif isinstance(
+            c,
+            (
+                QAsphericSurface,
+                ToricSurface,
+                ZernikeSurface,
+                XYPolynomialSurface,
+                DiffractiveOpticalElement,
+            ),
+        ):
+            medium = (
+                None if (not c.material or c.material.lower() == "air") else c.material
+            )
+            rows.append(_row_from_shaped(c, medium))
+            zs.append(c.position)
         elif isinstance(c, OddAsphericSurface):
             medium = (
                 None if (not c.material or c.material.lower() == "air") else c.material

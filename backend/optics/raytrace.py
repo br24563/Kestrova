@@ -72,6 +72,7 @@ from .advanced_surfaces import (
     ZernikeSurface,
     DiffractiveOpticalElement,
     ToricSurface,
+    XYPolynomialSurface,
     CoordinateBreak,
 )
 
@@ -217,10 +218,12 @@ def _qbfs_basis(m_max: int) -> list:
     Express 15, 5218 (2007)): the departures u^2(1-u^2)Q_m(u^2) have
     orthonormal slopes under the weight 1/sqrt(1-u^2), normalised so Q_0 = 1.
     """
-    t = np.linspace(0, np.pi / 2, 4001)[1:-1]
-    # u = sin t gives du/sqrt(1-u^2) = dt (Gauss-Chebyshev style quadrature)
+    # u = sin t gives du/sqrt(1-u^2) = dt, leaving a smooth integrand in t
+    # that Gauss-Legendre quadrature integrates to round-off.
+    x_gl, w_gl = np.polynomial.legendre.leggauss(64 + 4 * m_max)
+    t = (x_gl + 1.0) * (np.pi / 4)
     u = np.sin(t)
-    w = np.full_like(t, t[1] - t[0])
+    w = w_gl * (np.pi / 4)
 
     def slope(coeffs):
         x = u * u
@@ -298,42 +301,106 @@ def q_aspheric_sag_function(c, k, coeffs, norm_radius, q_type):
     return f
 
 
+def _conic_sag_grad(c: float, k: float, x, y):
+    """Sag of a conic and its x and y derivatives."""
+    r2 = x * x + y * y
+    arg = 1.0 - (1.0 + k) * c * c * r2
+    root = np.sqrt(np.where(arg >= 0, arg, np.nan))
+    s = c * r2 / (1.0 + root)
+    g = c / root  # d sag / dr = c r / root, so d sag / dx = c x / root
+    return s, g * x, g * y
+
+
 class ZernikeShape(Shape):
-    """Sag = sum c_j Z_j(rho, theta) (Noll-normalised), rho = r / norm_radius."""
+    """Sag = base conic + sum c_j Z_j(rho, theta) (Noll-normalised),
+    rho = r / norm_radius."""
 
     rotationally_symmetric = False
 
-    def __init__(self, coeffs, norm_radius):
+    def __init__(self, coeffs, norm_radius, c=0.0, k=0.0):
         from .zernike import zernike_standard
 
-        self.coeffs = [float(c) for c in coeffs]
+        self.coeffs = [float(a) for a in coeffs]
         self.rn = float(norm_radius)
+        self.c, self.k = float(c), float(k)
         self._z = zernike_standard
 
-    def sag(self, x, y):
+    def _departure(self, x, y):
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=float)
         rho = np.hypot(x, y) / self.rn
         th = np.arctan2(y, x)
         s = np.zeros(np.broadcast(x, y).shape)
-        for j, c in enumerate(self.coeffs, start=1):
-            if c:
-                s = s + c * self._z(j, rho, th)
+        for j, a in enumerate(self.coeffs, start=1):
+            if a:
+                s = s + a * self._z(j, rho, th)
+        return s
+
+    def sag(self, x, y):
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        return _conic_sag_grad(self.c, self.k, x, y)[0] + self._departure(x, y)
+
+    def grad(self, x, y):
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        _, bx, by = _conic_sag_grad(self.c, self.k, x, y)
+        h = 1e-7 * self.rn
+        fx = (self._departure(x + h, y) - self._departure(x - h, y)) / (2 * h)
+        fy = (self._departure(x, y + h) - self._departure(x, y - h)) / (2 * h)
+        return bx + fx, by + fy
+
+    def vertex_curvature(self):
+        # meridional (y-z) curvature at the vertex: the base conic's plus the
+        # r^2 term of the Zernike departure along y
+        r = self.rn * np.array([0.01, 0.02, 0.03])
+        z = self._departure(np.zeros(3), r) - self._departure(0.0, 0.0)
+        A = np.stack([r, r**2, r**3], axis=1)
+        return self.c + 2.0 * np.linalg.solve(A, z)[1]
+
+    def conic_base(self):
+        return self.c, self.k
+
+
+class XYPolynomialShape(Shape):
+    """Sag = base conic + sum C_ij (x/R)^i (y/R)^j over a normalisation
+    radius R (Code V XYP, Zemax extended polynomial)."""
+
+    rotationally_symmetric = False
+
+    def __init__(self, c=0.0, k=0.0, terms=(), norm_radius=1.0):
+        self.c, self.k = float(c), float(k)
+        self.rn = float(norm_radius)
+        self.terms = tuple((int(i), int(j), float(a)) for i, j, a in terms if a)
+
+    def sag(self, x, y):
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        s = _conic_sag_grad(self.c, self.k, x, y)[0]
+        u, v = x / self.rn, y / self.rn
+        for i, j, a in self.terms:
+            s = s + a * u**i * v**j
         return s
 
     def grad(self, x, y):
-        h = 1e-7 * self.rn
-        fx = (self.sag(x + h, y) - self.sag(x - h, y)) / (2 * h)
-        fy = (self.sag(x, y + h) - self.sag(x, y - h)) / (2 * h)
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        _, fx, fy = _conic_sag_grad(self.c, self.k, x, y)
+        u, v = x / self.rn, y / self.rn
+        for i, j, a in self.terms:
+            if i:
+                fx = fx + a * i * u ** (i - 1) * v**j / self.rn
+            if j:
+                fy = fy + a * j * u**i * v ** (j - 1) / self.rn
         return fx, fy
 
     def vertex_curvature(self):
-        # meridional (y-z) curvature at the vertex, from the r^2 term of the
-        # sag along y
-        r = self.rn * np.array([0.01, 0.02, 0.03])
-        z = self.sag(np.zeros(3), r) - self.sag(0.0, 0.0)
-        A = np.stack([r, r**2, r**3], axis=1)
-        return 2.0 * np.linalg.solve(A, z)[1]
+        # meridional (y-z) curvature: the base's plus 2 C_02 / R^2
+        c02 = sum(a for i, j, a in self.terms if (i, j) == (0, 2))
+        return self.c + 2.0 * c02 / self.rn**2
+
+    def conic_base(self):
+        return self.c, self.k
 
 
 class YToroid(Shape):
@@ -393,6 +460,9 @@ class Surface:
     focal_length: Optional[float] = None  # ideal lens
     ideal_dispersion: float = 0.0  # 1/V of an ideal lens's glass
     phase: Optional[tuple] = None  # DOE: (coeffs, order)
+    obscuration: Optional[float] = None  # radius of a central obscuration
+    # ("rectangular" | "elliptical", half-width in x, half-width in y)
+    aperture_xy: Optional[tuple] = None
     component_id: str = ""
     label: str = ""
     material_after: Optional[str] = None
@@ -495,7 +565,21 @@ def _shape_for(comp) -> Shape:
         )
         return RadialNumeric(func, c, k, scale=comp.norm_radius)
     if isinstance(comp, ZernikeSurface):
-        return ZernikeShape(comp.zernike_coeffs, comp.norm_radius)
+        return ZernikeShape(
+            comp.zernike_coeffs,
+            comp.norm_radius,
+            curvature_from_radius(comp.radius),
+            comp.conic,
+        )
+    if isinstance(comp, XYPolynomialSurface):
+        return XYPolynomialShape(
+            curvature_from_radius(comp.radius),
+            comp.conic,
+            comp.terms,
+            comp.norm_radius,
+        )
+    if isinstance(comp, DiffractiveOpticalElement):
+        return Conicoid(curvature_from_radius(comp.radius), comp.conic)
     if isinstance(comp, ToricSurface):
         return YToroid(
             curvature_from_radius(comp.radius_tangential),
@@ -505,6 +589,21 @@ def _shape_for(comp) -> Shape:
     if isinstance(comp, Mirror):
         return Conicoid(curvature_from_radius(comp.radius), comp.conic)
     return Shape()
+
+
+def _apply_aperture_shape(comp, surface: "Surface") -> None:
+    """Copy a component's obscuration and non-circular aperture to one of
+    its surfaces."""
+    if comp.obscuration_diameter:
+        surface.obscuration = comp.obscuration_diameter / 2.0
+    if comp.aperture_shape != "circular":
+        hx, hy = comp.aperture_half_x, comp.aperture_half_y
+        if not (hx and hy and hx > 0 and hy > 0):
+            raise ValueError(
+                f"{comp.id}: a {comp.aperture_shape} aperture needs positive "
+                "half-widths in x and y"
+            )
+        surface.aperture_xy = (comp.aperture_shape, float(hx), float(hy))
 
 
 def build_sequence(
@@ -639,7 +738,7 @@ def build_sequence(
             add(
                 "refract",
                 comp.position,
-                Shape(),
+                _shape_for(comp),
                 new_medium=comp.material,
                 keep_medium=False,
                 semi_aperture=comp.aperture_diameter / 2.0,
@@ -655,6 +754,7 @@ def build_sequence(
                 QAsphericSurface,
                 ZernikeSurface,
                 ToricSurface,
+                XYPolynomialSurface,
             ),
         ):
             add(
@@ -689,6 +789,12 @@ def build_sequence(
             s.direction = direction
         else:
             raise ValueError(f"Unsupported component type: {type(comp).__name__}")
+
+    by_id = {c.id: c for c in system.components}
+    for s_ in surfaces:
+        comp_ = by_id.get(s_.component_id)
+        if comp_ is not None:
+            _apply_aperture_shape(comp_, s_)
 
     # Check that the sequence moves consistently along the axis.
     prev_z = system.object.position
@@ -741,7 +847,8 @@ def _surface_power(s: Surface, nb: float, na: float) -> float:
         coeffs, order = s.phase
         c1 = coeffs[0] if coeffs else 0.0
         # psi = (m lambda / 2pi) Phi ; psi ~ -phi r^2 / 2  =>  phi = -2 c1 m lambda/2pi
-        return -2.0 * c1 * order * s_wavelength_holder[0] / (2 * math.pi)
+        diffractive = -2.0 * c1 * order * s_wavelength_holder[0] / (2 * math.pi)
+        return diffractive + s.curvature * (na - nb)
     if s.kind in ("stop", "dummy"):
         return 0.0
     return s.curvature * (na - nb)
@@ -1305,6 +1412,24 @@ def _ideal_lens_opl(hit, d_in, d_out, f, L, travel):
     return inc + out
 
 
+def _inside_aperture(s: "Surface", x, y, r):
+    """Which local hit points (x, y; r = hypot) pass the surface's clear
+    aperture: its circle, obscuration and rectangle or ellipse."""
+    ok = np.ones(np.shape(r), dtype=bool)
+    if s.semi_aperture is not None:
+        ok &= r <= s.semi_aperture * (1 + 1e-9) + 1e-12
+    if s.obscuration:
+        ok &= r >= s.obscuration * (1 - 1e-9)
+    if s.aperture_xy is not None:
+        kind, hx, hy = s.aperture_xy
+        tol = 1 + 1e-9
+        if kind == "rectangular":
+            ok &= (np.abs(x) <= hx * tol) & (np.abs(y) <= hy * tol)
+        else:
+            ok &= (x / hx) ** 2 + (y / hy) ** 2 <= tol * tol
+    return ok
+
+
 def _trace_bundle(seq, p0, d0, clip):
     p = np.array(p0, dtype=float)
     d = np.array(d0, dtype=float)
@@ -1322,7 +1447,7 @@ def _trace_bundle(seq, p0, d0, clip):
 
     for i, s in enumerate(seq.surfaces):
         pl, dl = _to_local(s.origin, s.rotation, p, d)
-        if s.kind in ("ideal", "stop", "dummy") or s.phase is not None:
+        if s.kind in ("ideal", "stop", "dummy"):
             with np.errstate(divide="ignore", invalid="ignore"):
                 t = -pl[:, 2] / dl[:, 2]
             hit = pl + t[:, None] * dl
@@ -1335,8 +1460,8 @@ def _trace_bundle(seq, p0, d0, clip):
         t = np.where(ok, t, 0.0)
         opl = opl + n_cur * t
         r = np.hypot(hit[:, 0], hit[:, 1])
-        if clip and s.semi_aperture is not None:
-            valid &= r <= s.semi_aperture * (1 + 1e-9) + 1e-12
+        if clip:
+            valid &= _inside_aperture(s, hit[:, 0], hit[:, 1], r)
 
         travel = np.sign(dl[:, 2])
         if s.kind == "ideal":
@@ -1374,12 +1499,19 @@ def _trace_bundle(seq, p0, d0, clip):
                     gy = np.where(
                         rr > 0, dphi * hit[:, 1] / np.where(rr > 0, rr, 1), 0.0
                     )
-                kx = n1 * dl[:, 0] + order * lam / (2 * math.pi) * gx
-                ky = n1 * dl[:, 1] + order * lam / (2 * math.pi) * gy
-                tx, ty = kx / n2, ky / n2
-                tz2 = 1.0 - tx * tx - ty * ty
-                valid &= tz2 >= 0
-                dl = np.stack([tx, ty, travel * np.sqrt(np.clip(tz2, 0, None))], axis=1)
+                # The phase adds (m lambda / 2 pi) grad(phi) to the
+                # tangential component of n d (Welford's grating equation on
+                # a curved surface); the normal component follows from |n' d'|.
+                nrm = _normals(s.shape, hit)
+                nrm = np.where(
+                    np.sum(dl * nrm, axis=1)[:, None] < 0, -nrm, nrm
+                )  # along the travel
+                g = order * lam / (2 * math.pi)
+                kv = n1 * dl + np.stack([g * gx, g * gy, np.zeros(N)], axis=1)
+                kt = kv - np.sum(kv * nrm, axis=1)[:, None] * nrm
+                kn2 = n2 * n2 - np.sum(kt * kt, axis=1)
+                valid &= kn2 >= 0
+                dl = (kt + np.sqrt(np.clip(kn2, 0, None))[:, None] * nrm) / n2
             else:
                 nrm = _normals(s.shape, hit)
                 cos_i = np.sum(dl * nrm, axis=1)
@@ -1670,7 +1802,14 @@ def opd(
     ally = np.concatenate([[0.0], py])
     b, _, _ = trace_field_rays(system, hx, hy, allx, ally, seq=seq, fo=fo)
     if not b.valid[0]:
-        raise ValueError("The chief ray cannot be traced for this field")
+        # A chief ray stopped by an obscuration still defines the reference
+        # (Code V traces the reference ray without clipping).
+        bc, _, _ = trace_field_rays(
+            system, hx, hy, np.zeros(1), np.zeros(1), seq=seq, fo=fo, clip=False
+        )
+        if not bc.valid[0]:
+            raise ValueError("The chief ray cannot be traced for this field")
+        b.image[0], b.directions[0], b.opl[0] = bc.image[0], bc.directions[0], bc.opl[0]
     Q = b.image[0]
     dch = b.directions[0]
     o, Rm = seq.image_origin, seq.image_rotation

@@ -66,6 +66,10 @@ def _pack(seq):
     rot = np.zeros((M, 3, 3))
     ident = np.zeros(M, dtype=np.bool_)
     semi = np.full(M, -1.0)
+    # obscuration radius (-1 none); aperture kind 0 none, 1 rectangle,
+    # 2 ellipse, with half-widths in x and y
+    ap = np.zeros((M, 4))
+    ap[:, 0] = -1.0
     n1 = np.zeros(M)
     n2 = np.zeros(M)
     for j, s in enumerate(seq.surfaces):
@@ -77,8 +81,14 @@ def _pack(seq):
         ident[j] = bool(np.array_equal(s.rotation, np.eye(3)))
         if s.semi_aperture is not None:
             semi[j] = s.semi_aperture
+        if s.obscuration:
+            ap[j, 0] = s.obscuration
+        if s.aperture_xy is not None:
+            shape, hx, hy = s.aperture_xy
+            ap[j, 1] = 1.0 if shape == "rectangular" else 2.0
+            ap[j, 2], ap[j, 3] = hx, hy
         n1[j], n2[j] = s.n_before, s.n_after
-    packed = (kind, c, k, origin, rot, ident, semi, n1, n2)
+    packed = (kind, c, k, origin, rot, ident, semi, ap, n1, n2)
     try:
         seq._fast_pack = packed
     except AttributeError:  # pragma: no cover
@@ -93,7 +103,22 @@ PARALLEL_MIN_RAYS = 4096
 
 
 def _kernel_impl(
-    p0, d0, kind, c, k, origin, rot, ident, semi, n1, n2, n_start, img_o, img_R, clip
+    p0,
+    d0,
+    kind,
+    c,
+    k,
+    origin,
+    rot,
+    ident,
+    semi,
+    ap,
+    n1,
+    n2,
+    n_start,
+    img_o,
+    img_R,
+    clip,
 ):
     N = p0.shape[0]
     M = kind.shape[0]
@@ -160,9 +185,21 @@ def _kernel_impl(
                 hx, hy, hz = lx, ly, lz
                 t = 0.0
             opl += ncur * t
-            if clip and semi[j] >= 0.0:
-                if np.sqrt(hx * hx + hy * hy) > semi[j] * (1 + 1e-9) + 1e-12:
+            if clip:
+                rr = np.sqrt(hx * hx + hy * hy)
+                if semi[j] >= 0.0 and rr > semi[j] * (1 + 1e-9) + 1e-12:
                     ok_all = False
+                if ap[j, 0] > 0.0 and rr < ap[j, 0] * (1 - 1e-9):
+                    ok_all = False
+                if ap[j, 1] == 1.0:
+                    if abs(hx) > ap[j, 2] * (1 + 1e-9) or abs(hy) > ap[j, 3] * (
+                        1 + 1e-9
+                    ):
+                        ok_all = False
+                elif ap[j, 1] == 2.0:
+                    ex, ey = hx / ap[j, 2], hy / ap[j, 3]
+                    if ex * ex + ey * ey > (1 + 1e-9) ** 2:
+                        ok_all = False
             # direction change
             if kind[j] != _PLANE:
                 nx = -cj * hx
@@ -255,7 +292,7 @@ if AVAILABLE:  # pragma: no branch
 
 def trace(seq, p0, d0, clip: bool):
     """(points, directions, opl, valid, image, n_image, surface_opl)."""
-    kind, c, k, origin, rot, ident, semi, n1, n2 = _pack(seq)
+    kind, c, k, origin, rot, ident, semi, ap, n1, n2 = _pack(seq)
     p0 = np.ascontiguousarray(p0, dtype=float)
     d0 = np.ascontiguousarray(d0, dtype=float)
     kernel = _kernel_parallel if len(p0) >= PARALLEL_MIN_RAYS else _kernel_serial
@@ -270,6 +307,7 @@ def trace(seq, p0, d0, clip: bool):
             rot,
             ident,
             semi,
+            ap,
             n1,
             n2,
             float(seq.surfaces[0].n_before),

@@ -441,6 +441,11 @@ export type SurfaceType =
   | "standard"
   | "even_asphere"
   | "odd_asphere"
+  | "q_asphere"
+  | "toroid"
+  | "zernike"
+  | "xy_polynomial"
+  | "diffractive"
   | "paraxial"
   | "coordinate_break"
   | "component";
@@ -485,6 +490,18 @@ export interface LensSurface {
   conic: number;
   aspheric_coefficients: number[];
   odd_coefficients?: number[]; // odd_asphere only: r^3, r^5, ...
+  radius_x?: number; // toroid: x-z radius (0 = flat, a cylinder)
+  norm_radius?: number | null; // Q, Zernike, XY polynomial terms
+  q_type?: "qbfs" | "qcon";
+  q_coefficients?: number[]; // q_0, q_1, ... (m)
+  zernike_coefficients?: number[]; // Noll Z1, Z2, ... (m)
+  xy_coefficients?: Record<string, number>; // "x<i>y<j>": C_ij (m)
+  phase_coefficients?: number[]; // rad, of r^2, r^4, ... (r in m)
+  diffraction_order?: number;
+  obscuration_semi?: number | null; // central obscuration radius (m)
+  aperture_shape?: "circular" | "rectangular" | "elliptical";
+  aperture_half_x?: number | null;
+  aperture_half_y?: number | null;
   thickness: number; // to the next surface
   material: string | null; // medium after; null = air, "MIRROR" reflects
   semi_diameter: number | null; // null = automatic
