@@ -1231,6 +1231,37 @@ async def lens_import(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Could not read the file: {e}")
 
 
+def _sample_info(ref) -> dict:
+    return {
+        "id": ref.id,
+        "name": ref.name,
+        "description": ref.description,
+        "citation": ref.citation,
+        "url": ref.url,
+        "notes": ref.notes,
+    }
+
+
+@app.get("/api/lens/samples")
+async def lens_samples():
+    """The reference lenses (published designs the engine is validated
+    against), without their prescriptions."""
+    from optics.reference_lenses import REFERENCE_LENSES
+
+    return [_sample_info(r) for r in REFERENCE_LENSES]
+
+
+@app.get("/api/lens/samples/{sample_id}")
+async def lens_sample(sample_id: str):
+    """One reference lens with its prescription (``lens``)."""
+    from optics.reference_lenses import get_reference
+
+    ref = get_reference(sample_id)
+    if ref is None:
+        raise HTTPException(status_code=404, detail=f"Sample '{sample_id}' not found")
+    return {**_sample_info(ref), "lens": ref.build()}
+
+
 @app.post("/api/lens/export")
 async def lens_export(request: LensExportRequest):
     """A Code V or Zemax lens file of the prescription: ``content`` (text),

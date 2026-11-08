@@ -438,7 +438,12 @@ export function formatValue(value: number, decimals: number = 3): string {
 // ---------------------------------------------------------------------------
 
 export type SurfaceType =
-  "standard" | "even_asphere" | "paraxial" | "coordinate_break" | "component";
+  | "standard"
+  | "even_asphere"
+  | "odd_asphere"
+  | "paraxial"
+  | "coordinate_break"
+  | "component";
 
 export type SolveKind =
   | "marginal_height"
@@ -479,6 +484,7 @@ export interface LensSurface {
   radius: number; // 0 = flat
   conic: number;
   aspheric_coefficients: number[];
+  odd_coefficients?: number[]; // odd_asphere only: r^3, r^5, ...
   thickness: number; // to the next surface
   material: string | null; // medium after; null = air, "MIRROR" reflects
   semi_diameter: number | null; // null = automatic

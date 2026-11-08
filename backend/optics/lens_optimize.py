@@ -49,7 +49,7 @@ from .models import OpticalSystem
 
 def _surface_sag(surface, h: float) -> float:
     """Sag at height h of a standard or even-asphere surface (m)."""
-    if surface.surface_type not in ("standard", "even_asphere"):
+    if surface.surface_type not in ("standard", "even_asphere", "odd_asphere"):
         raise ValueError(
             f"Edge thickness needs standard surfaces, not {surface.surface_type}"
         )

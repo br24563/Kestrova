@@ -39,8 +39,10 @@ import {
 import {
   evaluateLensConstraints,
   exportLensFile,
+  getLensSample,
   importLensFile,
   lensFromSystem,
+  listLensSamples,
   optimizeLens,
   resolveLens,
   snapLensGlasses,
@@ -63,7 +65,7 @@ import { ConstraintsEditor } from "./ConstraintsEditor";
 import { OptimizeReport } from "./OptimizeReport";
 import { LensTolerancePanel } from "./LensTolerancePanel";
 import { downloadBlob } from "../ExportButton";
-import type { LensFileFormat } from "../../api";
+import type { LensFileFormat, LensSample } from "../../api";
 
 interface LensDataEditorProps {
   lens: LensData | null;
@@ -103,7 +105,12 @@ const SOLVE_LABELS: Record<SolveKind, string> = {
   f_number: "F-number",
 };
 
-const EDITABLE_TYPES: SurfaceType[] = ["standard", "even_asphere", "paraxial"];
+const EDITABLE_TYPES: SurfaceType[] = [
+  "standard",
+  "even_asphere",
+  "odd_asphere",
+  "paraxial",
+];
 
 /** Parse a cell; "" and "inf"/"infinity" give null (flat radius, automatic aperture, ...). */
 function parseNumber(text: string): number | null | undefined {
@@ -193,12 +200,16 @@ export function LensDataEditor({
     | "snap"
     | "open"
     | "save"
+    | "samples"
     | null
   >(null);
   const [fileNote, setFileNote] = useState<{
     message: string;
     warnings: string[];
+    source?: { citation: string; url: string; notes: string };
   } | null>(null);
+  const [samples, setSamples] = useState<LensSample[] | null>(null);
+  const [samplesOpen, setSamplesOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [firstOrder, setFirstOrder] = useState<LensFirstOrder | null>(null);
@@ -234,29 +245,78 @@ export function LensDataEditor({
     }
   };
 
+  /** Show an opened lens and resolve it. */
+  const showOpened = async (opened: LensData) => {
+    onImported(opened);
+    setFirstOrder(null);
+    setRms(null);
+    setFlagCell(null);
+    try {
+      const result = await resolveLens(opened);
+      setFirstOrder(result.first_order);
+      onResolved(result);
+    } catch (err) {
+      setError(
+        `Opened, but it could not be resolved: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  };
+
   const openFile = async (file: File) => {
     setBusy("open");
     setError(null);
     try {
       const { lens: opened, warnings } = await importLensFile(file);
-      onImported(opened);
-      setFirstOrder(null);
-      setRms(null);
-      setFlagCell(null);
       setFileNote({ message: `Opened ${file.name}`, warnings });
-      try {
-        const result = await resolveLens(opened);
-        setFirstOrder(result.first_order);
-        onResolved(result);
-      } catch (err) {
-        setError(
-          `Opened, but it could not be resolved: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      }
+      await showOpened(opened);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open the file");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleSamples = async () => {
+    if (samplesOpen) return setSamplesOpen(false);
+    setError(null);
+    if (samples === null) {
+      setBusy("samples");
+      try {
+        setSamples(await listLensSamples());
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not list the samples",
+        );
+        return;
+      } finally {
+        setBusy(null);
+      }
+    }
+    setSamplesOpen(true);
+  };
+
+  const openSample = async (id: string) => {
+    setSamplesOpen(false);
+    setBusy("samples");
+    setError(null);
+    try {
+      const sample = await getLensSample(id);
+      setFileNote({
+        message: `Opened sample: ${sample.name}`,
+        warnings: [],
+        source: {
+          citation: sample.citation,
+          url: sample.url,
+          notes: sample.notes,
+        },
+      });
+      await showOpened(sample.lens);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not open the sample",
+      );
     } finally {
       setBusy(null);
     }
@@ -284,6 +344,44 @@ export function LensDataEditor({
       >
         {busy === "open" ? "Opening..." : "Open .seq / .zmx"}
       </button>
+      <button
+        onClick={toggleSamples}
+        disabled={busy !== null}
+        aria-expanded={samplesOpen}
+        title="Open a published reference lens"
+        className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+      >
+        {busy === "samples" ? "Loading..." : "Samples"}
+      </button>
+    </>
+  );
+
+  const samplesMenu = (
+    <>
+      {samplesOpen && samples && (
+        <ul
+          role="menu"
+          aria-label="Sample lenses"
+          className="mb-2 bg-white border border-gray-200 rounded shadow-sm divide-y divide-gray-100 text-left"
+        >
+          {samples.map((sample) => (
+            <li key={sample.id} role="none">
+              <button
+                role="menuitem"
+                onClick={() => openSample(sample.id)}
+                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+              >
+                <span className="block text-xs font-medium text-gray-800">
+                  {sample.name}
+                </span>
+                <span className="block text-[11px] text-gray-500">
+                  {sample.description}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 
@@ -299,6 +397,7 @@ export function LensDataEditor({
           Convert the current system
         </button>{" "}
         or {openButton}
+        <div className="mt-2">{samplesMenu}</div>
         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       </div>
     );
@@ -605,6 +704,7 @@ export function LensDataEditor({
           </button>
         </div>
       </div>
+      {samplesMenu}
 
       {/* Object and aperture */}
       <div className="flex flex-wrap gap-3 mb-2 text-xs text-gray-600">
@@ -723,6 +823,7 @@ export function LensDataEditor({
                       >
                         <option value="standard">Standard</option>
                         <option value="even_asphere">Even asphere</option>
+                        <option value="odd_asphere">Odd asphere</option>
                         <option value="paraxial">Paraxial</option>
                       </select>
                     ) : (
@@ -923,6 +1024,20 @@ export function LensDataEditor({
       {fileNote && (
         <div className="text-xs text-gray-600 mt-2" data-testid="file-note">
           {fileNote.message}
+          {fileNote.source && (
+            <p className="text-gray-500 mt-0.5">
+              Source:{" "}
+              <a
+                href={fileNote.source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-optical-600 hover:underline"
+              >
+                {fileNote.source.citation}
+              </a>
+              {fileNote.source.notes && ` ${fileNote.source.notes}`}
+            </p>
+          )}
           {fileNote.warnings.length > 0 && (
             <ul className="list-disc ml-5 text-amber-700">
               {fileNote.warnings.map((w) => (

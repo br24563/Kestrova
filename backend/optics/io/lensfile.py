@@ -448,7 +448,14 @@ def write_codev(lens: LensData) -> tuple[str, list[str]]:
         lines.append(f"{cmd} {s.radius * mm:.6f} {s.thickness * mm:.6f}{g}")
         if glass == "MIRROR":
             lines.append("  REFL")
-        aspheric = s.surface_type == "even_asphere" and any(s.aspheric_coefficients)
+        aspheric = s.surface_type in ("even_asphere", "odd_asphere") and any(
+            s.aspheric_coefficients
+        )
+        if s.surface_type == "odd_asphere" and any(s.odd_coefficients):
+            warnings.append(
+                f"Surface {i}: odd asphere terms (r^3, r^5, ...) are not written "
+                "to Code V files"
+            )
         if aspheric:
             lines.append("  ASP")
         if s.conic:
@@ -627,6 +634,28 @@ def read_zemax(text: str) -> LensFileResult:
         elif rs["type"] == "PARAXIAL":
             s.surface_type = "paraxial"
             s.focal_length = rs["parm"].get(1, 0.0) * unit
+        elif rs["type"] == "ODDASPH":
+            s.radius = 1.0 / (rs["curv"] / unit) if rs["curv"] else 0.0
+            s.conic = rs["coni"]
+            s.material = rs["glass"]
+            p = rs["parm"]
+            for k in (1, 2):
+                if p.get(k):
+                    warnings.append(
+                        f"Surface {rs['index']}: the r^{k} asphere term is not supported"
+                    )
+            terms = {k: p.get(k, 0.0) / unit ** (k - 1) for k in range(3, 9)}
+            even = [terms[k] for k in (4, 6, 8)]
+            odd = [terms[k] for k in (3, 5, 7)]
+            while even and even[-1] == 0:
+                even.pop()
+            while odd and odd[-1] == 0:
+                odd.pop()
+            s.aspheric_coefficients = even
+            s.odd_coefficients = odd
+            s.surface_type = (
+                "odd_asphere" if odd else ("even_asphere" if even else "standard")
+            )
         elif rs["type"] in ("STANDARD", "EVENASPH"):
             s.radius = 1.0 / (rs["curv"] / unit) if rs["curv"] else 0.0
             s.conic = rs["coni"]
@@ -762,13 +791,35 @@ def write_zemax(lens: LensData) -> tuple[str, list[str]]:
                 f"  PARM 1 {(s.focal_length or 0.0) * mm:.10g}",
             ]
         else:
-            aspheric = s.surface_type == "even_asphere" and any(s.aspheric_coefficients)
-            lines.append("  TYPE EVENASPH" if aspheric else "  TYPE STANDARD")
+            odd = s.surface_type == "odd_asphere" and any(s.odd_coefficients)
+            aspheric = s.surface_type in ("even_asphere", "odd_asphere") and any(
+                s.aspheric_coefficients
+            )
+            if odd:
+                lines.append("  TYPE ODDASPH")
+            else:
+                lines.append("  TYPE EVENASPH" if aspheric else "  TYPE STANDARD")
             curv = 1.0 / (s.radius * mm) if s.radius else 0.0
             lines.append(f"  CURV {curv:.15g}")
             if s.conic:
                 lines.append(f"  CONI {s.conic:.10g}")
-            if aspheric:
+            if odd:
+                # Zemax's odd asphere: PARM k is the r^k coefficient, k = 1 .. 8
+                terms = {
+                    order: a
+                    for order, a in zip(range(4, 22, 2), s.aspheric_coefficients)
+                }
+                terms.update(zip(range(3, 21, 2), s.odd_coefficients))
+                if any(a for order, a in terms.items() if order > 8):
+                    warnings.append(
+                        f"Surface {i - 1}: odd asphere terms beyond r^8 dropped"
+                    )
+                for order in range(3, 9):
+                    if terms.get(order):
+                        lines.append(
+                            f"  PARM {order} {terms[order] * (1e-3) ** (order - 1):.10E}"
+                        )
+            elif aspheric:
                 for k, a in enumerate(s.aspheric_coefficients[:9], start=2):
                     lines.append(f"  PARM {k} {a * (1e-3) ** (2 * k - 1):.10E}")
             glass = _glass_for_file(s.material, warnings)
