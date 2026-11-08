@@ -24,6 +24,7 @@ export type Modifier =
 export const SURFACE_PARAMETERS: Record<SurfaceType, string[]> = {
   standard: ["radius", "thickness", "conic", "semi_diameter"],
   even_asphere: ["radius", "thickness", "conic", "semi_diameter"],
+  odd_asphere: ["radius", "thickness", "conic", "semi_diameter"],
   paraxial: ["focal_length", "thickness", "semi_diameter"],
   coordinate_break: ["thickness"],
   component: ["thickness"],
@@ -52,7 +53,8 @@ export function hasParameter(surface: LensSurface, param: string): boolean {
   if (GLASS_PARAMETERS.includes(param)) {
     return (
       (surface.surface_type === "standard" ||
-        surface.surface_type === "even_asphere") &&
+        surface.surface_type === "even_asphere" ||
+        surface.surface_type === "odd_asphere") &&
       parseModelGlass(surface.material) !== null
     );
   }

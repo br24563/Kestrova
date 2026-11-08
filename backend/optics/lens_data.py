@@ -41,7 +41,7 @@ import numpy as np
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from . import raytrace as rt
-from .advanced_surfaces import AsphericSurface, CoordinateBreak
+from .advanced_surfaces import AsphericSurface, CoordinateBreak, OddAsphericSurface
 from .models import (
     AnalysisSettings,
     ApertureStop,
@@ -64,7 +64,12 @@ FAR_OBJECT = 1.0e6
 _PLACEHOLDER_SEMI = 100.0
 
 SurfaceType = Literal[
-    "standard", "even_asphere", "paraxial", "coordinate_break", "component"
+    "standard",
+    "even_asphere",
+    "odd_asphere",
+    "paraxial",
+    "coordinate_break",
+    "component",
 ]
 SolveKind = Literal[
     "marginal_height", "chief_height", "marginal_angle", "chief_angle", "f_number"
@@ -74,6 +79,7 @@ THICKNESS_SOLVES = ("marginal_height", "chief_height")
 RADIUS_SOLVES = ("marginal_angle", "chief_angle", "f_number")
 _ASPHERE_ORDERS = tuple(range(4, 22, 2))  # A4 .. A20
 _ASPHERE_PARAMS = tuple(f"asphere_{k}" for k in _ASPHERE_ORDERS)
+_ODD_ORDERS = tuple(range(3, 21, 2))  # A3 .. A19 of an odd asphere
 _CB_PARAMS = ("decenter_x", "decenter_y", "decenter_z", "tilt_x", "tilt_y", "tilt_z")
 
 #: Parameters each surface type has (all numeric).
@@ -85,6 +91,9 @@ PARAMETERS: dict[str, tuple[str, ...]] = {
     "standard": ("radius", "thickness", "conic", "semi_diameter") + GLASS_PARAMS,
     "even_asphere": ("radius", "thickness", "conic", "semi_diameter")
     + _ASPHERE_PARAMS
+    + GLASS_PARAMS,
+    "odd_asphere": ("radius", "thickness", "conic", "semi_diameter")
+    + tuple(f"asphere_{k}" for k in sorted(_ASPHERE_ORDERS + _ODD_ORDERS))
     + GLASS_PARAMS,
     "paraxial": ("focal_length", "thickness", "semi_diameter"),
     "coordinate_break": ("thickness",) + _CB_PARAMS,
@@ -132,6 +141,10 @@ class LensSurface(BaseModel):
     conic: float = 0.0
     aspheric_coefficients: list[float] = Field(
         default_factory=list, description="A4, A6, ..."
+    )
+    odd_coefficients: list[float] = Field(
+        default_factory=list,
+        description="Odd asphere terms A3, A5, ... (r^3, r^5, ...); odd_asphere only",
     )
     thickness: float = 0.0
     material: Optional[str] = Field(
@@ -358,8 +371,7 @@ def get_parameter(surface: LensSurface, name: str) -> float:
             f"'{name}' is not a parameter of a {surface.surface_type} surface"
         )
     if name.startswith("asphere_"):
-        k = _ASPHERE_ORDERS.index(int(name.split("_")[1]))
-        coeffs = surface.aspheric_coefficients
+        coeffs, k = _coefficient_slot(surface, name)
         return coeffs[k] if k < len(coeffs) else 0.0
     if name in GLASS_PARAMS:
         from .materials import parse_model_glass
@@ -374,13 +386,25 @@ def get_parameter(surface: LensSurface, name: str) -> float:
     return float(value)
 
 
+def _coefficient_slot(surface: LensSurface, name: str) -> tuple[list[float], int]:
+    """The coefficient list an ``asphere_<order>`` parameter lives in and its
+    index there (even orders in aspheric_coefficients, odd in odd_coefficients)."""
+    order = int(name.split("_")[1])
+    if order % 2:
+        return surface.odd_coefficients, _ODD_ORDERS.index(order)
+    return surface.aspheric_coefficients, _ASPHERE_ORDERS.index(order)
+
+
 def _set(surface: LensSurface, name: str, value: float) -> None:
     if name.startswith("asphere_"):
-        k = _ASPHERE_ORDERS.index(int(name.split("_")[1]))
-        coeffs = list(surface.aspheric_coefficients)
+        current, k = _coefficient_slot(surface, name)
+        coeffs = list(current)
         coeffs += [0.0] * (k + 1 - len(coeffs))
         coeffs[k] = float(value)
-        surface.aspheric_coefficients = coeffs
+        if int(name.split("_")[1]) % 2:
+            surface.odd_coefficients = coeffs
+        else:
+            surface.aspheric_coefficients = coeffs
     elif name in GLASS_PARAMS:
         from .materials import model_glass_name, parse_model_glass
 
@@ -533,8 +557,12 @@ def _build(
             labels[i] = cid
             i += 1
             continue
-        # standard / even_asphere
-        aspheric = s.surface_type == "even_asphere" and any(s.aspheric_coefficients)
+        # standard / even_asphere / odd_asphere
+        odd = s.surface_type == "odd_asphere" and any(s.odd_coefficients)
+        aspheric = odd or (
+            s.surface_type in ("even_asphere", "odd_asphere")
+            and any(s.aspheric_coefficients)
+        )
         if s.material == "MIRROR":
             if aspheric:
                 raise ValueError(f"Surface {i}: aspheric mirrors are not supported yet")
@@ -625,7 +653,20 @@ def _build(
         cid = _unique(cid_base, used)
         semi_s = semi_of(i)
         owner[i] = len(comps)
-        if s.conic != 0 or aspheric:
+        if odd:
+            comps.append(
+                OddAsphericSurface(
+                    id=cid,
+                    position=zs[i],
+                    radius=s.radius,
+                    conic=s.conic,
+                    aspheric_coeffs=list(s.aspheric_coefficients),
+                    odd_coeffs=[0.0] + list(s.odd_coefficients),  # no r^1 term
+                    aperture_diameter=2 * required_semi(i),
+                    material=s.material or "air",
+                )
+            )
+        elif s.conic != 0 or aspheric:
             comps.append(
                 AsphericSurface(
                     id=cid,
@@ -980,6 +1021,25 @@ def from_system(system: OpticalSystem) -> LensData:
                 )
             )
             zs += [c.position, c.position + direction * c.thickness]
+        elif isinstance(c, OddAsphericSurface):
+            medium = (
+                None if (not c.material or c.material.lower() == "air") else c.material
+            )
+            if c.odd_coeffs and c.odd_coeffs[0] != 0.0:
+                raise ValueError(f"{c.id}: an r^1 odd-asphere term is not supported")
+            rows.append(
+                LensSurface(
+                    label=c.id,
+                    surface_type="odd_asphere",
+                    radius=c.radius,
+                    conic=c.conic,
+                    aspheric_coefficients=list(c.aspheric_coeffs),
+                    odd_coefficients=list(c.odd_coeffs[1:]),
+                    material=medium,
+                    semi_diameter=c.aperture_diameter / 2,
+                )
+            )
+            zs.append(c.position)
         elif isinstance(c, AsphericSurface):
             medium = (
                 None if (not c.material or c.material.lower() == "air") else c.material

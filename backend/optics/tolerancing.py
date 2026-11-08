@@ -166,7 +166,11 @@ def _check(lens: LensData, t: Tolerance) -> None:
     if last >= n:
         raise ValueError(f"{t.label}: the lens has {n} surfaces")
     s = lens.surfaces[t.surface]
-    if t.kind in ("DLF", "DLR") and s.surface_type not in ("standard", "even_asphere"):
+    if t.kind in ("DLF", "DLR") and s.surface_type not in (
+        "standard",
+        "even_asphere",
+        "odd_asphere",
+    ):
         raise ValueError(f"{t.label}: not a refracting or reflecting surface")
     if t.kind in ("DLN", "DLV") and (s.material is None or s.material == "MIRROR"):
         raise ValueError(f"{t.label}: no glass after surface {t.surface}")

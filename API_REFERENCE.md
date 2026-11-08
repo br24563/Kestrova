@@ -240,8 +240,8 @@ editable starting points, not a standard.
 
 Multipart upload of a Code V sequence file (`.seq`) or a Zemax text lens
 file (`.zmx`) → `{"lens", "warnings"}`. The lens keeps the surfaces
-(standard, even asphere, Zemax paraxial, coordinate breaks), catalog and
-model glasses (Code V `nd:vd`, Zemax `___BLANK`), stop, clear apertures,
+(standard, even asphere, Zemax odd asphere and paraxial, coordinate
+breaks), catalog and model glasses (Code V `nd:vd`, Zemax `___BLANK`), stop, clear apertures,
 entrance pupil, wavelengths with weights, the field table with weights and
 vignetting, and Code V's image solve (`PIM`) and variables (`CCY`/`THC`).
 `warnings` lists commands or keywords the file contains that were not
@@ -252,7 +252,19 @@ interpreted.
 `{ "lens", "format": "seq" | "zmx" }` → `{"filename", "content",
 "warnings"}`. Solves and pickups the format cannot express here are written
 as their current values and listed in `warnings`. Code V has no paraxial
-(ideal lens) surface, so such a lens can only be written as `.zmx`.
+(ideal lens) surface, so such a lens can only be written as `.zmx`. Odd
+asphere terms are written to Zemax (`ODDASPH`, up to r^8) and dropped
+from Code V files, with a warning either way.
+
+#### GET /api/lens/samples
+
+The reference lenses (published designs the engine is validated against):
+a list of `{"id", "name", "description", "citation", "url", "notes"}`.
+
+#### GET /api/lens/samples/{id}
+
+One reference lens: the same fields plus `lens` (the prescription). 404
+for an unknown id.
 
 #### POST /api/lens/constraints
 

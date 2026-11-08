@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (validation)
+- Reference lenses with their published results: a Geiser triplet and a
+  US 7,535,658 phone lens (checked against ray-optics' first-order data,
+  paraxial rays, Seidel sums and exact real rays), a Smith double Gauss, a
+  Kidger Petzval and the Hubble Space Telescope (`optics/reference_lenses.py`,
+  `tests/test_reference_lenses.py`). In the lens editor, "Samples" opens
+  any of them with its source (`/api/lens/samples`).
+- Odd aspheres (r^3 .. r^19 on top of the even terms) in the lens editor,
+  the optimizer and tolerancing; read and written as Zemax `ODDASPH`.
+
 ## [0.4.0] - 2026-11-07
 
 ### Added (file interchange)

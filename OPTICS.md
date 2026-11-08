@@ -129,6 +129,31 @@ the pupil edge at the axial and full fields for all wavelengths. A lens
 converts to the component model below (and back) without changing the
 optics.
 
+Surface types: standard (sphere or conic), even asphere (r^4 .. r^20),
+odd asphere (the even terms plus r^3, r^5, .. r^19 on the same conic),
+paraxial (ideal lens), coordinate break and engine component. Asphere
+terms are the parameters `asphere_<order>` (for variables and pickups).
+
+### Reference lenses
+
+`optics/reference_lenses.py` holds published designs with the results
+their sources report, and `tests/test_reference_lenses.py` checks the
+engine against them. The app offers them as samples.
+
+| Lens | Source | Checked |
+|---|---|---|
+| Geiser triplet, f/4, 50 mm | Sasian, OPTI 517, via ray-optics | EFL, BFL, FFL, pupils, paraxial ray heights, Seidel S-I..S-V on every surface, wavefront coefficients: all to the printed digits |
+| Cell-phone lens, f/3.5 (US 7,535,658) | ray-optics | First-order data; three exact rays (marginal, skew, off-axis chief) through 8 odd/even aspheres: every intersection, sag and direction cosine to the printed digits |
+| Double Gauss, f/1.7 (US 2,784,643) | Smith, *Modern Lens Design*, via COMSOL | EFL 100.2 mm within 0.05 %; axial minimum-RMS focus 0.186 mm vs. COMSOL's 0.180 mm |
+| Field-flattened Petzval, f/2.4 | Kidger, *Fundamental Optical Design*, via COMSOL | EFL within 0.8 % (glasses substituted) |
+| Hubble Space Telescope | COMSOL model; STScI | EFL 57.6 m and f/24 within 0.01 %; spherical aberration and coma cancel between the mirrors |
+
+The ray-optics comparisons are against an independent program tracing
+the same prescription, so they test the engine to the last printed digit.
+The designers' focal lengths are for their original glasses, which the
+tabulated copies replace with catalogue equivalents, so they hold to about
+1 %.
+
 ### Diffraction MTF
 
 The MTF is the modulus of the optical transfer function, the normalised

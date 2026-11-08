@@ -114,6 +114,12 @@ engine's own formulas:
   Petzval sum from surface curvatures, third-order aberrations against
   real rays at small aperture
 - Snell's law and total internal reflection in the exact tracer
+- Published lenses (`test_reference_lenses.py`): first-order data, paraxial
+  rays, surface-by-surface Seidel sums and exact real rays through odd and
+  even aspheres against ray-optics' output for the same prescriptions;
+  designers' focal lengths; COMSOL's best focus; the Hubble Space
+  Telescope's published focal length and its aplanatism (see OPTICS.md,
+  Reference lenses)
 
 ### Performance Tests
 

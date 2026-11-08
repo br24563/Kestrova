@@ -1079,3 +1079,39 @@ export async function exportLensFile(
     format === "seq" ? "write the Code V file" : "write the Zemax file",
   );
 }
+
+/** A published reference lens offered as a sample (no prescription). */
+export interface LensSample {
+  id: string;
+  name: string;
+  description: string;
+  citation: string;
+  url: string;
+  notes: string;
+}
+
+/** The reference lenses the engine is validated against. */
+export async function listLensSamples(): Promise<LensSample[]> {
+  const response = await fetch(`${API_BASE}/lens/samples`);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to list the sample lenses: ${await errorDetail(response)}`,
+    );
+  }
+  return response.json();
+}
+
+/** One reference lens with its prescription. */
+export async function getLensSample(
+  id: string,
+): Promise<LensSample & { lens: LensData }> {
+  const response = await fetch(
+    `${API_BASE}/lens/samples/${encodeURIComponent(id)}`,
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Failed to open the sample lens: ${await errorDetail(response)}`,
+    );
+  }
+  return response.json();
+}
