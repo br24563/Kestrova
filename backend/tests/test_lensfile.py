@@ -276,7 +276,7 @@ class TestErrors:
         with pytest.raises(ValueError, match="not in the material catalog"):
             LF.read_codev("SO 0 1e20\nSTO 10 1 UNOBTAINIUM\nSI 0 0\n")
         with pytest.raises(ValueError, match="not supported"):
-            LF.read_zemax("SURF 0\nDISZ INFINITY\nSURF 1\nTYPE TOROIDAL\nSURF 2\n")
+            LF.read_zemax("SURF 0\nDISZ INFINITY\nSURF 1\nTYPE SZERNSAG\nSURF 2\n")
         with pytest.raises(ValueError, match="Unsupported"):
             LF.read_lens_file("x", "lens.txt")
 

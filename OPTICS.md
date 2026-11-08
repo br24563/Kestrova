@@ -129,10 +129,32 @@ the pupil edge at the axial and full fields for all wavelengths. A lens
 converts to the component model below (and back) without changing the
 optics.
 
-Surface types: standard (sphere or conic), even asphere (r^4 .. r^20),
-odd asphere (the even terms plus r^3, r^5, .. r^19 on the same conic),
-paraxial (ideal lens), coordinate break and engine component. Asphere
-terms are the parameters `asphere_<order>` (for variables and pickups).
+Surface types (each on a base conic, `radius` 0 = flat, unless noted):
+
+| Type | Sag beyond the conic | Parameters |
+|---|---|---|
+| standard | none | |
+| even asphere | A4 r^4 .. A20 r^20 | `asphere_4` .. `asphere_20` |
+| odd asphere | the even terms plus A3 r^3 .. A19 r^19 | `asphere_3` .. `asphere_19` |
+| Q asphere | Forbes Qbfs (best-fit sphere) or Qcon terms over `norm_radius` | `q_0` .. `q_12` |
+| toroid | the y-z conic swept about an axis parallel to y at `radius_x` (0 = cylinder) | `radius_x` |
+| Zernike | standard (Noll) Zernike terms over `norm_radius` | `z_1` .. `z_37` |
+| XY polynomial | C_ij (x/R)^i (y/R)^j, 1 <= i + j <= 10, R = `norm_radius` | `x<i>y<j>` |
+| diffractive | phase c_1 r^2 + c_2 r^4 + .. (radians) in `diffraction_order` | `phase_2` .. `phase_20` |
+
+plus paraxial (ideal lens), coordinate break and engine component. All the
+named terms can be variables or pickups. A diffractive surface adds
+(m lambda / 2 pi) grad(phi) to the tangential component of n d at its
+(curved) base surface, so its paraxial power -c_1 m lambda / pi adds to the
+base surface's refraction. Paraxial data of a surface without rotational
+symmetry (toroid, Zernike, XY polynomial) use its y-z section; Seidel sums
+list such surfaces as unsupported.
+
+Every surface can also carry a central circular obscuration and a
+rectangular or elliptical clear aperture (half-widths in x and y) besides
+its circular semi-diameter; rays outside are vignetted in every analysis.
+The aperture stop stays circular. A chief ray stopped by an obscuration
+still serves as the wavefront reference.
 
 ### Reference lenses
 
@@ -147,6 +169,17 @@ engine against them. The app offers them as samples.
 | Double Gauss, f/1.7 (US 2,784,643) | Smith, *Modern Lens Design*, via COMSOL | EFL 100.2 mm within 0.05 %; axial minimum-RMS focus 0.186 mm vs. COMSOL's 0.180 mm |
 | Field-flattened Petzval, f/2.4 | Kidger, *Fundamental Optical Design*, via COMSOL | EFL within 0.8 % (glasses substituted) |
 | Hubble Space Telescope | COMSOL model; STScI | EFL 57.6 m and f/24 within 0.01 %; spherical aberration and coma cancel between the mirrors |
+
+The surface types and apertures are checked against closed-form results
+in `tests/test_surface_types.py`: the Forbes Q polynomials against Forbes'
+recurrence (Opt. Express 18, 19700 (2010)), Zernike terms against their XY
+polynomial expansions, a tilted XY plane against Snell's law at a wedge,
+the diffractive surface against the grating equation and its Abbe number
+(-3.45), and the MTF of an obscured perfect lens against O'Neill's
+annular-pupil MTF. With an obscuration, Hopkins direct integration
+converges slowly (about 0.4 % at the default sampling) because the
+pupil's hole is a discontinuity inside its quadrature; the FFT method is
+unaffected.
 
 The ray-optics comparisons are against an independent program tracing
 the same prescription, so they test the engine to the last printed digit.

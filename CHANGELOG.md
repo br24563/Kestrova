@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (surface types)
+- Lens editor surface types: Q asphere (Forbes Qbfs / Qcon), toroid and
+  cylinder, Zernike sag on a base conic, XY polynomial freeform and
+  diffractive (radial phase on a curved base), each with its terms as
+  variables. A "Surface details" panel under the table edits the terms
+  (also the even and odd asphere coefficients, which had no editor), the
+  normalisation radius and the clear aperture.
+- Central obscurations and rectangular / elliptical clear apertures on any
+  surface, in the NumPy and compiled tracers; a chief ray behind an
+  obscuration still serves as the wavefront reference.
+- Zemax toroids (`TOROIDAL`) read and written.
+
+### Fixed
+- The Forbes Qbfs basis was built with a quadrature that dropped its end
+  points, leaving the polynomials about 3e-4 off orthonormal; it now
+  matches Forbes' recurrence to round-off.
+- Edge-thickness constraints included only even aspheric terms; they now
+  use each surface's full sag (odd asphere terms were left out before).
+
 ### Added (validation)
 - Reference lenses with their published results: a Geiser triplet and a
   US 7,535,658 phone lens (checked against ray-optics' first-order data,

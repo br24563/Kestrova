@@ -67,10 +67,13 @@ class QAsphericSurface(OpticalComponentBase):
 
 
 class ZernikeSurface(OpticalComponentBase):
-    """Zernike sag surface (standard/Noll-ordered coefficients over
-    ``norm_radius``)."""
+    """Zernike sag surface: a base conic (``radius``, 0 = flat, and
+    ``conic``) plus Noll-ordered standard Zernike terms over
+    ``norm_radius``."""
 
     type: Literal["zernike"] = "zernike"
+    radius: float = 0.0
+    conic: float = 0.0
     zernike_coeffs: list[float] = Field(default_factory=list)
     norm_radius: float = 0.025
     aperture_diameter: float = 0.025
@@ -80,9 +83,11 @@ class ZernikeSurface(OpticalComponentBase):
 
 class DiffractiveOpticalElement(OpticalComponentBase):
     """Diffractive surface: phase phi(r) = sum_i c_i r^(2i+2) (radians) in
-    the given diffraction order."""
+    the given diffraction order, on a base conic (``radius``, 0 = flat)."""
 
     type: Literal["doe"] = "doe"
+    radius: float = 0.0
+    conic: float = 0.0
     doe_type: str = "kinoform"
     design_wavelength: float = 550e-9
     diffraction_order: int = 1
@@ -99,6 +104,20 @@ class ToricSurface(OpticalComponentBase):
     radius_tangential: float = 0.1
     radius_sagittal: float = 0.1
     conic: float = 0.0
+    aperture_diameter: float = 0.025
+    material: str = "N-BK7"
+    thickness: float = 0.0
+
+
+class XYPolynomialSurface(OpticalComponentBase):
+    """XY polynomial freeform: a base conic plus sum C_ij (x/R)^i (y/R)^j
+    over ``norm_radius`` R. ``terms`` lists [i, j, C_ij] (C in metres)."""
+
+    type: Literal["xy_polynomial"] = "xy_polynomial"
+    radius: float = 0.0
+    conic: float = 0.0
+    terms: list[tuple[int, int, float]] = Field(default_factory=list)
+    norm_radius: float = 1.0
     aperture_diameter: float = 0.025
     material: str = "N-BK7"
     thickness: float = 0.0

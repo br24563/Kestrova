@@ -8,6 +8,8 @@ so that both ``models.py`` and ``advanced_surfaces.py`` can import
 All length values are in meters (SI base unit).
 """
 
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -22,6 +24,23 @@ class OpticalComponentBase(BaseModel):
 
     id: str = Field(..., description="Unique identifier for this component")
     position: float = Field(..., description="Position along optical axis (meters)")
+    # Clear-aperture shape beyond the component's circular aperture (applied
+    # to every surface of the component when rays are clipped).
+    obscuration_diameter: Optional[float] = Field(
+        default=None, description="Central circular obscuration diameter (m)"
+    )
+    aperture_shape: Literal["circular", "rectangular", "elliptical"] = Field(
+        default="circular",
+        description="rectangular / elliptical use aperture_half_x and aperture_half_y",
+    )
+    aperture_half_x: Optional[float] = Field(
+        default=None,
+        description="Half-width in x of a rectangular/elliptical aperture (m)",
+    )
+    aperture_half_y: Optional[float] = Field(
+        default=None,
+        description="Half-width in y of a rectangular/elliptical aperture (m)",
+    )
 
     @field_validator("id")
     @classmethod

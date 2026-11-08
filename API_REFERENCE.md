@@ -240,8 +240,8 @@ editable starting points, not a standard.
 
 Multipart upload of a Code V sequence file (`.seq`) or a Zemax text lens
 file (`.zmx`) → `{"lens", "warnings"}`. The lens keeps the surfaces
-(standard, even asphere, Zemax odd asphere and paraxial, coordinate
-breaks), catalog and model glasses (Code V `nd:vd`, Zemax `___BLANK`), stop, clear apertures,
+(standard, even asphere, Zemax odd asphere, toroid and paraxial,
+coordinate breaks), catalog and model glasses (Code V `nd:vd`, Zemax `___BLANK`), stop, clear apertures,
 entrance pupil, wavelengths with weights, the field table with weights and
 vignetting, and Code V's image solve (`PIM`) and variables (`CCY`/`THC`).
 `warnings` lists commands or keywords the file contains that were not
@@ -254,7 +254,11 @@ interpreted.
 as their current values and listed in `warnings`. Code V has no paraxial
 (ideal lens) surface, so such a lens can only be written as `.zmx`. Odd
 asphere terms are written to Zemax (`ODDASPH`, up to r^8) and dropped
-from Code V files, with a warning either way.
+from Code V files, with a warning either way. Toroids are written to Zemax
+(`TOROIDAL`). Q, Zernike, XY polynomial and diffractive terms (and Code V
+toroids), obscurations and non-circular apertures are not written yet: the
+surface is written as its base conic and each omission is listed in
+`warnings`.
 
 #### GET /api/lens/samples
 

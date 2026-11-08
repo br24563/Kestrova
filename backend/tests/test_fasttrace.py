@@ -57,12 +57,34 @@ def tilted():
                   aperture_diameter=0.03, material="N-SF5")]})
 
 
+def obscured():
+    s = cassegrain()
+    comps = [c.model_copy(update={"obscuration_diameter": 0.04}) if c.id == "M1" else c
+             for c in s.components]
+    return s.model_copy(update={"components": comps})
+
+
+def shaped_apertures():
+    s = six_element()
+    shapes = {"L1": ("rectangular", 0.004, 0.006), "L4": ("elliptical", 0.008, 0.005)}
+    comps = []
+    for c in s.components:
+        if c.id in shapes:
+            kind, hx, hy = shapes[c.id]
+            c = c.model_copy(update={"aperture_shape": kind, "aperture_half_x": hx,
+                                     "aperture_half_y": hy})
+        comps.append(c)
+    return s.model_copy(update={"components": comps})
+
+
 SYSTEMS = {
     "thick": lambda: get_preset_by_id("thick_lens")["system"],
     "parabola": lambda: get_preset_by_id("parabolic_mirror")["system"],
     "six_element": six_element,
     "cassegrain": cassegrain,
     "tilted": tilted,
+    "obscured": obscured,
+    "shaped_apertures": shaped_apertures,
 }
 
 
@@ -146,11 +168,11 @@ def test_kernel_source_matches_numpy_in_python(name, clip, monkeypatch):
     rng = np.random.default_rng(11)
     px, py = rng.uniform(-1.3, 1.3, 150), rng.uniform(-1.3, 1.3, 150)
     p0, d0, _ = rt.aim_rays(seq, fo, 0.0, 0.8, px, py)
-    kind, c, k, origin, rot, ident, semi, n1, n2 = ft._pack(seq)
+    kind, c, k, origin, rot, ident, semi, ap, n1, n2 = ft._pack(seq)
     with np.errstate(all="ignore"):
         pts, d, opl, valid, img, sopl = ft._kernel_impl(
             np.ascontiguousarray(p0, dtype=float), np.ascontiguousarray(d0, dtype=float),
-            kind, c, k, origin, rot, ident, semi, n1, n2,
+            kind, c, k, origin, rot, ident, semi, ap, n1, n2,
             float(seq.surfaces[0].n_before),
             np.ascontiguousarray(seq.image_origin, dtype=float),
             np.ascontiguousarray(seq.image_rotation, dtype=float), clip,

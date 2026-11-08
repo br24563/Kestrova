@@ -368,6 +368,30 @@ def read_codev(text: str) -> LensFileResult:
     )
 
 
+_TYPE_NAMES = {
+    "q_asphere": "Q-type asphere",
+    "toroid": "toroid",
+    "zernike": "Zernike",
+    "xy_polynomial": "XY polynomial",
+    "diffractive": "diffractive",
+}
+
+
+def _unwritten(i: int, s, fmt: str, supported: tuple, warnings: list) -> None:
+    """Warn about a surface type or clear aperture the format does not get:
+    the surface is written as its base conic and a circular aperture."""
+    if s.surface_type in _TYPE_NAMES and s.surface_type not in supported:
+        warnings.append(
+            f"Surface {i}: {_TYPE_NAMES[s.surface_type]} terms are not written to "
+            f"{fmt} files (written as its base conic)"
+        )
+    if s.obscuration_semi or s.aperture_shape != "circular":
+        warnings.append(
+            f"Surface {i}: the obscuration / {s.aperture_shape} aperture is not "
+            f"written to {fmt} files"
+        )
+
+
 def write_codev(lens: LensData) -> tuple[str, list[str]]:
     """A Code V sequence file of the lens (millimetres) and the warnings."""
     warnings: list[str] = []
@@ -442,6 +466,7 @@ def write_codev(lens: LensData) -> tuple[str, list[str]]:
                 if getattr(s, attr):
                     lines.append(f"  {key} {math.degrees(getattr(s, attr)):.8f}")
             continue
+        _unwritten(i, s, "Code V", (), warnings)
         glass = _glass_for_file(s.material, warnings)
         cmd = "STO" if s.is_stop else "S"
         g = "" if glass in (None, "MIRROR") else " " + _codev_glass_name(glass)
@@ -634,6 +659,17 @@ def read_zemax(text: str) -> LensFileResult:
         elif rs["type"] == "PARAXIAL":
             s.surface_type = "paraxial"
             s.focal_length = rs["parm"].get(1, 0.0) * unit
+        elif rs["type"] == "TOROIDAL":
+            s.surface_type = "toroid"
+            s.radius = 1.0 / (rs["curv"] / unit) if rs["curv"] else 0.0
+            s.conic = rs["coni"]
+            s.material = rs["glass"]
+            p = rs["parm"]
+            s.radius_x = p.get(1, 0.0) * unit
+            if any(v for k, v in p.items() if k >= 2):
+                warnings.append(
+                    f"Surface {rs['index']}: toroid aspheric terms are not supported"
+                )
         elif rs["type"] == "ODDASPH":
             s.radius = 1.0 / (rs["curv"] / unit) if rs["curv"] else 0.0
             s.conic = rs["coni"]
@@ -713,6 +749,20 @@ def read_zemax(text: str) -> LensFileResult:
     )
 
 
+def _write_zemax_glass(material, lines: list, warnings: list) -> None:
+    glass = _glass_for_file(material, warnings)
+    if glass == "MIRROR":
+        lines.append("  GLAS MIRROR 0 0 1.5 40 0 0 0 0 0 0")
+    elif glass is not None:
+        model = parse_model_glass(glass)
+        if model is not None:
+            lines.append(
+                f"  GLAS ___BLANK 1 0 {model[0]:.6f} {model[1]:.4f} 0 0 0 0 0 0"
+            )
+        else:
+            lines.append(f"  GLAS {glass} 0 0 1.5 40 0 0 0 0 0 0")
+
+
 def write_zemax(lens: LensData) -> tuple[str, list[str]]:
     """A Zemax text lens file of the lens (millimetres) and the warnings."""
     warnings: list[str] = []
@@ -790,7 +840,19 @@ def write_zemax(lens: LensData) -> tuple[str, list[str]]:
                 "  TYPE PARAXIAL",
                 f"  PARM 1 {(s.focal_length or 0.0) * mm:.10g}",
             ]
+        elif s.surface_type == "toroid":
+            # Zemax's toroid: the y-z curve (CURV, CONI) swept about an axis
+            # parallel to y at the radius of rotation (PARM 1, 0 = flat in x)
+            _unwritten(i - 1, s, "Zemax", ("toroid",), warnings)
+            lines.append("  TYPE TOROIDAL")
+            curv = 1.0 / (s.radius * mm) if s.radius else 0.0
+            lines.append(f"  CURV {curv:.15g}")
+            if s.conic:
+                lines.append(f"  CONI {s.conic:.10g}")
+            lines.append(f"  PARM 1 {s.radius_x * mm:.15g}")
+            _write_zemax_glass(s.material, lines, warnings)
         else:
+            _unwritten(i - 1, s, "Zemax", ("toroid",), warnings)
             odd = s.surface_type == "odd_asphere" and any(s.odd_coefficients)
             aspheric = s.surface_type in ("even_asphere", "odd_asphere") and any(
                 s.aspheric_coefficients
@@ -822,17 +884,7 @@ def write_zemax(lens: LensData) -> tuple[str, list[str]]:
             elif aspheric:
                 for k, a in enumerate(s.aspheric_coefficients[:9], start=2):
                     lines.append(f"  PARM {k} {a * (1e-3) ** (2 * k - 1):.10E}")
-            glass = _glass_for_file(s.material, warnings)
-            if glass == "MIRROR":
-                lines.append("  GLAS MIRROR 0 0 1.5 40 0 0 0 0 0 0")
-            elif glass is not None:
-                model = parse_model_glass(glass)
-                if model is not None:
-                    lines.append(
-                        f"  GLAS ___BLANK 1 0 {model[0]:.6f} {model[1]:.4f} 0 0 0 0 0 0"
-                    )
-                else:
-                    lines.append(f"  GLAS {glass} 0 0 1.5 40 0 0 0 0 0 0")
+            _write_zemax_glass(s.material, lines, warnings)
         if src.semi_diameter is not None and not src.semi_diameter_auto:
             lines.append(f"  DIAM {src.semi_diameter * mm:.8f}")
         lines.append(f"  DISZ {s.thickness * mm:.8f}")

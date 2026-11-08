@@ -173,6 +173,7 @@ from .advanced_surfaces import (
     ZernikeSurface,
     DiffractiveOpticalElement,
     ToricSurface,
+    XYPolynomialSurface,
     CoordinateBreak,
 )
 
@@ -189,6 +190,7 @@ OpticalComponent = Annotated[
         ZernikeSurface,
         DiffractiveOpticalElement,
         ToricSurface,
+        XYPolynomialSurface,
         CoordinateBreak,
     ],
     Field(discriminator="type"),

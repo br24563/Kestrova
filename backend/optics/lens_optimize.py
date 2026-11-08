@@ -31,11 +31,13 @@ import numpy as np
 from . import raytrace as rt
 from .lens_data import (
     GLASS_PARAMS,
+    SHAPED_TYPES,
     Constraint,
     LensData,
     _merit_system,
     _set,
     get_parameter,
+    surface_shape,
     resolve,
     to_system,
     variables,
@@ -48,20 +50,14 @@ from .models import OpticalSystem
 
 
 def _surface_sag(surface, h: float) -> float:
-    """Sag at height h of a standard or even-asphere surface (m)."""
-    if surface.surface_type not in ("standard", "even_asphere", "odd_asphere"):
+    """Sag at height h along y of a surface with a shape (m)."""
+    if surface.surface_type not in SHAPED_TYPES:
         raise ValueError(
-            f"Edge thickness needs standard surfaces, not {surface.surface_type}"
+            f"Edge thickness needs surfaces with a shape, not {surface.surface_type}"
         )
-    sag = 0.0
-    if surface.radius:
-        c = 1.0 / surface.radius
-        arg = 1.0 - (1.0 + surface.conic) * c * c * h * h
-        if arg < 0:
-            raise ValueError("The semi-diameter exceeds the conic's extent")
-        sag = c * h * h / (1.0 + math.sqrt(arg))
-    for k, a in enumerate(surface.aspheric_coefficients):
-        sag += a * h ** (2 * k + 4)
+    sag = float(surface_shape(surface).sag(np.array(0.0), np.array(h)))
+    if not math.isfinite(sag):
+        raise ValueError("The semi-diameter exceeds the conic's extent")
     return sag
 
 

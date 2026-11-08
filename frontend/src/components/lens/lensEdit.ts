@@ -25,10 +25,34 @@ export const SURFACE_PARAMETERS: Record<SurfaceType, string[]> = {
   standard: ["radius", "thickness", "conic", "semi_diameter"],
   even_asphere: ["radius", "thickness", "conic", "semi_diameter"],
   odd_asphere: ["radius", "thickness", "conic", "semi_diameter"],
+  q_asphere: ["radius", "thickness", "conic", "semi_diameter"],
+  toroid: ["radius", "thickness", "conic", "semi_diameter"],
+  zernike: ["radius", "thickness", "conic", "semi_diameter"],
+  xy_polynomial: ["radius", "thickness", "conic", "semi_diameter"],
+  diffractive: ["radius", "thickness", "conic", "semi_diameter"],
   paraxial: ["focal_length", "thickness", "semi_diameter"],
   coordinate_break: ["thickness"],
   component: ["thickness"],
 };
+
+/** Surface types with a base conic, glass after them and a clear aperture. */
+export const SHAPED_TYPES: SurfaceType[] = [
+  "standard",
+  "even_asphere",
+  "odd_asphere",
+  "q_asphere",
+  "toroid",
+  "zernike",
+  "xy_polynomial",
+  "diffractive",
+];
+
+/** Types whose polynomial terms are normalised to norm_radius. */
+export const NORMALISED_TYPES: SurfaceType[] = [
+  "q_asphere",
+  "zernike",
+  "xy_polynomial",
+];
 
 /** Model-glass parameters (a surface whose material is "MODEL:<nd>:<vd>"). */
 export const GLASS_PARAMETERS = ["glass_nd", "glass_vd"];
@@ -52,9 +76,7 @@ export function modelGlassName(nd: number, vd: number): string {
 export function hasParameter(surface: LensSurface, param: string): boolean {
   if (GLASS_PARAMETERS.includes(param)) {
     return (
-      (surface.surface_type === "standard" ||
-        surface.surface_type === "even_asphere" ||
-        surface.surface_type === "odd_asphere") &&
+      SHAPED_TYPES.includes(surface.surface_type) &&
       parseModelGlass(surface.material) !== null
     );
   }

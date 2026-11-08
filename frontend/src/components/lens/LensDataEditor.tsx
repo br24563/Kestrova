@@ -54,13 +54,16 @@ import {
   GLASS_PARAMETERS,
   hasParameter,
   insertSurface,
+  NORMALISED_TYPES,
   parseModelGlass,
   setMaterial,
   setModifier,
   setStop,
+  SHAPED_TYPES,
   SURFACE_PARAMETERS,
   type Modifier,
 } from "./lensEdit";
+import { SurfaceDetails } from "./SurfaceDetails";
 import { ConstraintsEditor } from "./ConstraintsEditor";
 import { OptimizeReport } from "./OptimizeReport";
 import { LensTolerancePanel } from "./LensTolerancePanel";
@@ -105,12 +108,19 @@ const SOLVE_LABELS: Record<SolveKind, string> = {
   f_number: "F-number",
 };
 
-const EDITABLE_TYPES: SurfaceType[] = [
-  "standard",
-  "even_asphere",
-  "odd_asphere",
-  "paraxial",
-];
+const EDITABLE_TYPES: SurfaceType[] = [...SHAPED_TYPES, "paraxial"];
+
+const TYPE_LABELS: Partial<Record<SurfaceType, string>> = {
+  standard: "Standard",
+  even_asphere: "Even asphere",
+  odd_asphere: "Odd asphere",
+  q_asphere: "Q asphere",
+  toroid: "Toroid",
+  zernike: "Zernike",
+  xy_polynomial: "XY polynomial",
+  diffractive: "Diffractive",
+  paraxial: "Paraxial",
+};
 
 /** Parse a cell; "" and "inf"/"infinity" give null (flat radius, automatic aperture, ...). */
 function parseNumber(text: string): number | null | undefined {
@@ -453,6 +463,10 @@ export function LensDataEditor({
     const s = lens.surfaces[row];
     let next: LensSurface = { ...s, surface_type: type };
     if (type === "paraxial" && !next.focal_length) next.focal_length = 0.1;
+    if (NORMALISED_TYPES.includes(type) && !next.norm_radius)
+      next.norm_radius = s.semi_diameter ?? 0.01;
+    if (type === "toroid" && next.radius_x === undefined)
+      next.radius_x = s.radius;
     // drop flags on parameters the new type does not have
     for (const p of new Set([
       ...s.variables,
@@ -821,10 +835,11 @@ export function LensDataEditor({
                         }
                         className="bg-transparent text-xs py-0.5"
                       >
-                        <option value="standard">Standard</option>
-                        <option value="even_asphere">Even asphere</option>
-                        <option value="odd_asphere">Odd asphere</option>
-                        <option value="paraxial">Paraxial</option>
+                        {EDITABLE_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {TYPE_LABELS[t]}
+                          </option>
+                        ))}
                       </select>
                     ) : (
                       <span
@@ -995,6 +1010,15 @@ export function LensDataEditor({
           </tbody>
         </table>
       </div>
+
+      {selectedRow !== null && selectedRow < lens.surfaces.length && (
+        <SurfaceDetails
+          surface={lens.surfaces[selectedRow]}
+          row={selectedRow}
+          displayUnit={displayUnit}
+          onChange={(patch) => updateSurface(selectedRow, patch)}
+        />
+      )}
 
       {flagCell &&
         flagCell.row < lens.surfaces.length &&
