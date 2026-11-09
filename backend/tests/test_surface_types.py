@@ -519,16 +519,54 @@ class TestApertures:
         # the cutoff is 2 NA / lambda with NA the sine of the marginal ray angle
         cutoff = 2 * math.sin(math.atan(0.01 / 0.1)) / 550e-9
         if method == "hopkins":
-            # the pupil's hole is a discontinuity inside the Gauss quadrature
-            # domain, so direct integration converges slowly (about 0.4 %)
-            r = ma.hopkins_otf(system, v * cutoff, 550e-9, quadrature=96)
-            tol = 5e-3
+            # direct integration splits its quadrature at the hole's edges
+            r = ma.hopkins_otf(system, v * cutoff, 550e-9)
+            tol = 1e-3
         else:
             r = ma._fft_otf(system, v * cutoff, 550e-9, 0.0, 0.0, 0.0, None, 256)
             tol = 1e-2
         expected = [oneill_mtf(x, e) for x in v]
         np.testing.assert_allclose(np.abs(r["tangential"]), expected, atol=tol)
         np.testing.assert_allclose(np.abs(r["sagittal"]), expected, atol=tol)
+
+    @pytest.mark.parametrize("method", ["hopkins", "fft"])
+    def test_square_aperture_mtf(self, method):
+        # a square baffle of half-width a (in pupil radii) in front of a
+        # perfect lens: the pupil overlap along a side falls as 1 - v / a
+        a = 0.6
+        lens = LensData(
+            surfaces=[
+                LensSurface(
+                    label="Baffle",
+                    thickness=0.001,
+                    semi_diameter=0.0101,
+                    aperture_shape="rectangular",
+                    aperture_half_x=0.01 * a,
+                    aperture_half_y=0.01 * a,
+                ),
+                LensSurface(
+                    surface_type="paraxial",
+                    focal_length=0.1,
+                    thickness=0.1,
+                    semi_diameter=0.01,
+                    is_stop=True,
+                ),
+            ],
+            object_distance=None,
+            wavelengths=[550e-9],
+            analysis_settings=AnalysisSettings(wavelength=550e-9),
+        )
+        system = to_system(lens)
+        v = np.linspace(0.0, 0.55, 8)
+        cutoff = 2 * math.sin(math.atan(0.01 / 0.1)) / 550e-9
+        if method == "hopkins":
+            r = ma.hopkins_otf(system, v * cutoff, 550e-9)
+            tol = 1e-3
+        else:
+            r = ma._fft_otf(system, v * cutoff, 550e-9, 0.0, 0.0, 0.0, None, 256)
+            tol = 1e-2
+        np.testing.assert_allclose(np.abs(r["tangential"]), 1 - v / a, atol=tol)
+        np.testing.assert_allclose(np.abs(r["sagittal"]), 1 - v / a, atol=tol)
 
     def test_validation(self):
         with pytest.raises(ValueError, match="half"):
@@ -656,22 +694,173 @@ class TestLensModel:
         s1 = float(surface_shape(lens.surfaces[1]).sag(np.array(0.0), np.array(h)))
         assert edge_thickness(lens, 0) == pytest.approx(0.005 - s0 + s1)
 
-    def test_mirrors_with_new_shapes_are_refused(self):
-        lens = LensData(
-            surfaces=[
-                LensSurface(
-                    surface_type="toroid",
-                    radius=-0.5,
-                    radius_x=-0.6,
-                    material="MIRROR",
-                    is_stop=True,
-                    semi_diameter=0.02,
-                    thickness=-0.25,
-                )
-            ]
+    def test_diffractive_mirrors_are_refused(self):
+        lens = mirror_lens(
+            LensSurface(
+                surface_type="diffractive", radius=-0.5, phase_coefficients=[1e3]
+            )
         )
-        with pytest.raises(ValueError, match="mirrors are not supported"):
+        with pytest.raises(ValueError, match="diffractive mirrors are not supported"):
             to_system(lens)
+
+
+# =============================================================================
+# Shaped mirrors
+# =============================================================================
+
+
+def mirror_lens(surface: LensSurface) -> LensData:
+    """One concave mirror (the stop) with collimated light from -z."""
+    return LensData(
+        surfaces=[
+            surface.model_copy(
+                update=dict(
+                    material="MIRROR", is_stop=True, semi_diameter=0.02, thickness=-0.25
+                )
+            )
+        ],
+        object_distance=None,
+        wavelengths=[550e-9],
+        analysis_settings=AnalysisSettings(wavelength=550e-9),
+    )
+
+
+def axis_crossings(lens: LensData, points) -> np.ndarray:
+    """Where collimated rays starting at (x, y) cross the axis in the plane of
+    their offset (z of the crossing)."""
+    seq = rt.build_sequence(to_system(lens), 550e-9)
+    p0 = np.array([[x, y, -0.01] for x, y in points])
+    b = rt.trace_bundle(seq, p0, np.tile([0.0, 0.0, 1.0], (len(p0), 1)), clip=False)
+    assert b.valid.all()
+    hit, d = b.points[:, 1], b.directions
+    out = []
+    for (x, y), h, dd in zip(points, hit, d):
+        k = 0 if x else 1
+        out.append(h[2] - h[k] / dd[k] * dd[2])
+    return np.array(out)
+
+
+class TestShapedMirrors:
+    def test_paraboloid_focuses_perfectly(self):
+        # a paraboloid (Zernike surface on a conic -1 base, no terms) sends
+        # every axial ray through its focus at R/2
+        lens = mirror_lens(
+            LensSurface(
+                surface_type="zernike", radius=-0.5, conic=-1.0, norm_radius=0.02
+            )
+        )
+        z = axis_crossings(lens, [(0.0, h) for h in (0.002, 0.008, 0.015, 0.0199)])
+        np.testing.assert_allclose(z, -0.25, rtol=0, atol=1e-12)
+
+    def test_toroidal_mirror_has_two_focal_lines(self):
+        # paraxial foci R_y/2 and R_x/2 in the two principal sections
+        lens = mirror_lens(
+            LensSurface(surface_type="toroid", radius=-0.5, radius_x=-0.8)
+        )
+        zy, zx = axis_crossings(lens, [(0.0, 1e-4), (1e-4, 0.0)])
+        assert zy == pytest.approx(-0.25, rel=1e-6)
+        assert zx == pytest.approx(-0.4, rel=1e-6)
+
+    def test_shapes_of_one_mirror_trace_alike(self):
+        A, rn = 50.0, 0.02
+        even = mirror_lens(
+            LensSurface(
+                surface_type="even_asphere",
+                radius=-0.5,
+                conic=-0.5,
+                aspheric_coefficients=[A],
+            )
+        )
+        xy = mirror_lens(
+            LensSurface(
+                surface_type="xy_polynomial",
+                radius=-0.5,
+                conic=-0.5,
+                norm_radius=rn,
+                xy_coefficients={
+                    "x4y0": A * rn**4,
+                    "x2y2": 2 * A * rn**4,
+                    "x0y4": A * rn**4,
+                },
+            )
+        )
+        pts = [(0.0, 0.01), (0.012, 0.0), (0.005, 0.0)]
+        np.testing.assert_allclose(
+            axis_crossings(even, pts), axis_crossings(xy, pts), rtol=0, atol=1e-12
+        )
+        plain = mirror_lens(LensSurface(radius=-0.5, conic=-0.7))
+        zern = mirror_lens(
+            LensSurface(surface_type="zernike", radius=-0.5, conic=-0.7, norm_radius=rn)
+        )
+        np.testing.assert_allclose(
+            axis_crossings(plain, pts), axis_crossings(zern, pts), rtol=0, atol=1e-12
+        )
+
+    def test_hubble_with_a_freeform_secondary(self):
+        # the Hubble secondary written as a Zernike surface with no terms
+        # gives the same telescope
+        from optics.reference_lenses import HUBBLE
+
+        lens = HUBBLE.build()
+        free = lens.model_copy(deep=True)
+        sec = free.surfaces[1]
+        free.surfaces[1] = sec.model_copy(
+            update=dict(surface_type="zernike", norm_radius=0.2)
+        )
+        a, b = rt.first_order(to_system(lens)), rt.first_order(to_system(free))
+        assert b.efl == pytest.approx(a.efl, rel=1e-12)
+        seq_a = rt.build_sequence(to_system(lens), 550e-9)
+        seq_b = rt.build_sequence(to_system(free), 550e-9)
+        p0 = np.array([[0.0, y, -1.0] for y in (0.5, 0.9, 1.15)])
+        d0 = np.tile([0.0, 0.0, 1.0], (3, 1))
+        ia = rt.trace_bundle(seq_a, p0, d0, clip=False).image
+        ib = rt.trace_bundle(seq_b, p0, d0, clip=False).image
+        np.testing.assert_allclose(ia, ib, rtol=0, atol=1e-9)
+
+    @pytest.mark.parametrize(
+        "surface",
+        [
+            LensSurface(
+                surface_type="even_asphere",
+                radius=-0.5,
+                conic=-1.0,
+                aspheric_coefficients=[20.0],
+            ),
+            LensSurface(
+                surface_type="odd_asphere", radius=-0.5, odd_coefficients=[0.5]
+            ),
+            LensSurface(surface_type="toroid", radius=-0.5, radius_x=-0.7),
+            LensSurface(
+                surface_type="zernike",
+                radius=-0.5,
+                norm_radius=0.02,
+                zernike_coefficients=[0, 0, 0, 1e-6, 2e-6],
+            ),
+            LensSurface(
+                surface_type="xy_polynomial",
+                radius=-0.5,
+                norm_radius=0.02,
+                xy_coefficients={"x2y1": 1e-6},
+            ),
+            LensSurface(
+                surface_type="q_asphere",
+                radius=-0.5,
+                norm_radius=0.02,
+                q_coefficients=[1e-6],
+            ),
+        ],
+        ids=lambda s: s.surface_type,
+    )
+    def test_component_round_trip(self, surface):
+        lens = mirror_lens(surface)
+        back = from_system(to_system(lens))
+        row = back.surfaces[0]
+        assert row.material == "MIRROR"
+        assert row.surface_type == surface.surface_type
+        pts = [(0.0, 0.01), (0.015, 0.0)]
+        np.testing.assert_allclose(
+            axis_crossings(lens, pts), axis_crossings(back, pts), rtol=0, atol=1e-12
+        )
 
 
 # =============================================================================

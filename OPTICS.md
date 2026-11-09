@@ -143,7 +143,8 @@ Surface types (each on a base conic, `radius` 0 = flat, unless noted):
 | diffractive | phase c_1 r^2 + c_2 r^4 + .. (radians) in `diffraction_order` | `phase_2` .. `phase_20` |
 
 plus paraxial (ideal lens), coordinate break and engine component. All the
-named terms can be variables or pickups. A diffractive surface adds
+named terms can be variables or pickups. Mirrors can take any of these
+shapes except diffractive (a reflection grating is not supported yet). A diffractive surface adds
 (m lambda / 2 pi) grad(phi) to the tangential component of n d at its
 (curved) base surface, so its paraxial power -c_1 m lambda / pi adds to the
 base surface's refraction. Paraxial data of a surface without rotational
@@ -176,10 +177,15 @@ recurrence (Opt. Express 18, 19700 (2010)), Zernike terms against their XY
 polynomial expansions, a tilted XY plane against Snell's law at a wedge,
 the diffractive surface against the grating equation and its Abbe number
 (-3.45), and the MTF of an obscured perfect lens against O'Neill's
-annular-pupil MTF. With an obscuration, Hopkins direct integration
-converges slowly (about 0.4 % at the default sampling) because the
-pupil's hole is a discontinuity inside its quadrature; the FFT method is
-unaffected.
+annular-pupil MTF and of a square pupil (1 - v/a) to 1e-3.
+
+Hopkins direct integration handles blocked parts of the pupil
+(obscurations, shaped apertures, vignetting by any surface) by splitting
+its quadrature at their edges: each Gauss line across the pupil overlap is
+divided where rays start or stop passing (found by probing and bisection),
+and the lines are grouped into panels wherever the number of unblocked
+pieces changes, so no Gauss rule straddles an edge. All frequencies are
+integrated together.
 
 The ray-optics comparisons are against an independent program tracing
 the same prescription, so they test the engine to the last printed digit.

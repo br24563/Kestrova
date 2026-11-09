@@ -20,7 +20,7 @@ All wavelength values are in meters.
 """
 
 import math
-from typing import Union, Literal, Annotated, Optional
+from typing import Any, Union, Literal, Annotated, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .base import OpticalComponentBase
@@ -161,6 +161,14 @@ class Mirror(OpticalComponentBase):
     )
     aperture_diameter: Optional[float] = Field(
         default=None, description="Clear aperture in meters (defaults to width)"
+    )
+    surface_shape: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "A mirror that is not a plain conic: the data of the aspheric, odd "
+            "aspheric, Q, toroidal, Zernike or XY polynomial surface it has the "
+            "shape of (its own radius and conic replace the mirror's)"
+        ),
     )
 
 
