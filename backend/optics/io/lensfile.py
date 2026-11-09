@@ -392,9 +392,18 @@ def _unwritten(i: int, s, fmt: str, supported: tuple, warnings: list) -> None:
         )
 
 
+def _configuration_warning(lens: LensData) -> list[str]:
+    if lens.num_configurations > 1:
+        return [
+            f"Only configuration 1 of {lens.num_configurations} is written "
+            "(the zoom table is not)"
+        ]
+    return []
+
+
 def write_codev(lens: LensData) -> tuple[str, list[str]]:
     """A Code V sequence file of the lens (millimetres) and the warnings."""
-    warnings: list[str] = []
+    warnings: list[str] = _configuration_warning(lens)
     resolved = resolve(lens, fill_apertures=False)
     mm = 1e3
     wl = lens.wavelengths
@@ -765,7 +774,7 @@ def _write_zemax_glass(material, lines: list, warnings: list) -> None:
 
 def write_zemax(lens: LensData) -> tuple[str, list[str]]:
     """A Zemax text lens file of the lens (millimetres) and the warnings."""
-    warnings: list[str] = []
+    warnings: list[str] = _configuration_warning(lens)
     resolved = resolve(lens, fill_apertures=False)
     mm = 1e3
     lines = [

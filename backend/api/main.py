@@ -824,8 +824,14 @@ class LensFromSystemRequest(BaseModel):
     system: OpticalSystem
 
 
+_CONFIGURATION = Field(
+    0, ge=0, description="Configuration (0-based) of a multi-configuration lens"
+)
+
+
 class LensRequest(BaseModel):
     lens: _ld.LensData
+    configuration: int = _CONFIGURATION
 
 
 class LensOptimizeRequest(BaseModel):
@@ -834,6 +840,12 @@ class LensOptimizeRequest(BaseModel):
         default_factory=dict, description='{"<surface>.<parameter>": [low, high]}'
     )
     max_evaluations: int = Field(300, ge=1, le=10000)
+    configuration: int = _CONFIGURATION
+
+
+def _configured(lens: _ld.LensData, k: int) -> _ld.LensData:
+    """Configuration k of a lens (the lens itself when it has one)."""
+    return _ld.configured(lens, k) if lens.num_configurations > 1 else lens
 
 
 def _first_order_summary(system: OpticalSystem) -> dict:
@@ -871,12 +883,33 @@ async def lens_resolve(request: LensRequest):
     """
     try:
         resolved = _ld.resolve(request.lens)
-        system = _ld.to_system(resolved)
+        system = _ld.configuration_system(request.lens, request.configuration)
         return {
             "lens": resolved,
             "system": system,
             "first_order": _first_order_summary(system),
+            "configuration": request.configuration,
         }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/lens/configurations")
+async def lens_configurations(request: LensRequest):
+    """First-order properties of every configuration of the lens."""
+    try:
+        out = []
+        for k in range(request.lens.num_configurations):
+            system = _ld.configuration_system(request.lens, k)
+            names = request.lens.configuration_names
+            out.append(
+                {
+                    "configuration": k,
+                    "name": names[k] if names else "1",
+                    "first_order": _first_order_summary(system),
+                }
+            )
+        return {"configurations": out}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -899,6 +932,10 @@ async def lens_optimize(request: LensOptimizeRequest):
         )
         result["rms_spot_before"] = result["merit_before"] ** 0.5
         result["rms_spot_after"] = result["merit_after"] ** 0.5
+        if request.lens.num_configurations > 1:
+            result["system"] = _ld.configuration_system(
+                result["lens"], request.configuration
+            )
         result["first_order"] = _first_order_summary(result["system"])
         return result
     except ValueError as e:
@@ -919,6 +956,7 @@ class LensToleranceRequest(BaseModel):
     rss_budget: Optional[float] = Field(
         None, gt=0, description="Waves: also return inverse-sensitivity limits"
     )
+    configuration: int = _CONFIGURATION
 
 
 class LensMonteCarloRequest(BaseModel):
@@ -928,13 +966,15 @@ class LensMonteCarloRequest(BaseModel):
     trials: int = Field(50, ge=1, le=500)
     rings: int = Field(6, ge=2, le=16)
     seed: Optional[int] = 0
+    configuration: int = _CONFIGURATION
 
 
 @app.post("/api/lens/tolerance/defaults")
 async def lens_tolerance_defaults(request: LensRequest):
     """A starting tolerance set for every element (edit before use)."""
     try:
-        return {"tolerances": _tol.default_tolerances(request.lens)}
+        lens = _configured(request.lens, request.configuration)
+        return {"tolerances": _tol.default_tolerances(lens)}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -947,9 +987,10 @@ async def lens_tolerance(request: LensToleranceRequest):
     predicted distribution over random builds.
     """
     try:
-        tols = request.tolerances or _tol.default_tolerances(request.lens)
+        lens = _configured(request.lens, request.configuration)
+        tols = request.tolerances or _tol.default_tolerances(lens)
         a = _tol.analyze(
-            request.lens,
+            lens,
             tols,
             request.compensators,
             trials=request.trials,
@@ -968,9 +1009,10 @@ async def lens_tolerance(request: LensToleranceRequest):
 async def lens_tolerance_monte_carlo(request: LensMonteCarloRequest):
     """Exact Monte Carlo: every trial traced and its compensators re-optimized."""
     try:
-        tols = request.tolerances or _tol.default_tolerances(request.lens)
+        lens = _configured(request.lens, request.configuration)
+        tols = request.tolerances or _tol.default_tolerances(lens)
         return _tol.monte_carlo(
-            request.lens,
+            lens,
             tols,
             request.compensators,
             trials=request.trials,

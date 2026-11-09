@@ -268,6 +268,30 @@ with five times the default tolerances, the two agree within the sampling
 noise of the exact run (mean 0.1118 vs 0.1117 waves, 84 % level 0.140 vs
 0.135).
 
+### Configurations (zoom)
+
+A lens can have several configurations (zoom positions, focus settings,
+alternate fields), as in Code V's zoom table: `configuration_names` and
+`zoom` rows, each a parameter with one value per configuration. A row is a
+surface parameter (any parameter of that surface: spacings, radii, tilts,
+decenters, aspheric terms, model glass) or a system parameter (object
+distance, object height, field angle, entrance pupil diameter; an explicit
+field table is scaled with the field). The surface table always holds
+configuration 1. Every analysis runs on one configuration, with the clear
+apertures of the whole lens: automatic semi-diameters pass the beam of
+every configuration. Solves are recomputed in each configuration (an image
+solve refocuses each zoom position).
+
+The optimizer minimises the weighted sum of every configuration's merit.
+Zoom rows flagged variable give one variable per configuration;
+constraints hold in one configuration or in all of them. Tolerancing runs
+on one configuration at a time. Lens files carry configuration 1 only.
+
+Checked in `tests/test_configurations.py` against closed forms: a two-lens
+zoom's EFL f1 f2 / (f1 + f2 - d) and BFL in every configuration, and the
+optimizer recovering the spacings d = f1 + f2 - f1 f2 / F for target focal
+lengths F.
+
 ### Optimization
 
 `optics/lens_optimize.py` minimises the transverse ray errors (fields 0,

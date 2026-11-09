@@ -26,6 +26,7 @@ import type {
   CompareRequest,
   LensData,
   LensResolveResult,
+  LensConfigurationSummary,
   LensOptimizeResult,
   LensConstraintStatus,
   GlassSubstitution,
@@ -838,8 +839,26 @@ export async function lensFromSystem(
  * Apply pickups and solves and fill automatic semi-diameters; returns the
  * resolved lens, its component-based system and first-order properties.
  */
-export async function resolveLens(lens: LensData): Promise<LensResolveResult> {
-  return postJson("/lens/resolve", { lens }, "resolve lens data");
+export async function resolveLens(
+  lens: LensData,
+  configuration: number = 0,
+): Promise<LensResolveResult> {
+  return postJson(
+    "/lens/resolve",
+    { lens, configuration },
+    "resolve lens data",
+  );
+}
+
+/** First-order data of every configuration of the lens. */
+export async function lensConfigurations(
+  lens: LensData,
+): Promise<{ configurations: LensConfigurationSummary[] }> {
+  return postJson(
+    "/lens/configurations",
+    { lens },
+    "compare the configurations",
+  );
 }
 
 /**
@@ -850,10 +869,11 @@ export async function optimizeLens(
   lens: LensData,
   bounds: Record<string, [number, number]> = {},
   maxEvaluations: number = 300,
+  configuration: number = 0,
 ): Promise<LensOptimizeResult> {
   return postJson(
     "/lens/optimize",
-    { lens, bounds, max_evaluations: maxEvaluations },
+    { lens, bounds, max_evaluations: maxEvaluations, configuration },
     "optimize lens data",
   );
 }
@@ -880,10 +900,11 @@ export async function snapLensGlasses(
 /** A starting tolerance set for every element (edit before use). */
 export async function lensToleranceDefaults(
   lens: LensData,
+  configuration: number = 0,
 ): Promise<{ tolerances: LensTolerance[] }> {
   return postJson(
     "/lens/tolerance/defaults",
-    { lens },
+    { lens, configuration },
     "build default tolerances",
   );
 }
@@ -893,7 +914,11 @@ export async function toleranceLens(
   lens: LensData,
   tolerances: LensTolerance[] | null,
   compensators: LensCompensator[] | null,
-  options: { trials?: number; rssBudget?: number | null } = {},
+  options: {
+    trials?: number;
+    rssBudget?: number | null;
+    configuration?: number;
+  } = {},
 ): Promise<LensToleranceResult> {
   return postJson(
     "/lens/tolerance",
@@ -903,6 +928,7 @@ export async function toleranceLens(
       compensators,
       trials: options.trials ?? 20000,
       rss_budget: options.rssBudget ?? null,
+      configuration: options.configuration ?? 0,
     },
     "run tolerance analysis",
   );
@@ -914,10 +940,11 @@ export async function monteCarloLens(
   tolerances: LensTolerance[] | null,
   compensators: LensCompensator[] | null,
   trials: number = 50,
+  configuration: number = 0,
 ): Promise<LensMonteCarloResult> {
   return postJson(
     "/lens/tolerance/monte-carlo",
-    { lens, tolerances, compensators, trials },
+    { lens, tolerances, compensators, trials, configuration },
     "run Monte Carlo tolerance check",
   );
 }

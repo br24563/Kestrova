@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (configurations)
+- Multi-configuration lenses (zoom positions, focus settings, alternate
+  fields): a zoom table of surface or system parameters with one value per
+  configuration, analyses of any configuration with apertures covering all
+  of them, optimization of every configuration together (zoomed variables,
+  per-configuration constraints) and tolerancing of one configuration
+  (`/api/lens/configurations`; `configuration` on resolve, optimize and
+  tolerance requests). In the lens editor, a Configurations panel edits the
+  table, picks the configuration the analyses show and compares their
+  first-order data; constraints take a configuration.
+
+### Fixed
+- The optimizer took the whole constraint-correcting step even when a
+  strongly curved constraint (a focal length against a spacing) made it
+  overshoot, and stalled; it now also tries half and quarter steps. A merit
+  that starts at zero (ideal lenses) no longer turns round-off into steps.
+
 ### Added (follow-up)
 - Mirrors with aspheric, odd aspheric, Q, toroidal, Zernike and XY
   polynomial shapes (off-axis and freeform mirrors), read back from the

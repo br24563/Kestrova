@@ -74,6 +74,15 @@ export function ConstraintsEditor({
 }: Props) {
   const constraints = lens.constraints ?? [];
   const unit = LENGTH_UNIT_LABELS[displayUnit];
+  const configs = lens.configuration_names ?? [];
+  const multi = configs.length > 1;
+  /** Reported values of constraint k (one per configuration it applies to). */
+  const statusesOf = (k: number): LensConstraintStatus[] => {
+    if (!statuses) return [];
+    if (statuses.some((s) => s.index !== undefined))
+      return statuses.filter((s) => s.index === k);
+    return statuses[k] ? [statuses[k]] : [];
+  };
 
   const set = (k: number, c: LensConstraint) =>
     onChange(constraints.map((x, i) => (i === k ? c : x)));
@@ -159,6 +168,11 @@ export function ConstraintsEditor({
             <tr>
               <th className="px-1 py-0.5 text-left font-medium">Property</th>
               <th className="px-1 py-0.5 text-left font-medium">Surface</th>
+              {multi && (
+                <th className="px-1 py-0.5 text-left font-medium">
+                  Configuration
+                </th>
+              )}
               <th className="px-1 py-0.5 text-left font-medium">Mode</th>
               <th className="px-1 py-0.5 text-right font-medium">
                 Target / min
@@ -174,7 +188,7 @@ export function ConstraintsEditor({
                 c.target !== null && c.target !== undefined
                   ? "target"
                   : "limits";
-              const status = statuses?.[k];
+              const reported = statusesOf(k);
               const u = isLengthConstraint(c.kind) ? ` ${unit}` : "";
               return (
                 <tr key={k} className="border-t border-gray-100">
@@ -213,6 +227,35 @@ export function ConstraintsEditor({
                       <span className="text-gray-300">—</span>
                     )}
                   </td>
+                  {multi && (
+                    <td className="px-1">
+                      <select
+                        aria-label={`Constraint ${k + 1} configuration`}
+                        value={
+                          c.configuration == null
+                            ? "all"
+                            : String(c.configuration)
+                        }
+                        onChange={(e) =>
+                          set(k, {
+                            ...c,
+                            configuration:
+                              e.target.value === "all"
+                                ? null
+                                : parseInt(e.target.value, 10),
+                          })
+                        }
+                        className="bg-transparent text-xs py-0.5"
+                      >
+                        <option value="all">All</option>
+                        {configs.map((name, i) => (
+                          <option key={i} value={i}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                   <td className="px-1">
                     <select
                       aria-label={`Constraint ${k + 1} mode`}
@@ -272,16 +315,27 @@ export function ConstraintsEditor({
                     className="px-1 text-right font-mono"
                     data-testid={`constraint-${k}-value`}
                   >
-                    {status ? (
-                      <span
-                        className={
-                          status.satisfied ? "text-green-700" : "text-red-600"
-                        }
-                        title={status.satisfied ? "Met" : "Not met"}
-                      >
-                        {toDisplay(c, status.value)}
-                        {u} {status.satisfied ? "✓" : "✗"}
-                      </span>
+                    {reported.length ? (
+                      reported.map((status, j) => (
+                        <span
+                          key={j}
+                          className={`block ${
+                            status.satisfied ? "text-green-700" : "text-red-600"
+                          }`}
+                          title={
+                            (status.satisfied ? "Met" : "Not met") +
+                            (multi && status.configuration != null
+                              ? ` in ${configs[status.configuration]}`
+                              : "")
+                          }
+                        >
+                          {multi && status.configuration != null
+                            ? `${configs[status.configuration]}: `
+                            : ""}
+                          {toDisplay(c, status.value)}
+                          {u} {status.satisfied ? "✓" : "✗"}
+                        </span>
+                      ))
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}
