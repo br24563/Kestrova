@@ -64,6 +64,7 @@ import {
   type Modifier,
 } from "./lensEdit";
 import { SurfaceDetails } from "./SurfaceDetails";
+import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { ConstraintsEditor } from "./ConstraintsEditor";
 import { OptimizeReport } from "./OptimizeReport";
 import { LensTolerancePanel } from "./LensTolerancePanel";
@@ -218,6 +219,7 @@ export function LensDataEditor({
     warnings: string[];
     source?: { citation: string; url: string; notes: string };
   } | null>(null);
+  const [activeConfig, setActiveConfig] = useState(0);
   const [samples, setSamples] = useState<LensSample[] | null>(null);
   const [samplesOpen, setSamplesOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -262,6 +264,7 @@ export function LensDataEditor({
     setRms(null);
     setFlagCell(null);
     try {
+      setActiveConfig(0);
       const result = await resolveLens(opened);
       setFirstOrder(result.first_order);
       onResolved(result);
@@ -504,11 +507,32 @@ export function LensDataEditor({
     }
   };
 
+  /** The configuration the analyses show (the first if it no longer exists). */
+  const configurationOf = (l: LensData) =>
+    activeConfig < Math.max(1, l.configuration_names?.length ?? 0)
+      ? activeConfig
+      : 0;
+
+  const activate = async (k: number) => {
+    setActiveConfig(k);
+    setBusy("resolve");
+    setError(null);
+    try {
+      const result = await resolveLens(lens, k);
+      setFirstOrder(result.first_order);
+      onResolved(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Resolve failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const resolve = async () => {
     setBusy("resolve");
     setError(null);
     try {
-      const result = await resolveLens(lens);
+      const result = await resolveLens(lens, configurationOf(lens));
       setFirstOrder(result.first_order);
       onResolved(result);
     } catch (err) {
@@ -527,6 +551,7 @@ export function LensDataEditor({
         lens,
         {},
         Number.isFinite(n) && n > 0 ? n : 300,
+        configurationOf(lens),
       );
       setRms({
         before: result.rms_spot_before,
@@ -1020,6 +1045,15 @@ export function LensDataEditor({
         />
       )}
 
+      <ConfigurationsPanel
+        lens={lens}
+        displayUnit={displayUnit}
+        active={configurationOf(lens)}
+        busy={busy !== null}
+        onChange={update}
+        onActivate={activate}
+      />
+
       {flagCell &&
         flagCell.row < lens.surfaces.length &&
         hasParameter(lens.surfaces[flagCell.row], flagCell.param) && (
@@ -1170,7 +1204,11 @@ export function LensDataEditor({
         </div>
       )}
 
-      <LensTolerancePanel lens={lens} displayUnit={displayUnit} />
+      <LensTolerancePanel
+        lens={lens}
+        displayUnit={displayUnit}
+        configuration={configurationOf(lens)}
+      />
     </div>
   );
 }

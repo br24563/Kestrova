@@ -100,9 +100,15 @@ const w = (v: number | undefined) =>
 interface Props {
   lens: LensData;
   displayUnit: LengthUnit;
+  /** Configuration toleranced (0-based) for a multi-configuration lens. */
+  configuration?: number;
 }
 
-export function LensTolerancePanel({ lens, displayUnit }: Props) {
+export function LensTolerancePanel({
+  lens,
+  displayUnit,
+  configuration = 0,
+}: Props) {
   const [tolerances, setTolerances] = useState<LensTolerance[] | null>(null);
   const [compLimit, setCompLimit] = useState("");
   const [trials, setTrials] = useState("20000");
@@ -144,7 +150,9 @@ export function LensTolerancePanel({ lens, displayUnit }: Props) {
   };
 
   const loadDefaults = async () => {
-    const out = await run("defaults", () => lensToleranceDefaults(lens));
+    const out = await run("defaults", () =>
+      lensToleranceDefaults(lens, configuration),
+    );
     if (out) {
       setTolerances(out.tolerances);
       setResult(null);
@@ -160,6 +168,7 @@ export function LensTolerancePanel({ lens, displayUnit }: Props) {
         trials: Number.isFinite(n) && n >= 100 ? n : 20000,
         rssBudget:
           budget.trim() !== "" && Number.isFinite(b) && b > 0 ? b : null,
+        configuration,
       }),
     );
     if (out) {
@@ -176,6 +185,7 @@ export function LensTolerancePanel({ lens, displayUnit }: Props) {
         tolerances,
         compensators(),
         Number.isFinite(n) && n > 0 ? Math.min(n, 500) : 50,
+        configuration,
       ),
     );
     if (out) setMc(out);

@@ -361,6 +361,11 @@ class Constraint(BaseModel):
 
     kind: ConstraintKind
     surface: Optional[int] = Field(default=None, ge=0)
+    configuration: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Configuration it applies to (None = every configuration)",
+    )
     target: Optional[float] = None
     minimum: Optional[float] = None
     maximum: Optional[float] = None
@@ -389,6 +394,30 @@ class Constraint(BaseModel):
                 )
             )
         return self
+
+
+#: System parameters a zoom row can vary.
+SYSTEM_ZOOM_PARAMS = (
+    "object_distance",
+    "object_height",
+    "field_angle",
+    "entrance_pupil_diameter",
+)
+
+
+class ZoomRow(BaseModel):
+    """
+    One row of the configuration (zoom) table: a parameter and its value in
+    each configuration. ``surface`` None means a system parameter
+    (``SYSTEM_ZOOM_PARAMS``; an object distance of None is at infinity).
+    ``variable`` lets the optimizer vary each configuration's value
+    independently (Code V's zoomed variables).
+    """
+
+    surface: Optional[int] = Field(default=None, ge=0)
+    parameter: str
+    values: list[Optional[float]]
+    variable: bool = False
 
 
 class LensData(BaseModel):
@@ -428,11 +457,24 @@ class LensData(BaseModel):
     constraints: list[Constraint] = Field(
         default_factory=list, description="Held exactly during optimization"
     )
+    configuration_names: list[str] = Field(
+        default_factory=list,
+        description="Names of the configurations (empty = one configuration)",
+    )
+    zoom: list[ZoomRow] = Field(
+        default_factory=list,
+        description="Parameters that differ between configurations",
+    )
+    configuration_weights: Optional[list[float]] = Field(
+        default=None,
+        description="Weight of each configuration in the merit (None = equal)",
+    )
 
     @model_validator(mode="after")
     def _check(self):
         if not self.surfaces:
             raise ValueError("A lens needs at least one surface")
+        self._check_zoom()
         for c in self.constraints:
             if c.surface is not None and c.surface >= len(self.surfaces) - (
                 1 if c.kind == "edge_thickness" else 0
@@ -468,10 +510,150 @@ class LensData(BaseModel):
     def stop_index(self) -> int:
         return next(i for i, s in enumerate(self.surfaces) if s.is_stop)
 
+    @property
+    def num_configurations(self) -> int:
+        return max(1, len(self.configuration_names))
+
+    def _check_zoom(self) -> None:
+        n = self.num_configurations
+        if self.zoom and n < 2:
+            raise ValueError("A zoom table needs at least two configurations")
+        if self.configuration_weights is not None:
+            if len(self.configuration_weights) != n:
+                raise ValueError("Give one weight per configuration")
+            if any(w < 0 for w in self.configuration_weights) or not any(
+                self.configuration_weights
+            ):
+                raise ValueError("Configuration weights must be >= 0, not all 0")
+        for c in self.constraints:
+            if c.configuration is not None and c.configuration >= n:
+                raise ValueError(
+                    f"Constraint {c.kind}: configuration {c.configuration} "
+                    "does not exist"
+                )
+        seen = set()
+        for row in self.zoom:
+            key = (row.surface, row.parameter)
+            if key in seen:
+                raise ValueError(f"Zoom row {key} appears twice")
+            seen.add(key)
+            if len(row.values) != n:
+                raise ValueError(
+                    f"Zoom row {row.parameter}: give one value per configuration ({n})"
+                )
+            if row.surface is None:
+                if row.parameter not in SYSTEM_ZOOM_PARAMS:
+                    raise ValueError(
+                        f"'{row.parameter}' is not a system parameter that can "
+                        f"zoom ({', '.join(SYSTEM_ZOOM_PARAMS)})"
+                    )
+                if row.variable:
+                    raise ValueError("System parameters cannot be zoom variables")
+                if row.parameter != "object_distance" and any(
+                    v is None for v in row.values
+                ):
+                    raise ValueError(f"Zoom row {row.parameter}: a value is missing")
+                continue
+            if row.surface >= len(self.surfaces):
+                raise ValueError(f"Zoom row: surface {row.surface} does not exist")
+            surf = self.surfaces[row.surface]
+            if row.parameter not in PARAMETERS[surf.surface_type]:
+                raise ValueError(
+                    f"Zoom row: '{row.parameter}' is not a parameter of surface "
+                    f"{row.surface}"
+                )
+            if any(v is None for v in row.values):
+                raise ValueError(f"Zoom row {row.parameter}: a value is missing")
+            if (
+                row.parameter in surf.variables
+                or row.parameter in surf.solves
+                or row.parameter in surf.pickups
+            ):
+                raise ValueError(
+                    f"Surface {row.surface}: '{row.parameter}' is zoomed, so it "
+                    "cannot also be a variable, solve or pickup (flag the zoom "
+                    "row as variable instead)"
+                )
+        # the surface table always shows configuration 1
+        for row in self.zoom:
+            _apply_zoom_value(self, row, 0)
+
 
 # =============================================================================
 # Parameters
 # =============================================================================
+
+
+def _apply_zoom_value(lens: "LensData", row: ZoomRow, k: int) -> None:
+    """Set a zoom row's configuration-k value on the lens (in place)."""
+    v = row.values[k]
+    if row.surface is not None:
+        assert v is not None
+        _set(lens.surfaces[row.surface], row.parameter, v)
+        return
+    name = row.parameter
+    if name == "object_distance":
+        lens.object_distance = v
+    elif name == "entrance_pupil_diameter":
+        lens.entrance_pupil_diameter = v
+    elif name in ("field_angle", "object_height"):
+        assert v is not None
+        old = getattr(lens, name)
+        setattr(lens, name, v)
+        # an explicit field table keeps its shape, scaled to the new field
+        kind = "angle" if name == "field_angle" else "object_height"
+        if lens.fields and lens.field_type == kind and old:
+            if kind == "angle":
+                r = math.tan(v) / math.tan(old)
+                lens.fields = [
+                    f.model_copy(
+                        update={
+                            "x": math.atan(math.tan(f.x) * r),
+                            "y": math.atan(math.tan(f.y) * r),
+                        }
+                    )
+                    for f in lens.fields
+                ]
+            else:
+                r = v / old
+                lens.fields = [
+                    f.model_copy(update={"x": f.x * r, "y": f.y * r})
+                    for f in lens.fields
+                ]
+
+
+def configured(lens: "LensData", k: int) -> "LensData":
+    """The single-configuration lens of configuration ``k`` (zoom values
+    applied, the zoom table removed)."""
+    n = lens.num_configurations
+    if not 0 <= k < n:
+        raise ValueError(f"Configuration {k} does not exist (the lens has {n})")
+    out = lens.model_copy(deep=True)
+    for row in lens.zoom:
+        _apply_zoom_value(out, row, k)
+    out.zoom = []
+    out.configuration_names = []
+    out.configuration_weights = None
+    out.constraints = [
+        c.model_copy(update={"configuration": None})
+        for c in lens.constraints
+        if c.configuration is None or c.configuration == k
+    ]
+    if lens.configuration_names:
+        out.name = f"{lens.name} [{lens.configuration_names[k]}]".strip()
+    return out
+
+
+def configuration_system(lens: "LensData", k: int) -> OpticalSystem:
+    """The engine model of configuration ``k``, with the clear apertures of
+    the whole multi-configuration lens (resolved first)."""
+    resolved = resolve(lens)
+    one = configured(resolved, k)
+    for s in one.surfaces:
+        s.semi_diameter_auto = (
+            False  # keep the apertures that cover every configuration
+        )
+    return to_system(one)
 
 
 def get_parameter(surface: LensSurface, name: str) -> float:
@@ -1253,6 +1435,19 @@ def resolve(
         raise ValueError("Pickups and solves did not converge")
     if fill_apertures:
         _fill_semi_diameters(out, _stop_semi(out))
+        if out.zoom:
+            # automatic apertures pass the beam of every configuration
+            for k in range(1, out.num_configurations):
+                other = resolve(configured(lens, k))
+                for s, o in zip(out.surfaces, other.surfaces):
+                    if (
+                        s.semi_diameter_auto
+                        and o.semi_diameter is not None
+                        and (
+                            s.semi_diameter is None or o.semi_diameter > s.semi_diameter
+                        )
+                    ):
+                        s.semi_diameter = o.semi_diameter
     return out
 
 

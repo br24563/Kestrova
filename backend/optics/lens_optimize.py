@@ -36,6 +36,7 @@ from .lens_data import (
     LensData,
     _merit_system,
     _set,
+    configured,
     get_parameter,
     surface_shape,
     resolve,
@@ -98,21 +99,32 @@ def _needs_apertures(lens: LensData) -> bool:
 
 def evaluate_constraints(lens: LensData) -> list[dict]:
     """Every constraint with its current value and whether it is met (to
-    1e-9 relative)."""
-    resolved = resolve(lens, fill_apertures=_needs_apertures(lens))
-    system = to_system(resolved) if _needs_apertures(lens) else _merit_system(lens)
-    fo = rt.first_order(system)
+    1e-9 relative). With several configurations, a constraint for every
+    configuration is reported once per configuration."""
+    need_ap = _needs_apertures(lens)
+    resolved_all = resolve(lens, fill_apertures=need_ap)
+    n = lens.num_configurations
     out = []
-    for c in lens.constraints:
-        v = constraint_value(c, resolved, system, fo)
-        tol = 1e-9 * max(abs(c.target or c.minimum or c.maximum or 0.0), 1e-9)
-        met = (
-            abs(v - c.target) <= max(tol, 1e-12)
-            if c.target is not None
-            else (c.minimum is None or v >= c.minimum - tol)
-            and (c.maximum is None or v <= c.maximum + tol)
-        )
-        out.append({**c.model_dump(), "value": v, "satisfied": bool(met)})
+    for k in range(n):
+        Lk = configured(lens, k) if n > 1 else lens
+        resolved = configured(resolved_all, k) if n > 1 else resolved_all
+        system = to_system(resolved) if need_ap else _merit_system(Lk)
+        fo = rt.first_order(system)
+        for index, c in enumerate(lens.constraints):
+            if c.configuration is not None and c.configuration != k:
+                continue
+            v = constraint_value(c, resolved, system, fo)
+            tol = 1e-9 * max(abs(c.target or c.minimum or c.maximum or 0.0), 1e-9)
+            met = (
+                abs(v - c.target) <= max(tol, 1e-12)
+                if c.target is not None
+                else (c.minimum is None or v >= c.minimum - tol)
+                and (c.maximum is None or v <= c.maximum + tol)
+            )
+            row = {**c.model_dump(), "value": v, "satisfied": bool(met), "index": index}
+            if n > 1:
+                row["configuration"] = k
+            out.append(row)
     return out
 
 
@@ -152,6 +164,11 @@ class _Row:
     label: str
 
 
+#: Residual norm below which the merit is treated as zero.
+_MERIT_FLOOR = 1e-9
+#: Fractions of a rejected step tried before the damping is raised.
+_STEP_FRACTIONS = (1.0, 0.5, 0.25)
+
 _PARAM_SCALE = {
     "radius": 1e-3,
     "thickness": 1e-3,
@@ -161,6 +178,20 @@ _PARAM_SCALE = {
     "glass_nd": 1e-2,
     "glass_vd": 1.0,
 }
+
+
+def _variable_key(handle) -> str:
+    i, name, r, k = handle
+    return f"{i}.{name}" if r is None else f"{i}.{name}@{k + 1}"
+
+
+def _start_value(lens: LensData, handle) -> float:
+    i, name, r, k = handle
+    if r is None:
+        return get_parameter(lens.surfaces[i], name)
+    value = lens.zoom[r].values[k]
+    assert value is not None  # surface zoom rows have every value
+    return float(value)
 
 
 def optimize(
@@ -176,6 +207,12 @@ def optimize(
     ``{"<surface>.<parameter>": (low, high)}`` limits on variables. Only the
     stop limits the beam while optimizing (as in Code V).
 
+    With several configurations the merit is the weighted sum over all of
+    them; zoom rows flagged variable add one variable per configuration
+    (key ``"<surface>.<parameter>@<configuration number>"``; a bound on
+    ``"<surface>.<parameter>"`` applies to every configuration), and each
+    constraint holds in its configuration or in all of them.
+
     Returns the optimized lens and system, the variables, the merit before
     and after (sum of squared residuals; for the default merit the
     mean-square spot in m^2), the constraint report, evaluations,
@@ -183,9 +220,18 @@ def optimize(
     """
     from .advanced_optimization import ray_aberration_residuals
 
-    var = variables(lens)
-    if not var:
+    n_conf = lens.num_configurations
+    weights = lens.configuration_weights or [1.0] * n_conf
+    # (surface, parameter, zoom row or None, configuration or None)
+    handles: list[tuple[int, str, Optional[int], Optional[int]]] = [
+        (i, name, None, None) for i, name in variables(lens)
+    ]
+    for r_idx, row in enumerate(lens.zoom):
+        if row.variable and row.surface is not None:
+            handles += [(row.surface, row.parameter, r_idx, k) for k in range(n_conf)]
+    if not handles:
         raise ValueError("No surface parameter is flagged as a variable")
+    var = [(i, name) for i, name, _, _ in handles]
     if merit is None:
 
         def merit(system: OpticalSystem) -> np.ndarray:
@@ -194,14 +240,18 @@ def optimize(
             )
 
     bounds = dict(bounds or {})
-    keys = [f"{i}.{name}" for i, name in var]
+    keys = [_variable_key(h) for h in handles]
+    shared = {f"{i}.{name}" for i, name, r, _ in handles if r is not None}
     for key in bounds:
-        if key not in keys:
+        if key not in keys and key not in shared:
             raise ValueError(f"Bound '{key}' is not a variable (variables: {keys})")
+    for key, (i, name, r, _) in zip(keys, handles):
+        if r is not None and key not in bounds and f"{i}.{name}" in bounds:
+            bounds[key] = bounds[f"{i}.{name}"]
     # Radii are varied as curvatures (c = 1/R, 0 = flat), as Code V does:
     # power, and so focal-length constraints, are nearly linear in them.
     is_curv = np.array([name == "radius" for _, name in var])
-    raw0 = np.array([get_parameter(lens.surfaces[i], name) for i, name in var])
+    raw0 = np.array([_start_value(lens, h) for h in handles])
     x0 = np.where(is_curv, _to_curvature(raw0), raw0)
     scale = np.array(
         [
@@ -229,15 +279,23 @@ def optimize(
     need_ap = _needs_apertures(lens)
     hull_n, hull_b = glass_map_hull()
     glass_pairs = []  # (index of nd var or None, index of vd var or None, surface)
-    for i in sorted({i for i, name in var if name in GLASS_PARAMS}):
+    for i in sorted(
+        {i for i, name, r, _ in handles if name in GLASS_PARAMS and r is None}
+    ):
         nd_k = keys.index(f"{i}.glass_nd") if f"{i}.glass_nd" in keys else None
         vd_k = keys.index(f"{i}.glass_vd") if f"{i}.glass_vd" in keys else None
         glass_pairs.append((nd_k, vd_k, i))
 
     def apply(x) -> LensData:
         out = lens.model_copy(deep=True)
-        for (i, name), v, c in zip(var, x, is_curv):
-            _set(out.surfaces[i], name, _to_radius(v) if c else v)
+        for (i, name, r, k), v, c in zip(handles, x, is_curv):
+            val = float(_to_radius(v) if c else v)
+            if r is None:
+                _set(out.surfaces[i], name, val)
+            else:
+                out.zoom[r].values[k] = val  # type: ignore[index]
+                if k == 0:  # the surface table shows configuration 1
+                    _set(out.surfaces[i], name, val)
         return out
 
     evaluations = [0]
@@ -248,33 +306,51 @@ def optimize(
         evaluations[0] += 1
         try:
             L = apply(x)
-            system = _merit_system(L)
-            r = np.asarray(merit(system), dtype=float)
+            confs = [configured(L, k) for k in range(n_conf)] if n_conf > 1 else [L]
+            systems = [_merit_system(Lk) for Lk in confs]
+            r = np.concatenate(
+                [
+                    math.sqrt(wk) * np.asarray(merit(sk), dtype=float)
+                    for sk, wk in zip(systems, weights)
+                ]
+            )
             if not np.all(np.isfinite(r)):
                 return None
             g, rows = [], []
             if lens.constraints:
-                resolved = resolve(L, fill_apertures=need_ap)
-                fo = rt.first_order(system)
-                for c in lens.constraints:
-                    v = constraint_value(c, resolved, system, fo)
-                    if not math.isfinite(v):
-                        return None
-                    ref = (
-                        c.target
-                        if c.target is not None
-                        else (c.minimum if c.minimum is not None else c.maximum)
+                resolved_all = resolve(L, fill_apertures=need_ap)
+                for k, (Lk, sk) in enumerate(zip(confs, systems)):
+                    todo = [
+                        c
+                        for c in lens.constraints
+                        if c.configuration is None or c.configuration == k
+                    ]
+                    if not todo:
+                        continue
+                    resolved = (
+                        configured(resolved_all, k) if n_conf > 1 else resolved_all
                     )
-                    s = max(abs(ref or 0.0), 1e-6)
-                    if c.target is not None:
-                        g.append((v - c.target) / s)
-                        rows.append(_Row("eq", f"{c.kind}={c.target}"))
-                    if c.minimum is not None:
-                        g.append((v - c.minimum) / s)
-                        rows.append(_Row("ineq", f"{c.kind}>={c.minimum}"))
-                    if c.maximum is not None:
-                        g.append((c.maximum - v) / s)
-                        rows.append(_Row("ineq", f"{c.kind}<={c.maximum}"))
+                    fo = rt.first_order(sk)
+                    tag = f" [configuration {k + 1}]" if n_conf > 1 else ""
+                    for c in todo:
+                        v = constraint_value(c, resolved, sk, fo)
+                        if not math.isfinite(v):
+                            return None
+                        ref = (
+                            c.target
+                            if c.target is not None
+                            else (c.minimum if c.minimum is not None else c.maximum)
+                        )
+                        s = max(abs(ref or 0.0), 1e-6)
+                        if c.target is not None:
+                            g.append((v - c.target) / s)
+                            rows.append(_Row("eq", f"{c.kind}={c.target}{tag}"))
+                        if c.minimum is not None:
+                            g.append((v - c.minimum) / s)
+                            rows.append(_Row("ineq", f"{c.kind}>={c.minimum}{tag}"))
+                        if c.maximum is not None:
+                            g.append((c.maximum - v) / s)
+                            rows.append(_Row("ineq", f"{c.kind}<={c.maximum}{tag}"))
             # linear rows: variable bounds and the glass map
             for k in range(len(x)):
                 if np.isfinite(lo[k]):
@@ -307,7 +383,10 @@ def optimize(
     if first is None:
         raise ValueError("The starting lens cannot be traced")
     r0, g0, rows = first
-    norm0 = float(np.sqrt(np.sum(r0**2))) or 1.0
+    # Residuals are normalised by their starting size; below 1e-9 (1 nm RMS
+    # for the default spot merit, e.g. ideal lenses) the merit counts as zero,
+    # so round-off is not amplified and the constraints drive the steps.
+    norm0 = max(float(np.sqrt(np.sum(r0**2))), _MERIT_FLOOR)
     eq = np.array([row.kind == "eq" for row in rows], dtype=bool)
     rho = 1e8  # steep: with the second-order correction steps stay feasible
 
@@ -352,31 +431,41 @@ def optimize(
         grad = J.T @ rn
         D = np.maximum(np.diag(H), 1e-12 * max(1.0, float(np.max(np.diag(H)))))
         accepted = False
-        while evaluations[0] < max_evaluations:
+        while evaluations[0] < max_evaluations and not accepted:
             dz, _ = _kkt_step(H + lam * np.diag(D), grad, A, g, eq, tol_active)
-            x_try = x + dz * scale
-            res = evaluate(x_try)
-            if (
-                res is not None
-                and violation(res[1]) > 0
-                and evaluations[0] < max_evaluations
-            ):
-                # second-order correction: back onto the curved constraints
-                # with a minimum-norm step (the linearised step ignores
-                # their curvature, which otherwise forces tiny steps)
-                corr = _restore(A, res[1], eq, tol_active)
-                if corr is not None:
-                    x_soc = x_try + corr * scale
-                    res_soc = evaluate(x_soc)
-                    if res_soc is not None and phi(res_soc[0], res_soc[1]) < phi(
-                        res[0], res[1]
-                    ):
-                        x_try, res = x_soc, res_soc
-            if res is not None and phi(res[0], res[1]) < phi(r, g) * (1 - 1e-12):
-                prev = phi(r, g)
-                x, r, g = x_try, res[0], res[1]
-                lam = max(lam / 5.0, 1e-12)
-                accepted = True
+            # Damping shortens only the merit part of the step; the part that
+            # meets the linearised constraints stays whole and can overshoot
+            # a strongly curved constraint (e.g. a focal length against a
+            # spacing), so shorter steps along it are tried too.
+            for alpha in _STEP_FRACTIONS:
+                if evaluations[0] >= max_evaluations:
+                    break
+                x_try = x + alpha * dz * scale
+                res = evaluate(x_try)
+                if (
+                    res is not None
+                    and violation(res[1]) > 0
+                    and evaluations[0] < max_evaluations
+                ):
+                    # second-order correction: back onto the curved
+                    # constraints with a minimum-norm step (the linearised
+                    # step ignores their curvature, which otherwise forces
+                    # tiny steps)
+                    corr = _restore(A, res[1], eq, tol_active)
+                    if corr is not None:
+                        x_soc = x_try + corr * scale
+                        res_soc = evaluate(x_soc)
+                        if res_soc is not None and phi(res_soc[0], res_soc[1]) < phi(
+                            res[0], res[1]
+                        ):
+                            x_try, res = x_soc, res_soc
+                if res is not None and phi(res[0], res[1]) < phi(r, g) * (1 - 1e-12):
+                    prev = phi(r, g)
+                    x, r, g = x_try, res[0], res[1]
+                    lam = max(lam / 5.0, 1e-12)
+                    accepted = True
+                    break
+            if accepted:
                 break
             lam *= 10.0
             if lam > 1e12:

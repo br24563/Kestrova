@@ -534,6 +534,31 @@ export interface LensData {
   analysis_settings: AnalysisSettings;
   /** Held exactly by the optimizer (absent = none). */
   constraints?: LensConstraint[];
+  /** Names of the configurations (absent or empty = one configuration). */
+  configuration_names?: string[];
+  /** Parameters that differ between configurations. */
+  zoom?: ZoomRow[];
+  configuration_weights?: number[] | null;
+}
+
+/** System parameters a zoom row can vary (mirrors lens_data.SYSTEM_ZOOM_PARAMS). */
+export const SYSTEM_ZOOM_PARAMETERS = [
+  "object_distance",
+  "object_height",
+  "field_angle",
+  "entrance_pupil_diameter",
+] as const;
+
+/**
+ * One row of the configuration (zoom) table: a parameter and its value in
+ * each configuration (meters / radians). surface null = a system parameter;
+ * an object distance of null is at infinity.
+ */
+export interface ZoomRow {
+  surface: number | null;
+  parameter: string;
+  values: (number | null)[];
+  variable?: boolean;
 }
 
 /** Properties the optimizer can hold (mirrors lens_data.ConstraintKind). */
@@ -556,6 +581,8 @@ export const SURFACE_CONSTRAINTS: LensConstraintKind[] = [
 export interface LensConstraint {
   kind: LensConstraintKind;
   surface?: number | null;
+  /** Configuration it applies to (null = every configuration). */
+  configuration?: number | null;
   target?: number | null;
   minimum?: number | null;
   maximum?: number | null;
@@ -565,6 +592,8 @@ export interface LensConstraint {
 export interface LensConstraintStatus extends LensConstraint {
   value: number;
   satisfied: boolean;
+  /** Index of the constraint in lens.constraints. */
+  index?: number;
 }
 
 /** One optimizer cycle. */
@@ -589,6 +618,14 @@ export interface LensFirstOrder {
 export interface LensResolveResult {
   lens: LensData;
   system: OpticalSystem;
+  first_order: LensFirstOrder;
+  configuration?: number;
+}
+
+/** First-order data of one configuration. */
+export interface LensConfigurationSummary {
+  configuration: number;
+  name: string;
   first_order: LensFirstOrder;
 }
 

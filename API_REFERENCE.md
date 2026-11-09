@@ -126,10 +126,18 @@ component-based system (round trip is exact).
 
 #### POST /api/lens/resolve
 
-`{ "lens": {...} }` → `{ "lens", "system", "first_order" }`: pickups and
-solves applied, automatic semi-diameters filled, the component-based
-`system` for every other analysis endpoint, and EFL, BFL, F-numbers, image
-position and pupils.
+`{ "lens": {...}, "configuration": 0 }` → `{ "lens", "system",
+"first_order", "configuration" }`: pickups and solves applied, automatic
+semi-diameters filled, the component-based `system` for every other
+analysis endpoint, and EFL, BFL, F-numbers, image position and pupils. For
+a multi-configuration lens, `system` and `first_order` are those of
+`configuration` (0-based); `/api/lens/optimize` and the tolerancing
+endpoints take the same field.
+
+#### POST /api/lens/configurations
+
+`{ "lens" }` → `{ "configurations": [{ "configuration", "name",
+"first_order" }] }`: first-order data of every configuration.
 
 ```json
 {
