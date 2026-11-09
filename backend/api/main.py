@@ -894,6 +894,55 @@ async def lens_resolve(request: LensRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class LensGlobalRequest(BaseModel):
+    lens: _ld.LensData
+    starts: int = Field(16, ge=1, le=256)
+    max_evaluations: int = Field(200, ge=10, le=5000)
+    bounds: dict[str, list[float]] = Field(default_factory=dict)
+    ranges: dict[str, list[float]] = Field(
+        default_factory=dict,
+        description="Where starts are drawn: radii as curvatures (1/m)",
+    )
+    seed: Optional[int] = 0
+    keep: int = Field(5, ge=1, le=50)
+    workers: int = Field(1, ge=1, le=64, description="Processes running the starts")
+
+
+@app.post("/api/lens/global-optimize")
+async def lens_global_optimize(request: LensGlobalRequest):
+    """
+    Global search: local optimizations from many starting points spread
+    over the variables' ranges; the distinct designs that meet every
+    constraint, best merit first, each with its first-order data.
+    """
+    from optics.global_lens import global_optimize
+
+    def pairs(d):
+        out = {}
+        for key, pair in d.items():
+            if len(pair) != 2:
+                raise ValueError(f"'{key}' needs [low, high]")
+            out[key] = (pair[0], pair[1])
+        return out
+
+    try:
+        result = global_optimize(
+            request.lens,
+            starts=request.starts,
+            max_evaluations=request.max_evaluations,
+            bounds=pairs(request.bounds),
+            ranges=pairs(request.ranges),
+            seed=request.seed,
+            keep=request.keep,
+            workers=request.workers,
+        )
+        for s in result["solutions"]:
+            s["first_order"] = _first_order_summary(_ld.to_system(s["lens"]))
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/lens/merit")
 async def lens_merit(request: LensRequest):
     """

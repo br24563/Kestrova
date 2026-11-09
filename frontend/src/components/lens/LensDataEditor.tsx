@@ -66,6 +66,7 @@ import {
 import { SurfaceDetails } from "./SurfaceDetails";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { MeritPanel } from "./MeritPanel";
+import { GlobalSearchPanel } from "./GlobalSearchPanel";
 import { ConstraintsEditor } from "./ConstraintsEditor";
 import { OptimizeReport } from "./OptimizeReport";
 import { LensTolerancePanel } from "./LensTolerancePanel";
@@ -521,6 +522,22 @@ export function LensDataEditor({
     setError(null);
     try {
       const result = await resolveLens(lens, k);
+      setFirstOrder(result.first_order);
+      onResolved(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Resolve failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Load a design found by the global search and show it. */
+  const loadDesign = async (design: LensData) => {
+    onImported(design);
+    setBusy("resolve");
+    setError(null);
+    try {
+      const result = await resolveLens(design, configurationOf(design));
       setFirstOrder(result.first_order);
       onResolved(result);
     } catch (err) {
@@ -1157,6 +1174,16 @@ export function LensDataEditor({
         )}
       </div>
 
+      <GlobalSearchPanel
+        lens={lens}
+        displayUnit={displayUnit}
+        disabled={busy !== null || nVariables === 0}
+        maxEvaluations={(() => {
+          const n = parseInt(maxEvaluations, 10);
+          return Number.isFinite(n) && n > 0 ? n : 300;
+        })()}
+        onUse={loadDesign}
+      />
       {optResult && (
         <OptimizeReport result={optResult} displayUnit={displayUnit} />
       )}

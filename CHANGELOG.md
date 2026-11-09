@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (global search)
+- Global search on the lens prescription (`/api/lens/global-optimize`):
+  constrained local optimizations from Sobol-spread starts. It returns the
+  distinct feasible designs, best merit first, and can run starts in
+  parallel processes. In the lens editor, "Global search" lists the designs
+  found and loads the chosen one.
+
 ### Added (merit functions)
 - Merit function choices (`lens.merit`): transverse ray error from the
   chief ray or the spot centroid, or wavefront variance; pupil rings; the

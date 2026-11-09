@@ -134,6 +134,18 @@ a multi-configuration lens, `system` and `first_order` are those of
 `configuration` (0-based); `/api/lens/optimize` and the tolerancing
 endpoints take the same field.
 
+#### POST /api/lens/global-optimize
+
+`{ "lens", "starts": 16, "max_evaluations": 200, "bounds": {}, "ranges":
+{}, "seed": 0, "keep": 5, "workers": 1 }` → `{ "solutions": [{ "lens",
+"merit", "variables", "start", "first_order" }], "starts", "feasible",
+"distinct", "evaluations" }`. Local optimizations run from the lens as
+given (`start` 0) and from `starts` Sobol points over the variables'
+ranges. The response holds the distinct designs that meet every
+constraint, best merit first. `bounds` limit every local optimization (as
+for `/api/lens/optimize`); `ranges` set where starts are drawn (radii as
+curvatures in 1/m).
+
 #### POST /api/lens/merit
 
 `{ "lens" }` → `{ "configurations": [{ "configuration", "image_kind",
