@@ -67,6 +67,7 @@ import { SurfaceDetails } from "./SurfaceDetails";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { MeritPanel } from "./MeritPanel";
 import { GlobalSearchPanel } from "./GlobalSearchPanel";
+import { GlassExpertPanel } from "./GlassExpertPanel";
 import { ConstraintsEditor } from "./ConstraintsEditor";
 import { OptimizeReport } from "./OptimizeReport";
 import { LensTolerancePanel } from "./LensTolerancePanel";
@@ -1183,6 +1184,18 @@ export function LensDataEditor({
           return Number.isFinite(n) && n > 0 ? n : 300;
         })()}
         onUse={loadDesign}
+      />
+      <GlassExpertPanel
+        lens={lens}
+        disabled={busy !== null}
+        maxEvaluations={(() => {
+          const n = parseInt(maxEvaluations, 10);
+          return Number.isFinite(n) && n > 0 ? n : 150;
+        })()}
+        onDone={(result) => {
+          setFirstOrder(result.first_order);
+          onResolved(result);
+        }}
       />
       {optResult && (
         <OptimizeReport result={optResult} displayUnit={displayUnit} />

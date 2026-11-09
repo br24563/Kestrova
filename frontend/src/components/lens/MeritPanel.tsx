@@ -108,7 +108,13 @@ export function MeritPanel({
           <select
             aria-label="Merit kind"
             value={merit.kind}
-            onChange={(e) => set({ kind: e.target.value as MeritSpec["kind"] })}
+            onChange={(e) => {
+              const kind = e.target.value as MeritSpec["kind"];
+              // desensitizing is defined for the wavefront merit only
+              set(
+                kind === "wavefront" ? { kind } : { kind, desensitize: null },
+              );
+            }}
             className="border border-gray-200 rounded text-xs py-0.5"
           >
             <option value="transverse">Transverse ray error</option>
@@ -166,6 +172,40 @@ export function MeritPanel({
             className="w-12 border border-gray-200 rounded px-1 text-right"
           />
         </label>
+        {merit.kind === "wavefront" && (
+          <label
+            className="flex items-center gap-1"
+            title="Add the predicted wavefront degradation under the default tolerance set to the merit: trade nominal quality for a design that is easier to build"
+          >
+            <input
+              type="checkbox"
+              aria-label="Desensitize"
+              checked={!!merit.desensitize}
+              onChange={(e) =>
+                set({
+                  desensitize: e.target.checked
+                    ? { weight: 1, tolerances: [], rings: 4 }
+                    : null,
+                })
+              }
+            />
+            Desensitize
+            {merit.desensitize && (
+              <input
+                key={merit.desensitize.weight}
+                aria-label="Desensitize weight"
+                defaultValue={merit.desensitize.weight}
+                onBlur={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v) && v >= 0 && merit.desensitize)
+                    set({ desensitize: { ...merit.desensitize, weight: v } });
+                  else e.target.value = String(merit.desensitize?.weight ?? 1);
+                }}
+                className="w-12 border border-gray-200 rounded px-1 text-right"
+              />
+            )}
+          </label>
+        )}
         <button
           onClick={() =>
             set({
@@ -375,6 +415,9 @@ export function MeritPanel({
               {multi ? `${configs[c.configuration]}: ` : ""}
               {merit.kind === "wavefront" ? "RMS wavefront" : "RMS spot"}{" "}
               {imageRms(c)}
+              {c.desensitize
+                ? `, predicted degradation ${c.desensitize.predicted_rms_increase.toFixed(4)} waves`
+                : ""}
             </span>
           ))}
           <span className="text-gray-400">

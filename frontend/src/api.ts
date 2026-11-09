@@ -1189,3 +1189,31 @@ export async function globalOptimizeLens(
     "run the global search",
   );
 }
+
+export interface GlassSubstitutionResult extends LensResolveResult {
+  merit_before: number;
+  merit_after: number;
+  substitutions: { surface: number; from: string; to: string; merit: number }[];
+  evaluations: number;
+}
+
+/** Glass expert: nearest catalogue glasses tried on each glass, re-optimized. */
+export async function substituteLensGlasses(
+  lens: LensData,
+  options: {
+    candidates?: number;
+    vendors?: string[] | null;
+    maxEvaluations?: number;
+  } = {},
+): Promise<GlassSubstitutionResult> {
+  return postJson(
+    "/lens/substitute-glasses",
+    {
+      lens,
+      candidates: options.candidates ?? 8,
+      vendors: options.vendors ?? null,
+      max_evaluations: options.maxEvaluations ?? 150,
+    },
+    "substitute glasses",
+  );
+}

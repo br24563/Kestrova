@@ -146,6 +146,18 @@ constraint, best merit first. `bounds` limit every local optimization (as
 for `/api/lens/optimize`); `ranges` set where starts are drawn (radii as
 curvatures in 1/m).
 
+#### POST /api/lens/substitute-glasses
+
+`{ "lens", "surfaces": null, "candidates": 8, "vendors": null,
+"include_inquiry": false, "max_evaluations": 150, "passes": 2 }` → `{
+"lens", "system", "first_order", "merit_before", "merit_after",
+"substitutions": [{ "surface", "from", "to", "merit" }], "evaluations" }`:
+the glass expert.
+
+A desensitizing term is set on the lens (`merit.desensitize`: `weight`,
+`tolerances` as for `/api/lens/tolerance`, `rings`; wavefront merit
+only). `/api/lens/merit` reports it per tolerance.
+
 #### POST /api/lens/merit
 
 `{ "lens" }` → `{ "configurations": [{ "configuration", "image_kind",

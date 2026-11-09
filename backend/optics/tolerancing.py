@@ -393,6 +393,43 @@ def _compensate(R, G, limits):
     return R + Z @ G.T, Z
 
 
+def sensitivity_residuals(
+    lens: LensData,
+    tolerances: list[Tolerance],
+    compensators: Optional[list[Compensator]] = None,
+    rings: int = 4,
+) -> np.ndarray:
+    """
+    For each tolerance, the square root of the mean increase of the
+    compensated mean-square wavefront (waves^2) when it is set to +limit
+    and to -limit: the sum of squares is the predicted mean-square
+    degradation at the limits, the quantity a desensitized design keeps
+    small (in the spirit of Code V's SAB optimization).
+    """
+    compensators = list(compensators if compensators is not None else [Compensator()])
+    nominal = freeze(lens)
+    apertures = [s.semi_diameter for s in resolve(lens).surfaces]
+    probe = _probe(nominal, rings)
+    r0 = residuals(nominal, probe)
+    G = np.zeros((r0.size, len(compensators)))
+    for k, c in enumerate(compensators):
+        step = 1e-5
+        rp = residuals(apply(nominal, [], [(c, step)]), probe)
+        rm = residuals(apply(nominal, [], [(c, -step)]), probe)
+        G[:, k] = (rp - rm) / (2 * step)
+    limits = [c.limit for c in compensators]
+    (r0c,), _ = _compensate(r0[None, :], G, limits)
+    ms0 = float(np.sum(r0c**2))
+    out = []
+    for t in tolerances:
+        rp = residuals(apply(nominal, [(t, t.limit)], apertures=apertures), probe)
+        rm = residuals(apply(nominal, [(t, -t.limit)], apertures=apertures), probe)
+        comp, _ = _compensate(np.stack([rp, rm]), G, limits)
+        d = 0.5 * float(np.sum(comp[0] ** 2) + np.sum(comp[1] ** 2)) - ms0
+        out.append(math.sqrt(max(d, 0.0)))
+    return np.array(out)
+
+
 @dataclass
 class ToleranceAnalysis:
     nominal_rms: float  # waves, composite
