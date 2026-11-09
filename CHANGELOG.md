@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (follow-up)
+- Mirrors with aspheric, odd aspheric, Q, toroidal, Zernike and XY
+  polynomial shapes (off-axis and freeform mirrors), read back from the
+  component model; validated by a paraboloid's perfect focus and a toroidal
+  mirror's two focal lines.
+
+### Changed
+- Hopkins MTF integration splits its quadrature at the edges of blocked
+  parts of the pupil and integrates all frequencies together: an obscured
+  pupil's MTF now matches O'Neill's to 5e-4 at the default sampling (was
+  about 4e-3) and runs about 4x faster, and unobscured lenses are no
+  slower.
+
 ### Added (surface types)
 - Lens editor surface types: Q asphere (Forbes Qbfs / Qcon), toroid and
   cylinder, Zernike sag on a base conic, XY polynomial freeform and

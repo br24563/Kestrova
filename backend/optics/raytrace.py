@@ -587,8 +587,33 @@ def _shape_for(comp) -> Shape:
             comp.conic,
         )
     if isinstance(comp, Mirror):
+        if comp.surface_shape:
+            return _shape_for(mirror_shape_component(comp))
         return Conicoid(curvature_from_radius(comp.radius), comp.conic)
     return Shape()
+
+
+#: Surface components whose shape a mirror can take.
+_MIRROR_SHAPES = {
+    "aspheric": AsphericSurface,
+    "odd_aspheric": OddAsphericSurface,
+    "q_aspheric": QAsphericSurface,
+    "toric": ToricSurface,
+    "zernike": ZernikeSurface,
+    "xy_polynomial": XYPolynomialSurface,
+}
+
+
+def mirror_shape_component(mirror):
+    """The surface component a shaped mirror takes its sag from."""
+    data = dict(mirror.surface_shape)
+    kind = data.get("type")
+    if kind not in _MIRROR_SHAPES:
+        raise ValueError(
+            f"{mirror.id}: a mirror cannot have the shape of a '{kind}' surface"
+        )
+    data.update(id=mirror.id, position=mirror.position)
+    return _MIRROR_SHAPES[kind].model_validate(data)
 
 
 def _apply_aperture_shape(comp, surface: "Surface") -> None:
@@ -1773,6 +1798,17 @@ def pupil_grid(n: int, shape: str = "square"):
 # =============================================================================
 
 
+def chief_reference(system: OpticalSystem, hx: float, hy: float, seq, fo) -> tuple:
+    """(image point, direction, optical path) of the chief ray traced without
+    clipping, the wavefront reference when an obscuration blocks it."""
+    bc, _, _ = trace_field_rays(
+        system, hx, hy, np.zeros(1), np.zeros(1), seq=seq, fo=fo, clip=False
+    )
+    if not bc.valid[0]:
+        raise ValueError("The chief ray cannot be traced for this field")
+    return bc.image[0].copy(), bc.directions[0].copy(), float(bc.opl[0])
+
+
 def opd(
     system: OpticalSystem,
     hx: float,
@@ -1782,6 +1818,7 @@ def opd(
     wavelength: Optional[float] = None,
     seq=None,
     fo=None,
+    chief: Optional[tuple] = None,
 ):
     """
     Optical path difference W = OPL(chief) - OPL(ray), both measured to the
@@ -1789,6 +1826,9 @@ def opd(
     through the paraxial exit pupil on the chief ray. When the image is at
     infinity (afocal image space) the reference is a plane wave normal to
     the chief ray.
+
+    ``chief`` is the unclipped chief ray from :func:`chief_reference`, used
+    when the chief ray itself is blocked (saves retracing it per call).
 
     Returns (W array in meters, valid mask, bundle).
     """
@@ -1804,12 +1844,8 @@ def opd(
     if not b.valid[0]:
         # A chief ray stopped by an obscuration still defines the reference
         # (Code V traces the reference ray without clipping).
-        bc, _, _ = trace_field_rays(
-            system, hx, hy, np.zeros(1), np.zeros(1), seq=seq, fo=fo, clip=False
-        )
-        if not bc.valid[0]:
-            raise ValueError("The chief ray cannot be traced for this field")
-        b.image[0], b.directions[0], b.opl[0] = bc.image[0], bc.directions[0], bc.opl[0]
+        ref = chief if chief is not None else chief_reference(system, hx, hy, seq, fo)
+        b.image[0], b.directions[0], b.opl[0] = ref
     Q = b.image[0]
     dch = b.directions[0]
     o, Rm = seq.image_origin, seq.image_rotation

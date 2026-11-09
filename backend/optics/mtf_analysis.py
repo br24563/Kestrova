@@ -21,6 +21,7 @@ to 1 at zero frequency. Frequencies are in cycles/mm at the interface.
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from typing import Optional, Sequence, Union
 
 import numpy as np
@@ -61,6 +62,188 @@ def _inside(px, py, vignetting) -> np.ndarray:
     return ((px - cx) / ax) ** 2 + ((py - cy) / ay) ** 2 <= 1.0 + 1e-12
 
 
+#: Pupil points traced per call (bounds the memory of a large batch).
+_CHUNK = 100_000
+
+
+@lru_cache(maxsize=64)
+def _gauss_nodes(n: int) -> tuple:
+    x, w = np.polynomial.legendre.leggauss(n)
+    return tuple(x), tuple(w)
+
+
+def _gauss_rule(n: int):
+    """Gauss-Legendre nodes and weights on [-1, 1]."""
+    x, w = _gauss_nodes(n)
+    return np.array(x), np.array(w)
+
+
+def _runs(ok_row) -> list:
+    """(first, last) index of each run of True in a boolean row."""
+    runs = []
+    j, n = 0, len(ok_row)
+    while j < n:
+        if not ok_row[j]:
+            j += 1
+            continue
+        k = j
+        while k + 1 < n and ok_row[k + 1]:
+            k += 1
+        runs.append((j, k))
+        j = k + 1
+    return runs
+
+
+def _overlap_integrals(pair, shifts, x, w, bisections: int = 16) -> np.ndarray:
+    """
+    Integrals of a conj(b) over the overlaps of two unit pupils sheared by
+    +-shifts[k] along u (|u| <= 1 - shifts[k]), for every k at once, by
+    Gauss quadrature across (v) Gauss lines in u. ``pair(u, v, k)`` gives
+    the pupil values a and b at the sheared points (0 where a ray is blocked
+    or misses).
+
+    When every quadrature point of an overlap passes, its integral is the
+    plain product rule. When some are blocked (an obscuration, a shaped
+    aperture, vignetting by any surface) the integrand has edges inside the
+    domain, which Gauss quadrature integrates poorly. Each line is then
+    split at its edges (found by probing and bisection) so every unblocked
+    piece gets its own Gauss interval, and the u range is split into panels
+    where the number of pieces changes (a line grazing an edge), so each
+    panel's line integrals vary smoothly. Every stage traces all overlaps
+    together.
+    """
+    shifts = np.asarray(shifts, dtype=float)
+    K, nq = len(shifts), len(x)
+    halves = 1.0 - shifts
+    out = np.zeros(K, dtype=complex)
+    if K == 0:
+        return out
+
+    def h_of(u, k):
+        return np.sqrt(np.clip(1.0 - (np.abs(u) + shifts[k]) ** 2, 0.0, None))
+
+    def passes(a, b):
+        return (np.abs(a) > 0) & (np.abs(b) > 0)
+
+    # plain Gauss rule for every overlap
+    u = halves[:, None] * x[None, :]
+    wu = halves[:, None] * w[None, :]
+    ks = np.repeat(np.arange(K), nq * nq)
+    H = h_of(u, np.arange(K)[:, None])
+    U = np.repeat(u[:, :, None], nq, axis=2)
+    V = H[:, :, None] * x[None, None, :]
+    a, b = pair(U.ravel(), V.ravel(), ks)
+    weight = (wu[:, :, None] * H[:, :, None] * w[None, None, :]).reshape(K, -1)
+    prod = (a * np.conj(b)).reshape(K, -1)
+    clean = passes(a, b).reshape(K, -1).all(axis=1)
+    out[clean] = np.sum(weight * prod, axis=1)[clean]
+    blocked = np.flatnonzero(~clean)
+    if blocked.size == 0:
+        return out
+
+    # coarse probes: bisection then locates each edge to ~1e-5 of the pupil
+    t = np.linspace(-1.0, 1.0, 2 * max(8, nq // 6) + 1)
+    M = len(t)
+
+    def probe(us, kk):
+        """Pass/block of the probe points of each line (u, overlap)."""
+        Vp = h_of(us, kk)[:, None] * t[None, :]
+        a, b = pair(np.repeat(us, M), Vp.ravel(), np.repeat(kk, M))
+        return passes(a, b).reshape(len(us), M)
+
+    # panels in u: split where the number of unblocked pieces changes
+    ub = u[blocked]
+    kb = np.repeat(blocked, nq)
+    counts = np.array([len(_runs(r)) for r in probe(ub.ravel(), kb)]).reshape(
+        len(blocked), nq
+    )
+    brk_k, brk_lo, brk_hi, brk_c = [], [], [], []
+    for row, k in enumerate(blocked):
+        for i in range(nq - 1):
+            if counts[row, i] != counts[row, i + 1]:
+                brk_k.append(k)
+                brk_lo.append(ub[row, i])
+                brk_hi.append(ub[row, i + 1])
+                brk_c.append(counts[row, i])
+    panel_edges = {int(k): [-halves[k], halves[k]] for k in blocked}
+    if brk_k:
+        bk = np.array(brk_k)
+        lo, hi, c0 = np.array(brk_lo), np.array(brk_hi), np.array(brk_c)
+        for _ in range(bisections):
+            mid = 0.5 * (lo + hi)
+            same = np.array([len(_runs(r)) for r in probe(mid, bk)]) == c0
+            lo = np.where(same, mid, lo)
+            hi = np.where(same, hi, mid)
+        for k, edge in zip(bk, 0.5 * (lo + hi)):
+            panel_edges[int(k)].append(float(edge))
+    # Gauss lines in each panel, in proportion to its width
+    line_u, line_w, line_k = [], [], []
+    for kp, edges in panel_edges.items():
+        e_ = sorted(edges)
+        total = e_[-1] - e_[0]
+        for lo_, hi_ in zip(e_[:-1], e_[1:]):
+            xp, wp = _gauss_rule(max(8, math.ceil(nq * (hi_ - lo_) / total)))
+            line_u.append(0.5 * (lo_ + hi_) + 0.5 * (hi_ - lo_) * xp)
+            line_w.append(0.5 * (hi_ - lo_) * wp)
+            line_k.append(np.full(len(xp), kp))
+    LU = np.concatenate(line_u)
+    LW = np.concatenate(line_w)
+    LK = np.concatenate(line_k)
+    LH = h_of(LU, LK)
+
+    # pieces of each line, their edges found by bisection
+    seg_line: list[int] = []
+    v_lo: list[float] = []
+    v_hi: list[float] = []
+    todo: list[tuple] = []
+    for i, row in enumerate(probe(LU, LK)):
+        for j, k_ in _runs(row):
+            s_ = len(seg_line)
+            seg_line.append(i)
+            v_lo.append(LH[i] * t[j])
+            v_hi.append(LH[i] * t[k_])
+            if j > 0:
+                todo.append((s_, 0, LH[i] * t[j], LH[i] * t[j - 1]))
+            if k_ < M - 1:
+                todo.append((s_, 1, LH[i] * t[k_], LH[i] * t[k_ + 1]))
+    if not seg_line:
+        return out
+    seg_line_a = np.array(seg_line)
+    v_lo_a, v_hi_a = np.array(v_lo), np.array(v_hi)
+    if todo:
+        seg = np.array([e_[0] for e_ in todo])
+        side = np.array([e_[1] for e_ in todo])
+        good = np.array([e_[2] for e_ in todo], dtype=float)
+        bad = np.array([e_[3] for e_ in todo], dtype=float)
+        ue, ke = LU[seg_line_a[seg]], LK[seg_line_a[seg]]
+        for _ in range(bisections):
+            mid = 0.5 * (good + bad)
+            ok = passes(*pair(ue, mid, ke))
+            good = np.where(ok, mid, good)
+            bad = np.where(ok, bad, mid)
+        edge = 0.5 * (good + bad)
+        v_lo_a[seg[side == 0]] = edge[side == 0]
+        v_hi_a[seg[side == 1]] = edge[side == 1]
+    # Gauss points along each piece, in proportion to its share of the line
+    mid, rad = 0.5 * (v_lo_a + v_hi_a), 0.5 * (v_hi_a - v_lo_a)
+    share = rad / np.maximum(LH[seg_line_a], 1e-300)
+    n_pts = np.maximum(8, np.ceil(nq * share)).astype(int)
+    Ug, Vg, Wt, Kg = [], [], [], []
+    for n in np.unique(n_pts):
+        sel = n_pts == n
+        xp, wp = _gauss_rule(int(n))
+        Vg.append((mid[sel, None] + rad[sel, None] * xp[None, :]).ravel())
+        Wt.append((LW[seg_line_a[sel]][:, None] * rad[sel, None] * wp[None, :]).ravel())
+        Ug.append(np.repeat(LU[seg_line_a[sel]], n))
+        Kg.append(np.repeat(LK[seg_line_a[sel]], n))
+    Ug_a, Vg_a, Wt_a, Kg_a = (np.concatenate(z) for z in (Ug, Vg, Wt, Kg))
+    a, b = pair(Ug_a, Vg_a, Kg_a)
+    sums = np.zeros(K, dtype=complex)
+    np.add.at(sums, Kg_a, Wt_a * a * np.conj(b))
+    out[blocked] = sums[blocked]
+    return out
+
+
 def hopkins_otf(
     system: OpticalSystem,
     frequencies: Values,
@@ -86,56 +269,51 @@ def hopkins_otf(
     cutoff = 2.0 * na / wavelength
     x, w = np.polynomial.legendre.leggauss(int(quadrature))
 
+    chief = rt.chief_reference(system, field_x, field_y, seq, fo)
+
     def pupil_values(px, py):
         """exp(i k W) at pupil points, 0 outside the pupil or for failed rays."""
-        inside = _inside(px, py, vignetting)
+        inside = np.flatnonzero(_inside(px, py, vignetting))
         out = np.zeros(px.shape, dtype=complex)
-        if inside.any():
+        for start in range(0, inside.size, _CHUNK):
+            idx = inside[start : start + _CHUNK]
             W, ok, _ = rt.opd(
                 system,
                 field_x,
                 field_y,
-                px[inside],
-                py[inside],
+                px[idx],
+                py[idx],
                 wavelength,
                 seq=seq,
                 fo=fo,
+                chief=chief,
             )
-            vals = np.where(ok, np.exp(2j * math.pi * np.nan_to_num(W) / wavelength), 0)
-            out[inside] = vals
+            out[idx] = np.where(
+                ok, np.exp(2j * math.pi * np.nan_to_num(W) / wavelength), 0
+            )
         return out
 
     def otf_along(angle: float) -> np.ndarray:
         e = np.array([math.sin(angle), math.cos(angle)])  # (x, y) of the shift
         ep = np.array([e[1], -e[0]])
-        result = []
-        area = None
-        for delta in [0.0, *(2.0 * np.asarray(frequencies, dtype=float) / cutoff)]:
-            if delta >= 2.0:
-                result.append(0.0)
-                continue
-            half = 1.0 - delta / 2.0  # u range of the overlap of two unit disks
-            u = half * x
-            wu = half * w
-            h = np.sqrt(np.clip(1.0 - (np.abs(u) + delta / 2.0) ** 2, 0.0, None))
-            U = u[:, None] * np.ones_like(x)[None, :]
-            V = h[:, None] * x[None, :]
-            Wt = wu[:, None] * h[:, None] * w[None, :]
-            px, py = U * e[0] + V * ep[0], U * e[1] + V * ep[1]
-            a = pupil_values(
-                (px + delta / 2 * e[0]).ravel(), (py + delta / 2 * e[1]).ravel()
+        deltas = 2.0 * np.asarray(frequencies, dtype=float) / cutoff
+        shifts = np.concatenate([[0.0], np.where(deltas < 2.0, deltas, 0.0) / 2.0])
+
+        def pair(uu, vv, kk):
+            """Pupil values at the two points sheared by +-shifts[kk]."""
+            px, py = uu * e[0] + vv * ep[0], uu * e[1] + vv * ep[1]
+            sx, sy = shifts[kk] * e[0], shifts[kk] * e[1]
+            both = pupil_values(
+                np.concatenate([px + sx, px - sx]), np.concatenate([py + sy, py - sy])
             )
-            b = pupil_values(
-                (px - delta / 2 * e[0]).ravel(), (py - delta / 2 * e[1]).ravel()
-            )
-            value = np.sum(Wt.ravel() * a * np.conj(b))
-            if area is None:
-                area = value.real
-                if area <= 0:
-                    raise ValueError("No rays reach the image for this field")
-                continue
-            result.append(value / area)
-        return np.asarray(result, dtype=complex)
+            return both[: len(px)], both[len(px) :]
+
+        values = _overlap_integrals(pair, shifts, x, w)
+        area = values[0].real
+        if area <= 0:
+            raise ValueError("No rays reach the image for this field")
+        otf = values[1:] / area
+        return np.where(deltas < 2.0, otf, 0.0)
 
     return {
         "frequency": np.asarray(frequencies, dtype=float),

@@ -678,6 +678,37 @@ def _shaped_component(s: LensSurface, cid: str, z: float, aperture: float):
     )
 
 
+_SHAPE_FIELDS = (
+    "type",
+    "radius",
+    "conic",
+    "aspheric_coeffs",
+    "odd_coeffs",
+    "q_type",
+    "coefficients",
+    "norm_radius",
+    "radius_tangential",
+    "radius_sagittal",
+    "zernike_coeffs",
+    "terms",
+)
+
+
+def _shaped_mirror(s: LensSurface, cid: str, z: float, semi: float, shape) -> Mirror:
+    """A mirror, with the sag of ``shape`` (a surface component) if given."""
+    return Mirror(
+        id=cid,
+        position=z,
+        width=2 * semi,
+        radius=s.radius,
+        conic=s.conic,
+        aperture_diameter=2 * semi,
+        surface_shape=(
+            None if shape is None else shape.model_dump(include=set(_SHAPE_FIELDS))
+        ),
+    )
+
+
 def surface_shape(s: LensSurface):
     """The traced shape (local sag) of a surface row with a shape."""
     if s.surface_type not in SHAPED_TYPES:
@@ -806,9 +837,22 @@ def _build(
             continue
         if s.surface_type in _NEW_SHAPES:
             if s.material == "MIRROR":
-                raise ValueError(
-                    f"Surface {i}: {s.surface_type} mirrors are not supported yet"
+                if s.surface_type == "diffractive":
+                    raise ValueError(
+                        f"Surface {i}: diffractive mirrors are not supported yet"
+                    )
+                cid = _unique(cid_base, used)
+                owner[i] = len(comps)
+                semi = required_semi(i)
+                comps.append(
+                    _shaped_mirror(
+                        s, cid, zs[i], semi, _shaped_component(s, cid, zs[i], 2 * semi)
+                    )
                 )
+                labels[i] = f"{cid}.mirror"
+                direction = -direction
+                i += 1
+                continue
             cid = _unique(cid_base, used)
             owner[i] = len(comps)
             comps.append(_shaped_component(s, cid, zs[i], 2 * required_semi(i)))
@@ -823,21 +867,30 @@ def _build(
             and any(s.aspheric_coefficients)
         )
         if s.material == "MIRROR":
-            if aspheric:
-                raise ValueError(f"Surface {i}: aspheric mirrors are not supported yet")
             cid = _unique(cid_base, used)
             semi = required_semi(i)
             owner[i] = len(comps)
-            comps.append(
-                Mirror(
-                    id=cid,
-                    position=zs[i],
-                    width=2 * semi,
-                    radius=s.radius,
-                    conic=s.conic,
-                    aperture_diameter=2 * semi,
+            shape = None
+            if aspheric:
+                shape = (
+                    OddAsphericSurface(
+                        id=cid,
+                        position=zs[i],
+                        radius=s.radius,
+                        conic=s.conic,
+                        aspheric_coeffs=list(s.aspheric_coefficients),
+                        odd_coeffs=[0.0] + list(s.odd_coefficients),
+                    )
+                    if odd
+                    else AsphericSurface(
+                        id=cid,
+                        position=zs[i],
+                        radius=s.radius,
+                        conic=s.conic,
+                        aspheric_coeffs=list(s.aspheric_coefficients),
+                    )
                 )
-            )
+            comps.append(_shaped_mirror(s, cid, zs[i], semi, shape))
             labels[i] = f"{cid}.mirror"
             direction = -direction
             i += 1
@@ -1408,15 +1461,39 @@ def from_system(system: OpticalSystem) -> LensData:
             )
             zs.append(c.position)
         elif isinstance(c, Mirror):
-            rows.append(
-                LensSurface(
-                    label=c.id,
-                    radius=c.radius,
-                    conic=c.conic,
-                    material="MIRROR",
-                    semi_diameter=(c.aperture_diameter or c.width) / 2,
+            semi = (c.aperture_diameter or c.width) / 2
+            if c.surface_shape:
+                shape = rt.mirror_shape_component(c)
+                shape = shape.model_copy(update={"aperture_diameter": 2 * semi})
+                if isinstance(shape, (AsphericSurface, OddAsphericSurface)):
+                    odd = list(getattr(shape, "odd_coeffs", []))
+                    if odd and odd[0] != 0.0:
+                        raise ValueError(
+                            f"{c.id}: an r^1 odd-asphere term is not supported"
+                        )
+                    row = LensSurface(
+                        label=c.id,
+                        surface_type="odd_asphere" if any(odd) else "even_asphere",
+                        radius=shape.radius,
+                        conic=shape.conic,
+                        aspheric_coefficients=list(shape.aspheric_coeffs),
+                        odd_coefficients=odd[1:],
+                        semi_diameter=semi,
+                    )
+                else:
+                    row = _row_from_shaped(shape, None)
+                row.material = "MIRROR"
+                rows.append(row)
+            else:
+                rows.append(
+                    LensSurface(
+                        label=c.id,
+                        radius=c.radius,
+                        conic=c.conic,
+                        material="MIRROR",
+                        semi_diameter=semi,
+                    )
                 )
-            )
             zs.append(c.position)
             direction = -direction
         elif isinstance(c, CoordinateBreak):
