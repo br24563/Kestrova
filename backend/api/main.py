@@ -943,6 +943,42 @@ async def lens_global_optimize(request: LensGlobalRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class GlassSubstitutionRequest(BaseModel):
+    lens: _ld.LensData
+    surfaces: Optional[list[int]] = None
+    candidates: int = Field(8, ge=1, le=60)
+    vendors: Optional[list[str]] = None
+    include_inquiry: bool = False
+    max_evaluations: int = Field(150, ge=10, le=5000)
+    passes: int = Field(2, ge=1, le=10)
+
+
+@app.post("/api/lens/substitute-glasses")
+async def lens_substitute_glasses(request: GlassSubstitutionRequest):
+    """
+    Glass expert: try the nearest catalogue glasses on each glass of the
+    lens, re-optimizing with its variables, and keep each substitution that
+    lowers the merit (model glasses are always replaced).
+    """
+    from optics.glass_expert import substitute_glasses
+
+    try:
+        result = substitute_glasses(
+            request.lens,
+            surfaces=request.surfaces,
+            candidates=request.candidates,
+            vendors=request.vendors,
+            include_inquiry=request.include_inquiry,
+            max_evaluations=request.max_evaluations,
+            passes=request.passes,
+        )
+        result["system"] = _ld.to_system(result["lens"])
+        result["first_order"] = _first_order_summary(result["system"])
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/lens/merit")
 async def lens_merit(request: LensRequest):
     """

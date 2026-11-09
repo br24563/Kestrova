@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (desensitizing and glass substitution)
+- Desensitized optimization (`merit.desensitize`, wavefront merit): the
+  predicted wavefront degradation under a tolerance set is added to the
+  merit, so the optimizer trades nominal quality for buildability; the
+  merit report lists it per tolerance.
+- Glass expert (`/api/lens/substitute-glasses`): nearby catalogue glasses
+  tried on each glass with re-optimization, keeping those that lower the
+  merit. In the lens editor: a Desensitize option in the merit panel and a
+  "Substitute glasses" control.
+
 ### Added (global search)
 - Global search on the lens prescription (`/api/lens/global-optimize`):
   constrained local optimizations from Sobol-spread starts. It returns the

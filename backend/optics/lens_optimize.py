@@ -102,6 +102,28 @@ def _needs_apertures(lens: LensData) -> bool:
     )
 
 
+def desensitize_tolerances(lens: LensData) -> list:
+    """The tolerances of the lens's desensitizing term (the default set for
+    the lens when none are given), or [] without one."""
+    from .tolerancing import Tolerance, default_tolerances
+
+    d = lens.merit.desensitize
+    if d is None or d.weight == 0:
+        return []
+    if d.tolerances:
+        return [Tolerance.model_validate(t) for t in d.tolerances]
+    return default_tolerances(lens)
+
+
+def _desensitize_residuals(lens: LensData, tolerances: list) -> np.ndarray:
+    from .tolerancing import sensitivity_residuals
+
+    d = lens.merit.desensitize
+    if d is None or not tolerances:
+        return np.zeros(0)
+    return d.weight * sensitivity_residuals(lens, tolerances, rings=d.rings)
+
+
 def merit_report(lens: LensData) -> dict:
     """
     The merit of a lens term by term, per configuration: the image term
@@ -130,7 +152,25 @@ def merit_report(lens: LensData) -> dict:
             ops.append(
                 {**o.model_dump(), "value": v, "contribution": c, "index": index}
             )
-        conf_total = image_ms + sum(o["contribution"] for o in ops)
+        tols = desensitize_tolerances(Lk)
+        desens = None
+        if tols:
+            dr = _desensitize_residuals(Lk, tols)
+            weight = lens.merit.desensitize.weight  # type: ignore[union-attr]
+            desens = {
+                "weight": weight,
+                "tolerances": [
+                    {"tolerance": t.label, "rms_increase": float(v / weight)}
+                    for t, v in zip(tols, dr)
+                ],
+                "predicted_rms_increase": float(math.sqrt(np.sum(dr**2)) / weight),
+                "contribution": float(np.sum(dr**2)),
+            }
+        conf_total = (
+            image_ms
+            + sum(o["contribution"] for o in ops)
+            + (desens["contribution"] if desens else 0.0)
+        )
         total += weights[k] * conf_total
         rms = math.sqrt(image_ms) / spec.image_weight if spec.image_weight else None
         out.append(
@@ -140,6 +180,7 @@ def merit_report(lens: LensData) -> dict:
                 "image_rms": rms,
                 "image_contribution": image_ms,
                 "operands": ops,
+                "desensitize": desens,
                 "merit": conf_total,
             }
         )
@@ -318,6 +359,15 @@ def optimize(
         raise ValueError("No surface parameter is flagged as a variable")
     var = [(i, name) for i, name, _, _ in handles]
     spec_merit = merit is None  # the lens's own merit and operands
+    # the desensitizing term's tolerances, fixed for the run (per configuration)
+    desens_tols = (
+        [
+            desensitize_tolerances(configured(lens, k) if n_conf > 1 else lens)
+            for k in range(n_conf)
+        ]
+        if spec_merit
+        else [[] for _ in range(n_conf)]
+    )
 
     bounds = dict(bounds or {})
     keys = [_variable_key(h) for h in handles]
@@ -424,6 +474,11 @@ def optimize(
                                 ],
                             ]
                         )
+                if spec_merit and desens_tols[k]:
+                    Lk = confs[k]
+                    rk = np.concatenate(
+                        [rk, _desensitize_residuals(Lk, desens_tols[k])]
+                    )
                 parts.append(math.sqrt(wk) * rk)
             r = np.concatenate(parts)
             if not np.all(np.isfinite(r)):
@@ -768,6 +823,32 @@ def nearest_catalog_glass(
     if best is None:
         raise ValueError("No catalog glass matches the vendor selection")
     return best
+
+
+def nearest_catalog_glasses(
+    nd: float,
+    vd: float,
+    count: int = 8,
+    vendors: Optional[list[str]] = None,
+    include_inquiry: bool = False,
+    nd_per_vd: float = 0.01,
+    exclude: Optional[set] = None,
+) -> list[str]:
+    """The ``count`` catalogue glasses nearest to (nd, Vd), nearest first
+    (metric as :func:`nearest_catalog_glass`), skipping ``exclude``."""
+    from .materials import MATERIALS
+
+    wanted = {v.lower() for v in (vendors or ["Schott", "Ohara", "Hoya", "CDGM"])}
+    skip = exclude or set()
+    scored = []
+    for name, m in MATERIALS.items():
+        if (m.manufacturer or "").lower() not in wanted or m.nd is None or m.vd is None:
+            continue
+        if (m.status == "inquiry" and not include_inquiry) or name in skip:
+            continue
+        scored.append((math.hypot((m.nd - nd) / nd_per_vd, m.vd - vd), name))
+    scored.sort()
+    return [name for _, name in scored[: int(count)]]
 
 
 def snap_glasses(

@@ -337,6 +337,30 @@ Optimizing reaches two closed-form designs. Minimising S-I alone reaches
 Coddington's minimum-spherical bending q = 2(n^2 - 1)/(n + 2) within
 1 %. A telecentricity constraint puts the stop at the front focal plane.
 
+### Desensitizing and glass substitution
+
+With the wavefront merit, `merit.desensitize` adds one residual per
+tolerance: weight x sqrt(predicted increase of the compensated
+mean-square wavefront at +-limit), from the fast tolerancing (default
+tolerance set unless given). The merit then approximates nominal plus
+as-built degradation, in the spirit of Code V's SAB. Two checks:
+- the term equals the fast tolerancing's prediction;
+- adding it never raises the predicted degradation and never lowers the
+  nominal error (minimising f against f + g).
+
+How much it helps depends on the lens. On the Geiser triplet with 4 mrad
+element tilts and a 0.15 mm decenter, it cuts the predicted degradation
+by about 3 % for 0.02 waves of nominal error, and the exact Monte Carlo
+as-built mean is unchanged. That design was already close to as-built
+optimal.
+
+`optics/glass_expert.py` (Code V's glass expert) tries the nearest
+catalogue glasses (0.01 in nd counts as 1 in Vd) on each glass, re-optimizes
+with the lens's variables and keeps each substitution that lowers the
+merit, in passes; model glasses are always replaced. Given N-F2 as the
+flint of a thin achromat designed in closed form for N-BK7 / N-SF2, it
+finds N-SF2.
+
 ### Global search
 
 `optics/global_lens.py` looks beyond the nearest local minimum, in the

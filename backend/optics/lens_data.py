@@ -487,6 +487,24 @@ class Operand(BaseModel):
         return self
 
 
+class Desensitize(BaseModel):
+    """
+    A desensitizing term in the merit (in the spirit of Code V's SAB): for
+    each tolerance, ``weight`` times the square root of the predicted
+    increase of the compensated mean-square wavefront (waves^2) at its
+    limits (:func:`optics.tolerancing.sensitivity_residuals`). Its squares
+    add up to the predicted degradation, so the optimizer trades nominal
+    performance for a design that is easier to build.
+    """
+
+    weight: float = Field(default=1.0, ge=0.0)
+    tolerances: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="optics.tolerancing.Tolerance entries (empty = the default set)",
+    )
+    rings: int = Field(default=4, ge=2, le=12)
+
+
 class MeritSpec(BaseModel):
     """
     The merit function the optimizer minimises (Code V's default error
@@ -506,6 +524,15 @@ class MeritSpec(BaseModel):
         default=1.0, ge=0.0, description="Weight of the image term (0 = operands only)"
     )
     operands: list[Operand] = Field(default_factory=list)
+    desensitize: Optional[Desensitize] = None
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.desensitize is not None and self.kind != "wavefront":
+            raise ValueError(
+                "Desensitizing needs the wavefront merit (both terms are in waves)"
+            )
+        return self
 
 
 class LensData(BaseModel):
@@ -669,6 +696,14 @@ class LensData(BaseModel):
                     "cannot also be a variable, solve or pickup (flag the zoom "
                     "row as variable instead)"
                 )
+        if self.merit.desensitize is not None and self.merit.desensitize.tolerances:
+            from .tolerancing import Tolerance
+
+            for t in self.merit.desensitize.tolerances:
+                tol = Tolerance.model_validate(t)
+                last = tol.last_surface if tol.last_surface is not None else tol.surface
+                if last >= len(self.surfaces):
+                    raise ValueError(f"Tolerance {tol.label}: no such surface")
         # the surface table always shows configuration 1
         for row in self.zoom:
             _apply_zoom_value(self, row, 0)

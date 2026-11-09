@@ -562,6 +562,12 @@ export interface MeritSpec {
   reference: "chief" | "centroid";
   image_weight: number;
   operands: Operand[];
+  /** Desensitizing term (wavefront merit only); tolerances [] = the default set. */
+  desensitize?: {
+    weight: number;
+    tolerances: Record<string, unknown>[];
+    rings: number;
+  } | null;
 }
 
 /** The merit term by term in one configuration. */
@@ -575,6 +581,12 @@ export interface MeritConfigurationReport {
     contribution: number;
     index: number;
   })[];
+  desensitize?: {
+    weight: number;
+    tolerances: { tolerance: string; rms_increase: number }[];
+    predicted_rms_increase: number;
+    contribution: number;
+  } | null;
   merit: number;
 }
 
