@@ -131,7 +131,7 @@ describe("lens data API", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/lens/optimize");
     expect(body.bounds).toEqual({ "1.radius": [0.02, 1] });
     expect(body.max_evaluations).toBe(50);
-    expect(result.rms_spot_after).toBeLessThan(result.rms_spot_before);
+    expect(result.rms_spot_after!).toBeLessThan(result.rms_spot_before!);
   });
 
   it("surfaces the backend's error detail", async () => {

@@ -11,27 +11,21 @@ import type {
   LensConstraintStatus,
   LensData,
 } from "../../types";
+import { SURFACE_CONSTRAINTS } from "../../types";
 import {
-  fromMeters,
-  toMeters,
-  LENGTH_UNIT_LABELS,
-  SURFACE_CONSTRAINTS,
-} from "../../types";
+  FIELD_PROPERTIES,
+  PROPERTY_LABELS,
+  fromDisplayValue,
+  isLengthProperty,
+  showValue,
+  toDisplayValue,
+  unitLabel,
+} from "./properties";
 
-export const CONSTRAINT_LABELS: Record<LensConstraintKind, string> = {
-  efl: "Effective focal length",
-  bfl: "Back focal length",
-  working_f_number: "Working F-number",
-  magnification: "Magnification",
-  total_track: "Total track",
-  center_thickness: "Centre thickness",
-  edge_thickness: "Edge thickness",
-};
+export const CONSTRAINT_LABELS = PROPERTY_LABELS;
 
-/** Constraints whose values are lengths (the others are pure numbers). */
-export function isLengthConstraint(kind: LensConstraintKind): boolean {
-  return kind !== "working_f_number" && kind !== "magnification";
-}
+/** Constraints whose values are lengths. */
+export const isLengthConstraint = isLengthProperty;
 
 /** "= target", "≥ min", "≤ max" or "min … max" in display units. */
 export function describeConstraint(
@@ -39,14 +33,7 @@ export function describeConstraint(
   displayUnit: LengthUnit,
 ): string {
   const show = (v: number) =>
-    String(
-      Number(
-        (isLengthConstraint(c.kind)
-          ? fromMeters(v, displayUnit)
-          : v
-        ).toPrecision(6),
-      ),
-    );
+    String(Number(toDisplayValue(c.kind, v, displayUnit).toPrecision(6)));
   if (c.target !== null && c.target !== undefined) return `= ${show(c.target)}`;
   const lo = c.minimum ?? null;
   const hi = c.maximum ?? null;
@@ -73,7 +60,6 @@ export function ConstraintsEditor({
   onCheck,
 }: Props) {
   const constraints = lens.constraints ?? [];
-  const unit = LENGTH_UNIT_LABELS[displayUnit];
   const configs = lens.configuration_names ?? [];
   const multi = configs.length > 1;
   /** Reported values of constraint k (one per configuration it applies to). */
@@ -91,23 +77,15 @@ export function ConstraintsEditor({
     onChange([...constraints, { kind: "efl", target: 0.1, surface: null }]);
 
   const toDisplay = (c: LensConstraint, v: number | null | undefined) =>
-    v === null || v === undefined
-      ? ""
-      : String(
-          Number(
-            (isLengthConstraint(c.kind)
-              ? fromMeters(v, displayUnit)
-              : v
-            ).toPrecision(8),
-          ),
-        );
+    showValue(c.kind, v, displayUnit);
   const fromText = (c: LensConstraint, text: string): number | null => {
     const t = text.trim();
     if (t === "") return null;
     const v = Number(t);
     if (!Number.isFinite(v)) return null;
-    return isLengthConstraint(c.kind) ? toMeters(v, displayUnit) : v;
+    return fromDisplayValue(c.kind, v, displayUnit);
   };
+  const fieldCount = lens.fields?.length ?? 3;
 
   const changeKind = (k: number, kind: LensConstraintKind) => {
     const c = constraints[k];
@@ -120,6 +98,7 @@ export function ConstraintsEditor({
       ...c,
       kind,
       surface: needsSurface ? (c.surface ?? Math.max(firstGlass, 0)) : null,
+      field: FIELD_PROPERTIES.includes(kind) ? (c.field ?? null) : null,
     });
   };
 
@@ -167,7 +146,9 @@ export function ConstraintsEditor({
           <thead className="bg-gray-50 text-gray-600">
             <tr>
               <th className="px-1 py-0.5 text-left font-medium">Property</th>
-              <th className="px-1 py-0.5 text-left font-medium">Surface</th>
+              <th className="px-1 py-0.5 text-left font-medium">
+                Surface / field
+              </th>
               {multi && (
                 <th className="px-1 py-0.5 text-left font-medium">
                   Configuration
@@ -189,7 +170,8 @@ export function ConstraintsEditor({
                   ? "target"
                   : "limits";
               const reported = statusesOf(k);
-              const u = isLengthConstraint(c.kind) ? ` ${unit}` : "";
+              const ul = unitLabel(c.kind, displayUnit);
+              const u = ul ? ` ${ul}` : "";
               return (
                 <tr key={k} className="border-t border-gray-100">
                   <td className="px-1">
@@ -223,6 +205,28 @@ export function ConstraintsEditor({
                         }
                         className="w-12 border border-gray-200 rounded px-1 text-right"
                       />
+                    ) : FIELD_PROPERTIES.includes(c.kind) ? (
+                      <select
+                        aria-label={`Constraint ${k + 1} field`}
+                        value={c.field == null ? "last" : String(c.field)}
+                        onChange={(e) =>
+                          set(k, {
+                            ...c,
+                            field:
+                              e.target.value === "last"
+                                ? null
+                                : parseInt(e.target.value, 10),
+                          })
+                        }
+                        className="bg-transparent text-xs py-0.5"
+                      >
+                        <option value="last">Last field</option>
+                        {Array.from({ length: fieldCount }, (_, i) => (
+                          <option key={i} value={i}>
+                            Field {i + 1}
+                          </option>
+                        ))}
+                      </select>
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}

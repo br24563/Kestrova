@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (merit functions)
+- Merit function choices (`lens.merit`): transverse ray error from the
+  chief ray or the spot centroid, or wavefront variance; pupil rings; the
+  image term's weight; and weighted operands (Code V's user constraints in
+  the error function) for any property (`/api/lens/merit`).
+- New properties for operands and exact constraints, at a chosen field:
+  distortion, chief-ray angle, real image height, RMS spot, RMS wavefront,
+  lateral colour. Also axial colour and Seidel S-I to S-V.
+- Lens editor: a Merit function panel (image term, sampling, operands with
+  current values, Evaluate). Constraints take the new properties and a
+  field. The optimize report shows a wavefront merit in waves.
+
+### Changed
+- The default merit's field and wavelength weights are normalised to sum
+  1, so the reported RMS spot is the weighted RMS over the field table
+  (before, the squares were summed over fields). The optimum is unchanged.
+
 ### Added (configurations)
 - Multi-configuration lenses (zoom positions, focus settings, alternate
   fields): a zoom table of surface or system parameters with one value per

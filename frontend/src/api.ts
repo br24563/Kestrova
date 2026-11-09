@@ -27,6 +27,7 @@ import type {
   LensData,
   LensResolveResult,
   LensConfigurationSummary,
+  MeritReport,
   LensOptimizeResult,
   LensConstraintStatus,
   GlassSubstitution,
@@ -848,6 +849,11 @@ export async function resolveLens(
     { lens, configuration },
     "resolve lens data",
   );
+}
+
+/** The merit function term by term in every configuration. */
+export async function lensMerit(lens: LensData): Promise<MeritReport> {
+  return postJson("/lens/merit", { lens }, "evaluate the merit function");
 }
 
 /** First-order data of every configuration of the lens. */

@@ -1819,6 +1819,7 @@ def opd(
     seq=None,
     fo=None,
     chief: Optional[tuple] = None,
+    clip: bool = True,
 ):
     """
     Optical path difference W = OPL(chief) - OPL(ray), both measured to the
@@ -1827,7 +1828,9 @@ def opd(
     infinity (afocal image space) the reference is a plane wave normal to
     the chief ray.
 
-    ``chief`` is the unclipped chief ray from :func:`chief_reference`, used
+    ``clip`` False lets rays pass every clear aperture except the stop's
+    (as the optimizer traces). ``chief`` is the unclipped chief ray from
+    :func:`chief_reference`, used
     when the chief ray itself is blocked (saves retracing it per call).
 
     Returns (W array in meters, valid mask, bundle).
@@ -1840,7 +1843,7 @@ def opd(
     py = np.atleast_1d(np.asarray(py, dtype=float))
     allx = np.concatenate([[0.0], px])
     ally = np.concatenate([[0.0], py])
-    b, _, _ = trace_field_rays(system, hx, hy, allx, ally, seq=seq, fo=fo)
+    b, _, _ = trace_field_rays(system, hx, hy, allx, ally, seq=seq, fo=fo, clip=clip)
     if not b.valid[0]:
         # A chief ray stopped by an obscuration still defines the reference
         # (Code V traces the reference ray without clipping).

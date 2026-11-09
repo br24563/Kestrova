@@ -32,7 +32,6 @@ from . import raytrace as rt
 from .lens_data import (
     GLASS_PARAMS,
     SHAPED_TYPES,
-    Constraint,
     LensData,
     _merit_system,
     _set,
@@ -43,6 +42,7 @@ from .lens_data import (
     to_system,
     variables,
 )
+from .merit import image_residuals, property_value
 from .models import OpticalSystem
 
 # =============================================================================
@@ -75,8 +75,8 @@ def edge_thickness(lens: LensData, i: int) -> float:
     return sign * (s1.thickness - _surface_sag(s1, h) + _surface_sag(s2, h))
 
 
-def constraint_value(c: Constraint, lens: LensData, system: OpticalSystem, fo) -> float:
-    """Current value of a constraint's property."""
+def constraint_value(c, lens: LensData, system: OpticalSystem, fo) -> float:
+    """Current value of a constraint's or operand's property."""
     if c.kind == "efl":
         return fo.efl
     if c.kind == "bfl":
@@ -87,14 +87,63 @@ def constraint_value(c: Constraint, lens: LensData, system: OpticalSystem, fo) -
         return fo.magnification
     if c.kind == "total_track":
         return abs(sum(s.thickness for s in lens.surfaces))
-    assert c.surface is not None
     if c.kind == "center_thickness":
+        assert c.surface is not None
         return abs(lens.surfaces[c.surface].thickness)
-    return edge_thickness(lens, c.surface)
+    if c.kind == "edge_thickness":
+        assert c.surface is not None
+        return edge_thickness(lens, c.surface)
+    return property_value(c.kind, system, c.field)
 
 
 def _needs_apertures(lens: LensData) -> bool:
-    return any(c.kind == "edge_thickness" for c in lens.constraints)
+    return any(c.kind == "edge_thickness" for c in lens.constraints) or any(
+        o.kind == "edge_thickness" for o in lens.merit.operands
+    )
+
+
+def merit_report(lens: LensData) -> dict:
+    """
+    The merit of a lens term by term, per configuration: the image term
+    (RMS spot in m, or RMS wavefront in waves) and every operand's value,
+    target, weight and contribution (its squared residual), and the total
+    (sum of squared residuals, weighted by configuration).
+    """
+    spec = lens.merit
+    n = lens.num_configurations
+    weights = lens.configuration_weights or [1.0] * n
+    resolved_all = resolve(lens, fill_apertures=_needs_apertures(lens))
+    out, total = [], 0.0
+    for k in range(n):
+        Lk = configured(lens, k) if n > 1 else lens
+        resolved = configured(resolved_all, k) if n > 1 else resolved_all
+        system = _merit_system(Lk)
+        fo = rt.first_order(system)
+        image = image_residuals(system, spec)
+        image_ms = float(np.sum(image**2))
+        ops = []
+        for index, o in enumerate(lens.merit.operands):
+            if o.configuration is not None and o.configuration != k:
+                continue
+            v = constraint_value(o, resolved, system, fo)
+            c = (o.weight * (v - o.target)) ** 2
+            ops.append(
+                {**o.model_dump(), "value": v, "contribution": c, "index": index}
+            )
+        conf_total = image_ms + sum(o["contribution"] for o in ops)
+        total += weights[k] * conf_total
+        rms = math.sqrt(image_ms) / spec.image_weight if spec.image_weight else None
+        out.append(
+            {
+                "configuration": k,
+                "image_kind": spec.kind,
+                "image_rms": rms,
+                "image_contribution": image_ms,
+                "operands": ops,
+                "merit": conf_total,
+            }
+        )
+    return {"configurations": out, "merit": total}
 
 
 def evaluate_constraints(lens: LensData) -> list[dict]:
@@ -218,8 +267,6 @@ def optimize(
     mean-square spot in m^2), the constraint report, evaluations,
     iterations, success and a message.
     """
-    from .advanced_optimization import ray_aberration_residuals
-
     n_conf = lens.num_configurations
     weights = lens.configuration_weights or [1.0] * n_conf
     # (surface, parameter, zoom row or None, configuration or None)
@@ -232,12 +279,7 @@ def optimize(
     if not handles:
         raise ValueError("No surface parameter is flagged as a variable")
     var = [(i, name) for i, name, _, _ in handles]
-    if merit is None:
-
-        def merit(system: OpticalSystem) -> np.ndarray:
-            return ray_aberration_residuals(
-                system, wavelengths=list(system.wavelengths), vignetting=False
-            )
+    spec_merit = merit is None  # the lens's own merit and operands
 
     bounds = dict(bounds or {})
     keys = [_variable_key(h) for h in handles]
@@ -308,17 +350,49 @@ def optimize(
             L = apply(x)
             confs = [configured(L, k) for k in range(n_conf)] if n_conf > 1 else [L]
             systems = [_merit_system(Lk) for Lk in confs]
-            r = np.concatenate(
-                [
-                    math.sqrt(wk) * np.asarray(merit(sk), dtype=float)
-                    for sk, wk in zip(systems, weights)
-                ]
+            resolved_all = (
+                resolve(L, fill_apertures=need_ap)
+                if lens.constraints or (spec_merit and lens.merit.operands)
+                else None
             )
+            parts = []
+            for k, (sk, wk) in enumerate(zip(systems, weights)):
+                if not spec_merit:
+                    assert merit is not None
+                    rk = np.asarray(merit(sk), dtype=float)
+                else:
+                    rk = image_residuals(sk, lens.merit)
+                    ops = [
+                        o
+                        for o in lens.merit.operands
+                        if o.configuration is None or o.configuration == k
+                    ]
+                    if ops:
+                        assert resolved_all is not None
+                        resolved = (
+                            configured(resolved_all, k) if n_conf > 1 else resolved_all
+                        )
+                        fo_k = rt.first_order(sk)
+                        rk = np.concatenate(
+                            [
+                                rk,
+                                [
+                                    o.weight
+                                    * (
+                                        constraint_value(o, resolved, sk, fo_k)
+                                        - o.target
+                                    )
+                                    for o in ops
+                                ],
+                            ]
+                        )
+                parts.append(math.sqrt(wk) * rk)
+            r = np.concatenate(parts)
             if not np.all(np.isfinite(r)):
                 return None
             g, rows = [], []
             if lens.constraints:
-                resolved_all = resolve(L, fill_apertures=need_ap)
+                assert resolved_all is not None
                 for k, (Lk, sk) in enumerate(zip(confs, systems)):
                     todo = [
                         c

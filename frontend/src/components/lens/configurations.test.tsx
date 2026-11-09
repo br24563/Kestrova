@@ -12,7 +12,9 @@ import { LensDataEditor } from "./LensDataEditor";
 import { newSurface } from "./lensEdit";
 import type { LensData, OpticalSystem } from "../../types";
 
-beforeEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
 afterEach(cleanup);
 
 const base: LensData = {
