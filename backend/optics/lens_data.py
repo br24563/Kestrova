@@ -342,9 +342,30 @@ ConstraintKind = Literal[
     "total_track",
     "center_thickness",
     "edge_thickness",
+    "distortion",
+    "chief_ray_angle",
+    "image_height",
+    "spot_rms",
+    "wavefront_rms",
+    "lateral_color",
+    "axial_color",
+    "seidel_S1",
+    "seidel_S2",
+    "seidel_S3",
+    "seidel_S4",
+    "seidel_S5",
 ]
 #: Constraints that refer to one surface (its thickness to the next).
 SURFACE_CONSTRAINTS = ("center_thickness", "edge_thickness")
+#: Properties measured at one field (default: the last of the field table).
+FIELD_PROPERTIES = (
+    "distortion",
+    "chief_ray_angle",
+    "image_height",
+    "spot_rms",
+    "wavefront_rms",
+    "lateral_color",
+)
 
 
 class Constraint(BaseModel):
@@ -357,10 +378,23 @@ class Constraint(BaseModel):
     center_thickness (``surface``): axial thickness after the surface (m).
     edge_thickness (``surface``): thickness after the surface measured at
         the smaller of the two surfaces' semi-diameters (m).
+    At one field (``field``, default the last): distortion (fraction, real
+    chief-ray height over paraxial, at the paraxial focus), chief_ray_angle
+    (rad, in image space), image_height (m, real chief ray), spot_rms (m,
+    about the centroid, all wavelengths), wavefront_rms (waves, piston and
+    tilt removed, all wavelengths), lateral_color (m, chief-ray height at
+    the longest minus the shortest wavelength).
+    axial_color: paraxial focus at the longest minus the shortest
+    wavelength (m). seidel_S1 .. seidel_S5: Seidel sums (m).
     """
 
     kind: ConstraintKind
     surface: Optional[int] = Field(default=None, ge=0)
+    field: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Field-table entry of a field property (None = the last)",
+    )
     configuration: Optional[int] = Field(
         default=None,
         ge=0,
@@ -420,6 +454,60 @@ class ZoomRow(BaseModel):
     variable: bool = False
 
 
+class Operand(BaseModel):
+    """
+    A weighted target in the merit function (Code V's user-defined
+    constraints in the error function): adds weight * (value - target) to
+    the residuals, in the property's own unit (see :class:`Constraint` for
+    the properties and units).
+    """
+
+    kind: ConstraintKind
+    target: float = 0.0
+    weight: float = Field(default=1.0, ge=0.0)
+    surface: Optional[int] = Field(default=None, ge=0)
+    field: Optional[int] = Field(default=None, ge=0)
+    configuration: Optional[int] = Field(
+        default=None, ge=0, description="None = every configuration"
+    )
+
+    @model_validator(mode="after")
+    def _check(self):
+        if (self.kind in SURFACE_CONSTRAINTS) != (self.surface is not None):
+            raise ValueError(
+                f"Operand {self.kind} "
+                + (
+                    "needs a surface"
+                    if self.kind in SURFACE_CONSTRAINTS
+                    else "does not take a surface"
+                )
+            )
+        if self.field is not None and self.kind not in FIELD_PROPERTIES:
+            raise ValueError(f"Operand {self.kind} does not take a field")
+        return self
+
+
+class MeritSpec(BaseModel):
+    """
+    The merit function the optimizer minimises (Code V's default error
+    function plus user operands).
+
+    kind "transverse": transverse ray errors at the image (m) over a
+    Gaussian pupil sampling of ``rings`` rings, at every field and
+    wavelength with their weights, measured from the chief ray or from the
+    centroid of each field's spot. kind "wavefront": the wavefront error in
+    waves with piston and tilt removed over the same sampling.
+    """
+
+    kind: Literal["transverse", "wavefront"] = "transverse"
+    rings: int = Field(default=3, ge=1, le=12)
+    reference: Literal["chief", "centroid"] = "chief"
+    image_weight: float = Field(
+        default=1.0, ge=0.0, description="Weight of the image term (0 = operands only)"
+    )
+    operands: list[Operand] = Field(default_factory=list)
+
+
 class LensData(BaseModel):
     """A sequential lens prescription."""
 
@@ -468,6 +556,9 @@ class LensData(BaseModel):
     configuration_weights: Optional[list[float]] = Field(
         default=None,
         description="Weight of each configuration in the merit (None = equal)",
+    )
+    merit: MeritSpec = Field(
+        default_factory=MeritSpec, description="What the optimizer minimises"
     )
 
     @model_validator(mode="after")
@@ -525,12 +616,16 @@ class LensData(BaseModel):
                 self.configuration_weights
             ):
                 raise ValueError("Configuration weights must be >= 0, not all 0")
-        for c in self.constraints:
+        held: list[Constraint | Operand] = [*self.constraints, *self.merit.operands]
+        for c in held:
             if c.configuration is not None and c.configuration >= n:
                 raise ValueError(
-                    f"Constraint {c.kind}: configuration {c.configuration} "
-                    "does not exist"
+                    f"{c.kind}: configuration {c.configuration} does not exist"
                 )
+            if c.surface is not None and c.surface >= len(self.surfaces) - (
+                1 if c.kind == "edge_thickness" else 0
+            ):
+                raise ValueError(f"{c.kind}: surface {c.surface} has no next surface")
         seen = set()
         for row in self.zoom:
             key = (row.surface, row.parameter)
@@ -639,6 +734,15 @@ def configured(lens: "LensData", k: int) -> "LensData":
         for c in lens.constraints
         if c.configuration is None or c.configuration == k
     ]
+    out.merit = lens.merit.model_copy(
+        update={
+            "operands": [
+                o.model_copy(update={"configuration": None})
+                for o in lens.merit.operands
+                if o.configuration is None or o.configuration == k
+            ]
+        }
+    )
     if lens.configuration_names:
         out.name = f"{lens.name} [{lens.configuration_names[k]}]".strip()
     return out

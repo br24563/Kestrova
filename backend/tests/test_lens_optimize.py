@@ -88,10 +88,13 @@ def r2_for_efl(r1, f=EFL):
 def merit_along_constraint(r1):
     lens = singlet(r1, r2_for_efl(r1))
     system = ld.to_system(ld.resolve(lens))
+    # the default merit is the mean-square spot averaged over the three
+    # equally weighted fields: ray_aberration_residuals sums them
     return float(
         np.sum(
             ray_aberration_residuals(system, wavelengths=[WL], vignetting=False) ** 2
         )
+        / 3
     )
 
 

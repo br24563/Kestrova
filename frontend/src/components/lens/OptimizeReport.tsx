@@ -4,13 +4,10 @@
  */
 
 import type { LengthUnit, LensOptimizeResult } from "../../types";
-import { fmtLen, fromMeters, LENGTH_UNIT_LABELS } from "../../types";
+import { fmtLen } from "../../types";
 import { LinePlot } from "../analysis/LinePlot";
-import {
-  CONSTRAINT_LABELS,
-  describeConstraint,
-  isLengthConstraint,
-} from "./ConstraintsEditor";
+import { CONSTRAINT_LABELS, describeConstraint } from "./ConstraintsEditor";
+import { toDisplayValue, unitLabel } from "./properties";
 
 interface Props {
   result: LensOptimizeResult;
@@ -18,7 +15,6 @@ interface Props {
 }
 
 export function OptimizeReport({ result, displayUnit }: Props) {
-  const unit = LENGTH_UNIT_LABELS[displayUnit];
   const constraints = result.constraints ?? [];
   const history = result.history ?? [];
   // the default merit is the mean-square transverse ray error (m^2)
@@ -39,10 +35,19 @@ export function OptimizeReport({ result, displayUnit }: Props) {
         >
           {result.success ? "Constraints met" : "Constraints not all met"}
         </span>
-        <span className="text-gray-700">
-          RMS spot {fmtLen(result.rms_spot_before, "um", 3)} →{" "}
-          <strong>{fmtLen(result.rms_spot_after, "um", 3)}</strong> µm
-        </span>
+        {result.rms_spot_before !== null &&
+          result.rms_spot_after !== null &&
+          (result.image_kind === "wavefront" ? (
+            <span className="text-gray-700">
+              RMS wavefront {result.rms_spot_before.toFixed(4)} →{" "}
+              <strong>{result.rms_spot_after.toFixed(4)}</strong> waves
+            </span>
+          ) : (
+            <span className="text-gray-700">
+              RMS spot {fmtLen(result.rms_spot_before, "um", 3)} →{" "}
+              <strong>{fmtLen(result.rms_spot_after, "um", 3)}</strong> µm
+            </span>
+          ))}
         <span className="text-gray-500">
           {result.iterations ?? "?"} cycles, {result.evaluations} evaluations
         </span>
@@ -53,8 +58,8 @@ export function OptimizeReport({ result, displayUnit }: Props) {
         <table className="mt-2 text-xs">
           <tbody>
             {constraints.map((c, k) => {
-              const len = isLengthConstraint(c.kind);
-              const value = len ? fromMeters(c.value, displayUnit) : c.value;
+              const value = toDisplayValue(c.kind, c.value, displayUnit);
+              const ul = unitLabel(c.kind, displayUnit);
               return (
                 <tr key={k}>
                   <td className="pr-3 text-gray-600">
@@ -65,13 +70,13 @@ export function OptimizeReport({ result, displayUnit }: Props) {
                   </td>
                   <td className="pr-3 text-gray-500">
                     {describeConstraint(c, displayUnit)}
-                    {len ? ` ${unit}` : ""}
+                    {ul ? ` ${ul}` : ""}
                   </td>
                   <td
                     className={`font-mono ${c.satisfied ? "text-green-700" : "text-red-600"}`}
                   >
                     {Number(value.toPrecision(8))}
-                    {len ? ` ${unit}` : ""} {c.satisfied ? "✓" : "✗"}
+                    {ul ? ` ${ul}` : ""} {c.satisfied ? "✓" : "✗"}
                   </td>
                 </tr>
               );

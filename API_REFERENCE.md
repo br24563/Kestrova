@@ -134,6 +134,16 @@ a multi-configuration lens, `system` and `first_order` are those of
 `configuration` (0-based); `/api/lens/optimize` and the tolerancing
 endpoints take the same field.
 
+#### POST /api/lens/merit
+
+`{ "lens" }` → `{ "configurations": [{ "configuration", "image_kind",
+"image_rms", "image_contribution", "operands": [{..., "value",
+"contribution", "index"}], "merit" }], "merit" }`: the lens's merit
+function (`lens.merit`) term by term. `image_rms` is the RMS spot (m) or
+RMS wavefront (waves). `/api/lens/optimize` returns `merit_report_before`
+and `merit_report`, and its `rms_spot_before` / `rms_spot_after` are the
+image term of the requested configuration.
+
 #### POST /api/lens/configurations
 
 `{ "lens" }` → `{ "configurations": [{ "configuration", "name",

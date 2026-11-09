@@ -894,6 +894,21 @@ async def lens_resolve(request: LensRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/lens/merit")
+async def lens_merit(request: LensRequest):
+    """
+    The lens's merit function term by term in every configuration: the
+    image term (RMS spot in m or RMS wavefront in waves) and each operand's
+    value, target, weight and contribution.
+    """
+    from optics.lens_optimize import merit_report
+
+    try:
+        return merit_report(request.lens)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/lens/configurations")
 async def lens_configurations(request: LensRequest):
     """First-order properties of every configuration of the lens."""
@@ -930,8 +945,17 @@ async def lens_optimize(request: LensOptimizeRequest):
         result = _ld.optimize(
             request.lens, bounds=bounds, max_evaluations=request.max_evaluations
         )
-        result["rms_spot_before"] = result["merit_before"] ** 0.5
-        result["rms_spot_after"] = result["merit_after"] ** 0.5
+        from optics.lens_optimize import merit_report
+
+        k = request.configuration
+        before = merit_report(request.lens)
+        after = merit_report(result["lens"])
+        result["merit_report_before"] = before
+        result["merit_report"] = after
+        # the image term of the shown configuration: RMS spot (m) or wavefront (waves)
+        result["rms_spot_before"] = before["configurations"][k]["image_rms"]
+        result["rms_spot_after"] = after["configurations"][k]["image_rms"]
+        result["image_kind"] = request.lens.merit.kind
         if request.lens.num_configurations > 1:
             result["system"] = _ld.configuration_system(
                 result["lens"], request.configuration

@@ -65,6 +65,7 @@ import {
 } from "./lensEdit";
 import { SurfaceDetails } from "./SurfaceDetails";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
+import { MeritPanel } from "./MeritPanel";
 import { ConstraintsEditor } from "./ConstraintsEditor";
 import { OptimizeReport } from "./OptimizeReport";
 import { LensTolerancePanel } from "./LensTolerancePanel";
@@ -226,9 +227,10 @@ export function LensDataEditor({
   const [error, setError] = useState<string | null>(null);
   const [firstOrder, setFirstOrder] = useState<LensFirstOrder | null>(null);
   const [rms, setRms] = useState<{
-    before: number;
-    after: number;
+    before: number | null;
+    after: number | null;
     evaluations: number;
+    kind: "transverse" | "wavefront";
   } | null>(null);
   const [maxEvaluations, setMaxEvaluations] = useState("300");
   const [optResult, setOptResult] = useState<LensOptimizeResult | null>(null);
@@ -557,6 +559,7 @@ export function LensDataEditor({
         before: result.rms_spot_before,
         after: result.rms_spot_after,
         evaluations: result.evaluations,
+        kind: result.image_kind ?? "transverse",
       });
       setOptResult(result);
       setStatuses(result.constraints ?? null);
@@ -1129,14 +1132,23 @@ export function LensDataEditor({
             className="w-16 px-1 py-0.5 border border-gray-200 rounded text-right"
           />
         </label>
-        {rms && (
+        {rms && rms.before !== null && rms.after !== null && (
           <span
             className="text-xs text-gray-700"
             data-testid="lens-rms"
-            title="Optimizer merit: RMS transverse ray error over fields 0, 0.7 and 1 and all wavelengths"
+            title="The merit's image term over the field table and all wavelengths"
           >
-            RMS spot: {fmtLen(rms.before, "um", 3)} →{" "}
-            <strong>{fmtLen(rms.after, "um", 3)}</strong> µm
+            {rms.kind === "wavefront" ? (
+              <>
+                RMS wavefront: {rms.before.toFixed(4)} →{" "}
+                <strong>{rms.after.toFixed(4)}</strong> waves
+              </>
+            ) : (
+              <>
+                RMS spot: {fmtLen(rms.before, "um", 3)} →{" "}
+                <strong>{fmtLen(rms.after, "um", 3)}</strong> µm
+              </>
+            )}
             <span className="text-gray-400">
               {" "}
               ({rms.evaluations} evaluations)
@@ -1148,6 +1160,13 @@ export function LensDataEditor({
       {optResult && (
         <OptimizeReport result={optResult} displayUnit={displayUnit} />
       )}
+
+      <MeritPanel
+        lens={lens}
+        displayUnit={displayUnit}
+        busy={busy !== null}
+        onChange={update}
+      />
 
       <ConstraintsEditor
         lens={lens}

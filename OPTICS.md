@@ -294,9 +294,16 @@ lengths F.
 
 ### Optimization
 
-`optics/lens_optimize.py` minimises the transverse ray errors (fields 0,
-0.7 and 1, all wavelengths, Gaussian pupil) by damped least squares with
-the lens's constraints held exactly, as Code V does: each cycle solves the
+`optics/lens_optimize.py` minimises the lens's merit function
+(`LensData.merit`, see `optics/merit.py`) by damped least squares with the
+lens's constraints held exactly, as Code V does. The merit's image term is
+either the transverse ray errors at the image, from the chief ray or from
+each spot's centroid, or the wavefront error in waves with piston and tilt
+removed. Both are sampled with a Gaussian pupil of `rings` rings at every
+field and wavelength, with the field and wavelength weights normalised so
+the sum of squares is the weighted mean-square spot (m^2) or wavefront
+(waves^2). Operands add weight x (value - target) for any property below.
+The optimizer works as follows: each cycle solves the
 KKT system of the damped normal equations and the linearised active
 constraints (an active-set iteration, or a small QP solve where that
 cycles), then takes a second-order correction step back onto curved
@@ -305,10 +312,30 @@ restoration meets the constraints to round-off. Radii vary as curvatures
 (power, and so focal length, is nearly linear in them), and radius bounds
 may not span a flat surface.
 
-Constraints are targets or limits on EFL, BFL, working F-number,
-magnification, total track, the centre thickness after a surface, or the
-edge thickness after a surface, measured at the smaller of the two
-semi-diameters with the exact sag.
+Constraints (held exactly) and operands (weighted in the merit) use the
+same properties:
+- first-order: EFL, BFL, working F-number, magnification, total track;
+- thicknesses: the centre thickness after a surface, or the edge
+  thickness after a surface, measured at the smaller of the two
+  semi-diameters with the exact sag;
+- at one field of the table: distortion (real over paraxial chief-ray
+  height, at the paraxial focus), chief-ray angle in image space, real
+  image height, RMS spot (about the centroid) and RMS wavefront (piston and
+  tilt removed), lateral colour;
+- axial colour;
+- the Seidel sums S-I to S-V.
+
+`tests/test_merit.py` checks them against closed forms:
+- a defocused perfect lens: RMS spot a / sqrt 2, RMS wavefront
+  W020 / sqrt 12;
+- an ideal lens: undeviated chief ray (image height f tan theta), and a
+  telecentric stop at the front focal plane;
+- colour from f(lambda) ∝ 1 / (n - 1);
+- the Geiser triplet's published Seidel sums.
+
+Optimizing reaches two closed-form designs. Minimising S-I alone reaches
+Coddington's minimum-spherical bending q = 2(n^2 - 1)/(n + 2) within
+1 %. A telecentricity constraint puts the stop at the front focal plane.
 
 A model glass, `MODEL:<nd>:<vd>`, has the dispersion
 n = A + B/λ² + C/λ⁴ (λ in µm) fitted exactly to nd, to nF − nC = (nd − 1)/Vd

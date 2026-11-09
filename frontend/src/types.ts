@@ -530,6 +530,8 @@ export interface LensData {
   field_angle: number; // rad, for an object at infinity
   entrance_pupil_diameter: number | null;
   wavelengths: number[];
+  fields?: FieldPoint[] | null;
+  field_type?: FieldType | null;
   first_surface_position: number;
   analysis_settings: AnalysisSettings;
   /** Held exactly by the optimizer (absent = none). */
@@ -539,6 +541,46 @@ export interface LensData {
   /** Parameters that differ between configurations. */
   zoom?: ZoomRow[];
   configuration_weights?: number[] | null;
+  /** What the optimizer minimises (absent = transverse, 3 rings, chief ray). */
+  merit?: MeritSpec;
+}
+
+/** A weighted target in the merit: weight * (value - target), SI units. */
+export interface Operand {
+  kind: LensConstraintKind;
+  target: number;
+  weight: number;
+  surface?: number | null;
+  field?: number | null;
+  configuration?: number | null;
+}
+
+/** The merit function (mirrors lens_data.MeritSpec). */
+export interface MeritSpec {
+  kind: "transverse" | "wavefront";
+  rings: number;
+  reference: "chief" | "centroid";
+  image_weight: number;
+  operands: Operand[];
+}
+
+/** The merit term by term in one configuration. */
+export interface MeritConfigurationReport {
+  configuration: number;
+  image_kind: "transverse" | "wavefront";
+  image_rms: number | null; // m (transverse) or waves (wavefront)
+  image_contribution: number;
+  operands: (Operand & {
+    value: number;
+    contribution: number;
+    index: number;
+  })[];
+  merit: number;
+}
+
+export interface MeritReport {
+  configurations: MeritConfigurationReport[];
+  merit: number;
 }
 
 /** System parameters a zoom row can vary (mirrors lens_data.SYSTEM_ZOOM_PARAMS). */
@@ -569,7 +611,19 @@ export type LensConstraintKind =
   | "magnification"
   | "total_track"
   | "center_thickness"
-  | "edge_thickness";
+  | "edge_thickness"
+  | "distortion"
+  | "chief_ray_angle"
+  | "image_height"
+  | "spot_rms"
+  | "wavefront_rms"
+  | "lateral_color"
+  | "axial_color"
+  | "seidel_S1"
+  | "seidel_S2"
+  | "seidel_S3"
+  | "seidel_S4"
+  | "seidel_S5";
 
 /** Constraints that refer to one surface (its thickness to the next). */
 export const SURFACE_CONSTRAINTS: LensConstraintKind[] = [
@@ -581,6 +635,8 @@ export const SURFACE_CONSTRAINTS: LensConstraintKind[] = [
 export interface LensConstraint {
   kind: LensConstraintKind;
   surface?: number | null;
+  /** Field-table entry of a field property (null = the last). */
+  field?: number | null;
   /** Configuration it applies to (null = every configuration). */
   configuration?: number | null;
   target?: number | null;
@@ -633,8 +689,11 @@ export interface LensOptimizeResult extends LensResolveResult {
   variables: Record<string, number>;
   merit_before: number;
   merit_after: number;
-  rms_spot_before: number; // meters
-  rms_spot_after: number; // meters
+  rms_spot_before: number | null; // m, or waves for a wavefront merit
+  rms_spot_after: number | null;
+  image_kind?: "transverse" | "wavefront";
+  merit_report?: MeritReport;
+  merit_report_before?: MeritReport;
   evaluations: number;
   iterations?: number;
   constraints?: LensConstraintStatus[];
