@@ -337,6 +337,25 @@ Optimizing reaches two closed-form designs. Minimising S-I alone reaches
 Coddington's minimum-spherical bending q = 2(n^2 - 1)/(n + 2) within
 1 %. A telecentricity constraint puts the stop at the front focal plane.
 
+### Global search
+
+`optics/global_lens.py` looks beyond the nearest local minimum, in the
+spirit of Code V's Global Synthesis. It runs the full constrained local
+optimization from many starting points: the lens as given plus a
+scrambled Sobol sequence over each variable's range. Radii are sampled as
+curvatures, so a range can pass through flat. Default ranges:
+- a curvature within max(2|c|, 0.5 / largest semi-diameter) of its value;
+- a thickness from half to 1.5 times its value;
+- any other parameter within max(|v|, its scale).
+
+It returns the distinct designs that meet every constraint, best merit
+first. Two results are the same design when every variable agrees to 1e-3
+of its range. Starts can run in parallel processes (`workers`).
+`tests/test_global_lens.py` checks it on a cemented achromat (focal length
+and axial colour held), which has two zero-spherical bendings: local
+optimization finds the nearer one, and the global search returns both,
+matching the designs found by following the bending family.
+
 A model glass, `MODEL:<nd>:<vd>`, has the dispersion
 n = A + B/λ² + C/λ⁴ (λ in µm) fitted exactly to nd, to nF − nC = (nd − 1)/Vd
 and to a partial dispersion on Schott's normal line,

@@ -229,6 +229,50 @@ _PARAM_SCALE = {
 }
 
 
+Handle = tuple[int, str, Optional[int], Optional[int]]
+
+
+def variable_handles(lens: LensData) -> list[Handle]:
+    """Every variable as (surface, parameter, zoom row or None, configuration
+    or None): the surface table's variables, then one per configuration of
+    each zoom row flagged variable."""
+    handles: list[Handle] = [(i, name, None, None) for i, name in variables(lens)]
+    for r_idx, row in enumerate(lens.zoom):
+        if row.variable and row.surface is not None:
+            handles += [
+                (row.surface, row.parameter, r_idx, k)
+                for k in range(lens.num_configurations)
+            ]
+    return handles
+
+
+def variable_keys(lens: LensData) -> list[str]:
+    """The keys of the lens's variables ("<surface>.<parameter>[@<config>]")."""
+    return [_variable_key(h) for h in variable_handles(lens)]
+
+
+def variable_values(lens: LensData) -> dict[str, float]:
+    return {_variable_key(h): _start_value(lens, h) for h in variable_handles(lens)}
+
+
+def with_variable_values(lens: LensData, values: dict[str, float]) -> LensData:
+    """A copy of the lens with some variables set (keys as variable_keys)."""
+    out = lens.model_copy(deep=True)
+    for h in variable_handles(lens):
+        key = _variable_key(h)
+        if key not in values:
+            continue
+        i, name, r, k = h
+        v = float(values[key])
+        if r is None:
+            _set(out.surfaces[i], name, v)
+        else:
+            out.zoom[r].values[k] = v  # type: ignore[index]
+            if k == 0:
+                _set(out.surfaces[i], name, v)
+    return out
+
+
 def _variable_key(handle) -> str:
     i, name, r, k = handle
     return f"{i}.{name}" if r is None else f"{i}.{name}@{k + 1}"
@@ -269,13 +313,7 @@ def optimize(
     """
     n_conf = lens.num_configurations
     weights = lens.configuration_weights or [1.0] * n_conf
-    # (surface, parameter, zoom row or None, configuration or None)
-    handles: list[tuple[int, str, Optional[int], Optional[int]]] = [
-        (i, name, None, None) for i, name in variables(lens)
-    ]
-    for r_idx, row in enumerate(lens.zoom):
-        if row.variable and row.surface is not None:
-            handles += [(row.surface, row.parameter, r_idx, k) for k in range(n_conf)]
+    handles = variable_handles(lens)
     if not handles:
         raise ValueError("No surface parameter is flagged as a variable")
     var = [(i, name) for i, name, _, _ in handles]

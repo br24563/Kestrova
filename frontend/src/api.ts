@@ -27,6 +27,7 @@ import type {
   LensData,
   LensResolveResult,
   LensConfigurationSummary,
+  LensFirstOrder,
   MeritReport,
   LensOptimizeResult,
   LensConstraintStatus,
@@ -1147,4 +1148,44 @@ export async function getLensSample(
     );
   }
   return response.json();
+}
+
+/** One design found by the global search. */
+export interface GlobalSolution {
+  lens: LensData;
+  merit: number;
+  variables: Record<string, number>;
+  start: number; // 0 = the lens as given
+  first_order: LensFirstOrder;
+}
+
+export interface GlobalSearchResult {
+  solutions: GlobalSolution[];
+  starts: number;
+  feasible: number;
+  distinct: number;
+  evaluations: number;
+}
+
+/** Local optimizations from many starts; the distinct feasible designs, best first. */
+export async function globalOptimizeLens(
+  lens: LensData,
+  options: {
+    starts?: number;
+    maxEvaluations?: number;
+    workers?: number;
+    keep?: number;
+  } = {},
+): Promise<GlobalSearchResult> {
+  return postJson(
+    "/lens/global-optimize",
+    {
+      lens,
+      starts: options.starts ?? 16,
+      max_evaluations: options.maxEvaluations ?? 200,
+      workers: options.workers ?? 1,
+      keep: options.keep ?? 5,
+    },
+    "run the global search",
+  );
 }
