@@ -138,6 +138,15 @@ The interface is divided into three panels:
    - ISO 10110 (Optical drawing)
 2. Download the file
 
+### 6. Report, Drawings and Scripts
+
+- **Report** tab: generate the design report of the lens in the Lens Data
+  Editor (prescription, first order, fields, MTF, Seidel, tolerance
+  budget, element drawings) and save it as PDF or HTML.
+- **Drawings** tab: ISO 10110 drawings of every glass element.
+- **Script** tab: run Python with the scripting API on the editor's lens
+  (Ctrl+Enter runs); see [SCRIPTING.md](./SCRIPTING.md).
+
 ## Preset Systems
 
 | Preset | Description |

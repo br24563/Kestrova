@@ -190,6 +190,35 @@ brightest first.
 Rayleigh range, divergence, beam radius at the image plane and along the
 axis. `/api/analyze/imaging` also takes `polychromatic`.
 
+#### POST /api/lens/report
+
+`{ "lens", "configuration": 0, "title": null, "author": "", "mtf": true,
+"tolerances": true, "trials": 2000, "drawings": true }` → `{ "html" }`:
+the design report as one self-contained HTML page (inline CSS and SVG),
+laid out for printing to PDF.
+
+#### POST /api/lens/drawings
+
+`{ "lens", "configuration": 0, "tolerances": null, "edge_margin": 0.001,
+"notes": {} }` → `{ "drawings": [{ "name", "surfaces", "glass",
+"center_thickness", "edge_thickness", "clear_diameter", "outer_diameter",
+"left", "material", "right", "svg", "html" }] }`: ISO 10110 data per
+glass element. `left`/`material`/`right` are (label, value) rows; `notes`
+fills the codes the design does not set (`"0/"`, `"1/"`, `"2/"`, `"5/"`,
+`"irregularity"`).
+
+#### POST /api/script/run
+
+`{ "code", "lens": null, "timeout": 120 }` → `{ "output", "error",
+"lens", "duration", "timed_out" }`: runs Python with the scripting API
+(`ks`, `np`, `lens`) in its own process (see SCRIPTING.md). Refused (403)
+unless the client, the Host header and any Origin are this computer's
+loopback, or when `KESTROVA_DISABLE_SCRIPTING` is set.
+
+#### GET /api/script/reference
+
+→ `{ "reference": [{ "name", "signature", "doc" }] }`: the scripting API.
+
 #### POST /api/lens/merit
 
 `{ "lens" }` → `{ "configurations": [{ "configuration", "image_kind",

@@ -60,6 +60,9 @@ import { ChromaticAberrationPlot } from "./components/analysis/ChromaticAberrati
 import { GhostAnalysisPanel } from "./components/analysis/GhostAnalysisPanel";
 import { AdvancedOptimizationPanel } from "./components/optimization/AdvancedOptimizationPanel";
 import { ReportGenerator } from "./components/report/ReportGenerator";
+import { DesignReportPanel } from "./components/report/DesignReportPanel";
+import { DrawingsPanel } from "./components/report/DrawingsPanel";
+import { ScriptConsole } from "./components/script/ScriptConsole";
 import { LensDataEditor } from "./components/lens/LensDataEditor";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ErrorMessage } from "./components/ErrorMessage";
@@ -86,6 +89,8 @@ const ANALYSIS_TABS = [
   { id: "ghosts", label: "Ghosts" },
   { id: "optimize", label: "Advanced Optimization" },
   { id: "report", label: "Report" },
+  { id: "drawings", label: "Drawings" },
+  { id: "script", label: "Script" },
 ] as const;
 type AnalysisTab = (typeof ANALYSIS_TABS)[number]["id"];
 
@@ -891,7 +896,14 @@ function App() {
                 />
               )}
               {analysisTab === "report" && (
-                <ReportGenerator system={system} displayUnit={displayUnit} />
+                <>
+                  <DesignReportPanel lens={lens} />
+                  <ReportGenerator system={system} displayUnit={displayUnit} />
+                </>
+              )}
+              {analysisTab === "drawings" && <DrawingsPanel lens={lens} />}
+              {analysisTab === "script" && (
+                <ScriptConsole lens={lens} onApplyLens={handleLensChange} />
               )}
             </div>
           </div>
