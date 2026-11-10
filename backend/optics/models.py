@@ -291,6 +291,14 @@ class AnalysisSettings(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class Environment(BaseModel):
+    """Ambient temperature (C) and pressure (Pa) the system is traced at;
+    glass indices are taken relative to this air (see optics.environment)."""
+
+    temperature: float = 20.0
+    pressure: float = Field(default=101325.0, ge=0.0)
+
+
 class OpticalSystem(BaseModel):
     """
     A complete optical system.
@@ -315,6 +323,9 @@ class OpticalSystem(BaseModel):
     analysis_settings: AnalysisSettings = Field(
         default_factory=AnalysisSettings,
         description="Settings for ray tracing and analysis",
+    )
+    environment: Optional[Environment] = Field(
+        default=None, description="Temperature and pressure (None = 20 C, 1 atm)"
     )
     fields: Optional[list[FieldPoint]] = Field(
         default=None,

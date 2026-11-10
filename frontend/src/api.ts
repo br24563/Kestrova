@@ -1217,3 +1217,160 @@ export async function substituteLensGlasses(
     "substitute glasses",
   );
 }
+
+/** Polarization ray trace of one field (null outside the pupil). */
+export interface PolarizationResult {
+  pupil: number[];
+  field: number;
+  wavelength: number;
+  transmittance: (number | null)[][];
+  diattenuation: (number | null)[][];
+  retardance: (number | null)[][]; // rad
+  summary: {
+    field: number;
+    wavelengths: number[];
+    per_wavelength: number[];
+    transmittance: number;
+  };
+}
+
+export async function analyzePolarization(
+  system: OpticalSystem,
+  field: number = 0,
+  grid: number = 21,
+): Promise<PolarizationResult> {
+  return postJson(
+    "/analyze/polarization",
+    { system, field, grid },
+    "trace polarization",
+  );
+}
+
+/** One temperature of the environment analysis (SI units). */
+export interface EnvironmentRow {
+  temperature: number;
+  pressure: number;
+  efl: number | null;
+  bfl: number | null;
+  focus_shift: number;
+  rms_wavefront: number; // waves
+  depth_of_focus: number;
+}
+
+export async function lensEnvironment(
+  lens: LensData,
+  options: {
+    temperatures: number[];
+    pressure?: number;
+    mountCte?: number | null;
+    configuration?: number;
+  },
+): Promise<{ rows: EnvironmentRow[] }> {
+  return postJson(
+    "/lens/environment",
+    {
+      lens,
+      temperatures: options.temperatures,
+      pressure: options.pressure ?? 101325,
+      mount_cte: options.mountCte ?? null,
+      configuration: options.configuration ?? 0,
+    },
+    "analyse temperature and pressure",
+  );
+}
+
+/** One double-reflection ghost of the prescription. */
+export interface GhostTraceEntry {
+  surfaces: [number, number];
+  labels: [string, string];
+  fraction: number;
+  power: number;
+  rms_radius: number | null;
+  centroid: [number, number] | null;
+  focus_shift: number | null;
+  relative_irradiance: number;
+}
+
+export async function ghostTrace(
+  system: OpticalSystem,
+  field: number = 0,
+  top: number = 15,
+): Promise<{
+  field: number;
+  wavelength: number;
+  image_rms_radius: number;
+  ghosts: GhostTraceEntry[];
+}> {
+  return postJson(
+    "/analyze/ghost-trace",
+    { system, field, top },
+    "trace the ghosts",
+  );
+}
+
+export interface GaussianBeamResult {
+  wavelength: number;
+  m2: number;
+  matrix: [number, number, number, number];
+  waist_radius: number;
+  waist_position: number;
+  rayleigh_range: number;
+  divergence: number;
+  beam_radius_at_image: number;
+  wavefront_radius_at_image: number | null;
+  z: number[];
+  beam_radius: number[];
+}
+
+export async function gaussianBeam(
+  system: OpticalSystem,
+  waistRadius: number,
+  waistDistance: number,
+  m2: number = 1,
+  wavelength: number | null = null,
+): Promise<GaussianBeamResult> {
+  return postJson(
+    "/analyze/gaussian-beam",
+    {
+      system,
+      waist_radius: waistRadius,
+      waist_distance: waistDistance,
+      m2,
+      wavelength,
+    },
+    "propagate the beam",
+  );
+}
+
+export interface ImageSimulationResult {
+  metadata: Record<string, unknown>;
+  quality: Record<string, number>;
+  png_base64?: string;
+}
+
+export async function simulateImage(
+  system: OpticalSystem,
+  options: {
+    targetKind?: string;
+    fullField?: boolean;
+    polychromatic?: boolean;
+    noise?: boolean;
+    resolution?: number;
+    pixelPitch?: number;
+  } = {},
+): Promise<ImageSimulationResult> {
+  return postJson(
+    "/analyze/imaging",
+    {
+      system,
+      target_kind: options.targetKind ?? "bars",
+      full_field: options.fullField ?? false,
+      polychromatic: options.polychromatic ?? true,
+      with_noise: options.noise ?? false,
+      resolution: options.resolution ?? 128,
+      pixel_pitch: options.pixelPitch ?? 5e-6,
+      include_image: true,
+    },
+    "simulate the image",
+  );
+}

@@ -41,6 +41,7 @@ import numpy as np
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from . import raytrace as rt
+from .coating_spec import CoatingSpec
 from .advanced_surfaces import (
     AsphericSurface,
     CoordinateBreak,
@@ -231,6 +232,9 @@ class LensSurface(BaseModel):
     )
     aperture_half_y: Optional[float] = Field(
         default=None, description="Half-width in y of a rectangular/elliptical aperture"
+    )
+    coating: Optional[CoatingSpec] = Field(
+        default=None, description="Thin-film coating (None = a bare surface)"
     )
     thickness: float = 0.0
     material: Optional[str] = Field(
@@ -928,7 +932,13 @@ _NEW_SHAPES = ("q_asphere", "toroid", "zernike", "xy_polynomial", "diffractive")
 
 
 def _has_aperture_extras(s: LensSurface) -> bool:
-    return bool(s.obscuration_semi) or s.aperture_shape != "circular"
+    """Whether the surface carries properties a component holds per surface
+    (obscuration, shaped aperture, coating)."""
+    return (
+        bool(s.obscuration_semi)
+        or s.aperture_shape != "circular"
+        or s.coating is not None
+    )
 
 
 def _aperture_fields(s: LensSurface) -> dict:
@@ -937,6 +947,7 @@ def _aperture_fields(s: LensSurface) -> dict:
         "aperture_shape": s.aperture_shape,
         "aperture_half_x": s.aperture_half_x,
         "aperture_half_y": s.aperture_half_y,
+        "coating": s.coating.model_dump() if s.coating is not None else None,
     }
 
 

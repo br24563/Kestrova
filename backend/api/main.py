@@ -1337,6 +1337,145 @@ async def analyze_psf(request: FieldPsfRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class PolarizationRequest(BaseModel):
+    system: OpticalSystem
+    field: int = Field(0, ge=0)
+    wavelength: Optional[float] = None
+    grid: int = Field(21, ge=3, le=101)
+
+
+@app.post("/api/analyze/polarization")
+async def analyze_polarization(request: PolarizationRequest):
+    """
+    Polarization ray trace at one field: pupil maps of the
+    polarization-averaged transmittance, diattenuation and retardance (rad;
+    NaN outside the pupil, as null), and the pupil-averaged transmittance at
+    each wavelength.
+    """
+    import math as _math
+
+    from optics.polarization_trace import pupil_map, transmittance
+
+    try:
+        m = pupil_map(request.system, request.field, request.wavelength, request.grid)
+        summary = transmittance(request.system, request.field)
+
+        def grid(a):
+            return [[None if _math.isnan(v) else float(v) for v in row] for row in a]
+
+        return {
+            "pupil": m["pupil"].tolist(),
+            "field": m["field"],
+            "wavelength": m["wavelength"],
+            "transmittance": grid(m["transmittance"]),
+            "diattenuation": grid(m["diattenuation"]),
+            "retardance": grid(m["retardance"]),
+            "summary": summary,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class EnvironmentRequest(BaseModel):
+    lens: _ld.LensData
+    temperatures: list[float] = Field(default_factory=lambda: [-20.0, 20.0, 60.0])
+    pressure: float = Field(101325.0, ge=0.0)
+    mount_cte: Optional[float] = Field(
+        None, description="Housing CTE (1e-6/K) for the air spaces; None = rigid"
+    )
+    configuration: int = Field(0, ge=0)
+    system_at: Optional[float] = Field(
+        None, description="Also return the traced system at this temperature"
+    )
+
+
+@app.post("/api/lens/environment")
+async def lens_environment(request: EnvironmentRequest):
+    """
+    Temperature and pressure analysis of the prescription: at each
+    temperature, the EFL, BFL, focus shift from the image plane, RMS
+    wavefront and quarter-wave depth of focus (glass dn/dT and CTE, air
+    index, optional housing expansion).
+    """
+    from optics.environment import environment_system, environment_table
+
+    try:
+        out: dict = {
+            "rows": environment_table(
+                request.lens,
+                request.temperatures,
+                request.pressure,
+                request.mount_cte,
+                request.configuration,
+            )
+        }
+        if request.system_at is not None:
+            out["system"] = environment_system(
+                request.lens,
+                request.system_at,
+                request.pressure,
+                request.mount_cte,
+                request.configuration,
+            )
+        return out
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class GhostTraceRequest(BaseModel):
+    system: OpticalSystem
+    field: int = Field(0, ge=0)
+    wavelength: Optional[float] = None
+    rings: int = Field(6, ge=2, le=16)
+    top: Optional[int] = Field(None, ge=1)
+
+
+@app.post("/api/analyze/ghost-trace")
+async def analyze_ghost_trace(request: GhostTraceRequest):
+    """Every double-reflection ghost of the prescription at one field,
+    traced exactly, with coating or Fresnel reflectances; brightest first."""
+    from optics.ghost_trace import ghost_analysis
+
+    try:
+        return ghost_analysis(
+            request.system,
+            request.field,
+            request.wavelength,
+            request.rings,
+            request.top,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class BeamRequest(BaseModel):
+    system: OpticalSystem
+    waist_radius: float = Field(..., gt=0, description="Input 1/e^2 waist radius (m)")
+    waist_distance: float = Field(
+        0.0, description="Input waist in front of the first surface (m)"
+    )
+    wavelength: Optional[float] = None
+    m2: float = Field(1.0, ge=1.0)
+
+
+@app.post("/api/analyze/gaussian-beam")
+async def analyze_gaussian_beam(request: BeamRequest):
+    """Paraxial Gaussian beam through the system (ABCD of the prescription):
+    output waist size and position, beam radius at the image plane."""
+    from optics.beam_lens import beam_through
+
+    try:
+        return beam_through(
+            request.system,
+            request.waist_radius,
+            request.waist_distance,
+            request.wavelength,
+            request.m2,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/analyze/field-plots")
 async def analyze_field_plots(request: FieldPlotsRequest):
     """Distortion, F-theta distortion (object at infinity), lateral colour
@@ -2109,6 +2248,7 @@ class ImagingRequest(BaseModel):
     with_noise: bool = True
     seed: Optional[int] = None
     include_image: bool = False
+    polychromatic: bool = False
 
 
 @app.post("/api/analyze/imaging")
@@ -2146,6 +2286,7 @@ async def analyze_imaging(request: ImagingRequest):
             full_field=request.full_field,
             with_noise=request.with_noise,
             seed=request.seed,
+            polychromatic=request.polychromatic,
         )
         result = {
             "metadata": simulation.metadata,

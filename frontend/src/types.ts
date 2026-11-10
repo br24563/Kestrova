@@ -502,6 +502,8 @@ export interface LensSurface {
   aperture_shape?: "circular" | "rectangular" | "elliptical";
   aperture_half_x?: number | null;
   aperture_half_y?: number | null;
+  /** Thin-film coating (absent or null = a bare Fresnel surface). */
+  coating?: CoatingSpec | null;
   thickness: number; // to the next surface
   material: string | null; // medium after; null = air, "MIRROR" reflects
   semi_diameter: number | null; // null = automatic
@@ -520,6 +522,20 @@ export interface LensSurface {
   solves: Record<string, Solve>;
   pickups: Record<string, Pickup>;
   semi_diameter_auto: boolean;
+}
+
+/** One thin-film layer: a database material or an explicit index n - ik. */
+export interface CoatingLayer {
+  material?: string | null;
+  n?: number | null;
+  k?: number;
+  thickness: number; // m
+}
+
+/** A thin-film stack, layers in the order light meets them. */
+export interface CoatingSpec {
+  name?: string;
+  layers: CoatingLayer[];
 }
 
 export interface LensData {

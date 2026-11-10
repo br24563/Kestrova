@@ -51,6 +51,11 @@ import { FieldCurvaturePlot } from "./components/analysis/FieldCurvaturePlot";
 import { MtfPlot } from "./components/analysis/MtfPlot";
 import { PsfPlot } from "./components/analysis/PsfPlot";
 import { FieldPlotsPanel } from "./components/analysis/FieldPlotsPanel";
+import { PolarizationPanel } from "./components/analysis/PolarizationPanel";
+import { EnvironmentPanel } from "./components/analysis/EnvironmentPanel";
+import { GhostTracePanel } from "./components/analysis/GhostTracePanel";
+import { BeamPanel } from "./components/analysis/BeamPanel";
+import { ImageSimulationPanel } from "./components/analysis/ImageSimulationPanel";
 import { ChromaticAberrationPlot } from "./components/analysis/ChromaticAberrationPlot";
 import { GhostAnalysisPanel } from "./components/analysis/GhostAnalysisPanel";
 import { AdvancedOptimizationPanel } from "./components/optimization/AdvancedOptimizationPanel";
@@ -73,6 +78,10 @@ const ANALYSIS_TABS = [
   { id: "mtf", label: "MTF" },
   { id: "psf", label: "PSF" },
   { id: "field-plots", label: "Distortion & Colour" },
+  { id: "polarization", label: "Polarization" },
+  { id: "environment", label: "Environment" },
+  { id: "beam", label: "Gaussian Beam" },
+  { id: "image-sim", label: "Image Simulation" },
   { id: "chromatic", label: "Chromatic" },
   { id: "ghosts", label: "Ghosts" },
   { id: "optimize", label: "Advanced Optimization" },
@@ -849,6 +858,16 @@ function App() {
               {analysisTab === "field-plots" && (
                 <FieldPlotsPanel system={system} displayUnit={displayUnit} />
               )}
+              {analysisTab === "polarization" && (
+                <PolarizationPanel system={system} />
+              )}
+              {analysisTab === "environment" && (
+                <EnvironmentPanel lens={lens} displayUnit={displayUnit} />
+              )}
+              {analysisTab === "beam" && <BeamPanel system={system} />}
+              {analysisTab === "image-sim" && (
+                <ImageSimulationPanel system={system} />
+              )}
               {analysisTab === "chromatic" && (
                 <ChromaticAberrationPlot
                   system={system}
@@ -856,7 +875,13 @@ function App() {
                 />
               )}
               {analysisTab === "ghosts" && (
-                <GhostAnalysisPanel system={system} displayUnit={displayUnit} />
+                <>
+                  <GhostTracePanel system={system} />
+                  <GhostAnalysisPanel
+                    system={system}
+                    displayUnit={displayUnit}
+                  />
+                </>
               )}
               {analysisTab === "optimize" && (
                 <AdvancedOptimizationPanel
