@@ -6,6 +6,11 @@
 http://localhost:8000/api
 ```
 
+The desktop app's engine listens on a free port on 127.0.0.1 instead. The
+running server documents every endpoint interactively at `/docs` (Swagger
+UI) and `/openapi.json`. All lengths are metres and angles radians unless
+a field's name says otherwise (`..._mm`, `..._deg`).
+
 ## Endpoints
 
 ### System
@@ -30,7 +35,7 @@ Health check endpoint.
 ```json
 {
   "status": "healthy",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "features": {
     "ray_tracing": true,
     "analysis": true,
@@ -729,6 +734,84 @@ Load a project.
 
 Delete a project.
 
+### More endpoints
+
+#### Presets and samples
+
+- `GET /api/presets` → the preset systems (id, name, description);
+  `GET /api/presets/{preset_id}` → one preset's `system`.
+- `GET /api/lens/samples` → the reference lenses (id, name, citation, url,
+  notes); `GET /api/lens/samples/{sample_id}` → one with its `lens`
+  (404 if unknown).
+
+#### More analyses of a component system
+
+- `POST /api/analyze/through-focus-mtf`: `{ "system", "frequency_mm",
+  "field": 0, "defocus_min_mm": null, "defocus_max_mm": null,
+  "points": 21, "method": "fft" | "hopkins" }` → the wavelength-weighted
+  MTF at one frequency against image-plane position (default ±4 λ N'²)
+  and the best focus.
+- `POST /api/analyze/mtf-vs-field`: `{ "system", "frequencies_mm":
+  [10, 30, 50], "points": 11, "method" }` → tangential and sagittal MTF
+  from the axis to the largest field.
+- `POST /api/analyze/illumination`: `{ "system", "num_fields": 11,
+  "num_rays": 21, "focus_points": 21 }` → vignetting from real ray
+  bundles, relative illumination (with cos⁴) and MTF maps over field and
+  focus.
+- `POST /api/analyze/ghost-paths`: `{ "system", "field_fraction",
+  "num_rays": 5, "min_relative_irradiance": 1e-6, "coating_reflectance",
+  "mirror_reflectance": 0.95, "include_blocked": false }` → real
+  double-reflection paths of a component system (the prescription's
+  ghosts are `/api/analyze/ghost-trace`).
+- `POST /api/sweep`: `{ "system", "param", "values" }` → the analysis at
+  each value of one parameter. `POST /api/batch`: `{ "systems" }` → each
+  system's analysis.
+- `POST /api/validate`: a system → its warnings (overlapping components,
+  an object after the first lens, ...).
+- `POST /api/report`: `{ "system_a", "system_b", "label_a", "label_b",
+  "include_svg" }` → `{ "markdown" }`: the component-system engineering
+  report (the prescription's design report is `/api/lens/report`).
+
+#### Meshes, non-sequential tracing and radiometry
+
+- `GET /api/cad/formats`; `POST /api/cad/export` `{ "system", "format":
+  "stl" | "obj" | "ply", "binary": true }`: meshes of a component
+  system. The lens's STEP and IGES solids come from `/api/lens/export`.
+  `POST /api/cad/import` (file upload) reads STL, OBJ, STEP and IGES
+  geometry for non-sequential work.
+- `GET /api/nsc/examples`; `POST /api/nsc/trace` `{ "sources", "objects",
+  "detectors", "max_order": 10, "min_intensity": 1e-6 }`: non-sequential
+  ray tracing with splitting and scattering.
+- `GET /api/radiometry/brdf`: the reference BRDF surfaces, each set by
+  its total integrated scatter.
+
+#### More AI endpoints
+
+Every number in these answers is computed by the engine. The language
+model, when one is configured, only phrases and routes.
+
+- `POST /api/ai/chat` `{ "system", "message", "history", "provider",
+  "model" }`: one turn of a design conversation. The client sends the
+  prior turns, since the API is stateless.
+- `POST /api/ai/interpret` `{ "system", "prompt" }` → structured commands
+  (not applied); `POST /api/ai/command` `{ "system", "command" }` applies
+  one.
+- `POST /api/ai/brief` `{ "statements" }` → a design brief from fragments
+  ("5x magnification", "at f/2.8").
+- `POST /api/ai/design-rules` `{ "system" }` → manufacturability checks
+  (catalog glass, edge and centre thickness, aspect ratio).
+- `POST /api/ai/verify/claims` `{ "system", "claims", "tolerance" }`,
+  `POST /api/ai/verify/prescription` `{ "system", "tolerance" }` (the
+  closest classic design form) and `POST /api/ai/verify/full` (rule
+  checks, prescription comparison and claims together).
+- `GET /api/ai/provider`, `GET /api/ai/providers`: the configured and
+  available LLM providers (the rule-based parser is always available).
+
+#### Projects
+
+`DELETE /api/systems/{system_id}` deletes a saved project; the others are
+listed above.
+
 ## Error Responses
 
 All endpoints return standard HTTP status codes:
@@ -745,10 +828,15 @@ All endpoints return standard HTTP status codes:
 }
 ```
 
-## Rate Limiting
+## Security
 
-No rate limiting is implemented. For production use, add a reverse proxy with rate limiting.
+The API is meant for the user's own computer:
 
-## Authentication
-
-No authentication is implemented. For production use, add authentication middleware.
+- It has no authentication or rate limiting. Run it on 127.0.0.1, as the
+  launchers and the desktop app do, and do not expose it on a network.
+- `/api/script/run` executes Python. It answers only requests whose
+  client, Host header and Origin are all this computer's loopback
+  (127.0.0.1, ::1, localhost). Setting `KESTROVA_DISABLE_SCRIPTING`
+  turns it off.
+- CORS allows any origin, so a web page open in the same browser can
+  call the other endpoints of a locally running engine.

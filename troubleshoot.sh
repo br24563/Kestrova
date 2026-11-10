@@ -1,6 +1,6 @@
 #!/bin/bash
 #==============================================================================
-# AI Optical Design Engineer - Troubleshooting Script
+# Kestrova - Troubleshooting Script
 #==============================================================================
 
 set -e
@@ -17,7 +17,7 @@ cd "$SCRIPT_DIR"
 
 echo -e "${BLUE}"
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║          AI Optical Design Engineer - Diagnostics           ║"
+echo "║          Kestrova - Diagnostics                             ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 

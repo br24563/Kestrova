@@ -1,272 +1,127 @@
 # Testing Guide
 
-## Overview
+## The rule
 
-This project uses a comprehensive testing strategy to ensure scientific correctness, reliability, and performance.
+Every test compares the engine with something it did not compute:
 
-## Test Statistics
+- a closed form;
+- a published design and its published results;
+- vendor catalog data;
+- another program's output;
+- an exact Monte Carlo.
 
-The backend suite has about 1,100 tests (`pytest tests/ -q` prints the
-current count). The frontend tests in `frontend/src/__tests__` need
-`npm install` (they use `@testing-library/react`).
+The engine is never checked against its own formulas. When a test and
+the code disagree, find out which one is right before changing either.
 
-## Running Tests
+## Size
 
-### Backend Tests
+| Suite | Tests | Where |
+|-------|-------|-------|
+| Backend (pytest) | about 1,640 | `backend/tests/`, one file per area |
+| Frontend (Vitest) | about 170 | beside the components (`*.test.tsx`), plus `src/__tests__` and `src/*.test.ts` |
+
+CI fails if the backend's coverage of `optics/` drops below 80%. It is
+about 86% now. `pytest -q` prints the current count.
+
+## Running
 
 ```bash
 cd backend
-source venv/bin/activate
+pytest tests/ -q                                       # everything (several minutes)
+pytest tests/ --cov=optics --cov-fail-under=80        # with the CI gate
+pytest tests/test_reference_lenses.py -v              # one area
+pytest tests/test_tolerancing.py -k inverse           # matching tests
 
-# Run all tests
-pytest tests/ -v
-
-# Run with coverage
-pytest tests/ --cov=optics --cov-report=term-missing
-
-# Run specific test file
-pytest tests/test_edge_cases.py -v
-
-# Run specific test
-pytest tests/test_edge_cases.py::TestObjectAtInfinity -v
-
-# Run performance tests
-pytest tests/test_performance.py -v
-
-# Run with the CI coverage threshold (80%, see Coverage Targets)
-pytest tests/ --cov=optics --cov-fail-under=80
-```
-
-### Frontend Tests
-
-```bash
-cd frontend
+cd ../frontend
 npm test -- --run
 ```
 
-## Test Organization
+The tolerancing, global-search, Monte Carlo and script-console tests
+start worker processes or trace millions of rays. They make up most of
+the backend run time.
 
-```
-tests/
-├── test_units.py                  # Unit conversion tests
-├── test_lenses.py                 # Thin lens equation tests
-├── test_rays.py                   # Ray tracing tests
-├── test_systems.py                # System assembly tests
-├── test_analysis.py               # Optical analysis tests
-├── test_materials.py              # Material property tests
-├── test_optimization.py           # Optimization tests
-├── test_aberration.py             # Chromatic aberration tests
-├── test_diffraction.py            # Diffraction analysis tests
-├── test_seidel.py                 # Seidel aberration tests
-├── test_ai_commands.py            # AI command tests
-├── test_persistence.py            # Database tests
-├── test_project_tools.py          # Project tool tests
-├── test_validation.py             # Input validation tests
-├── test_validation_suite.py       # Physics validation tests
-├── test_edge_cases.py             # Edge case tests
-├── test_numerical_stability.py    # Numerical stability tests
-├── test_scientific_validation.py  # Scientific validation tests
-├── test_performance.py            # Performance benchmarks
-├── test_bug_finding.py            # Bug finding tests
-└── test_workflows.py              # Integration workflow tests
-```
+## What is validated, and against what
 
-## Test Categories
+| Area | Reference | Tests |
+|------|-----------|-------|
+| Glass indices | SCHOTT data sheets; every vendor glass against its catalog nd; Malitson, Li and Tatian for crystals and IR materials | `test_materials`, `test_glass_catalog` |
+| First order and real rays | Published lenses: first-order data, paraxial rays, Seidel sums and exact rays through even and odd aspheres against ray-optics' printed output; designers' focal lengths; COMSOL's best focus; Hubble's focal length and aplanatism | `test_reference_lenses` |
+| Lenses and surfaces | Lensmaker equation, thick-lens EFL and BFL, mirror sag h²/4R, paraboloid without spherical aberration, Snell's law and TIR | `test_scientific_validation`, `test_surfaces`, `test_rays` |
+| Surface types | Closed-form sags (conic, Q-type with Gauss-Legendre normalisation, Zernike, XY, toroid), DOE grating equation | `test_surface_types` |
+| Aberrations | Third-order aberrations against real rays at small aperture, Petzval sum from curvatures | `test_seidel`, `test_high_order` |
+| Diffraction | Airy radius, 83.8% encircled energy at the first dark ring, MTF 0.391 at half cutoff, the obscured-pupil MTF | `test_diffraction`, `test_mtf_analysis`, `test_image_quality` |
+| Illumination | Exact off-axis irradiance of a disk | `test_scientific_validation`, `test_illumination` |
+| Optimization | Constraints met exactly; a two-group zoom reaching the focal lengths of the closed form; global search returning both independently bracketed optima of an achromat's bending | `test_lens_optimize`, `test_merit`, `test_configurations`, `test_global_lens` |
+| Tolerancing | The predicted distribution against exact Monte Carlo builds | `test_tolerancing` |
+| Polarization and coatings | Fresnel equations, the quarter-wave AR layer, ideal mirror phases | `test_polarization_trace`, `test_coatings` |
+| Environment and ghosts | The Edlén / Birch-Downs air index, a singlet's thermal focal shift, a plate's ghost focus 2t/n before the image | `test_environment_ghost_beam` |
+| Gaussian beams | S. A. Self's thin-lens waist formulas | `test_environment_ghost_beam` |
+| Files | Code V and Zemax round trips keep the first-order values and Seidel sums; files in inches against hand conversion | `test_lensfile` |
+| CAD | Element volumes against the closed form (cylinder plus spherical segments); STEP shells closed (every edge used once in each sense); IGES fixed-format records; when OpenCascade is installed, the files read back as valid solids with the right volumes | `test_cad_layout` |
+| Drawings and reports | Edge thickness from the sphere sag, ISO 10110 CX/CC sense, tolerance codes | `test_scripting_reports` |
+| Script console | Isolation, time limit, and refusal of non-loopback clients, Host headers and Origins | `test_scripting_reports` |
+| Compiled trace | The Numba kernel against the NumPy trace, ray by ray | `test_fasttrace` |
+| Desktop engine | User-data folder, the served interface, the free port and `KESTROVA_PORT` line, exiting when its input closes, the kernel cache folder | `test_desktop_backend`, `test_cad_layout` |
 
-### Unit Tests
+Robustness tests (`test_edge_cases`, `test_numerical_stability`,
+`test_bug_finding`) cover:
 
-Test individual functions and components:
-- Unit conversions (nm, μm, mm, cm, m)
-- Thin lens equations
-- Ray tracing
-- Material properties
+- objects at infinity or at the focal point;
+- extreme focal lengths;
+- tiny perturbations;
+- random inputs.
 
-### Edge Case Tests
+## Writing a test
 
-Test boundary conditions:
-- Object at infinity
-- Object at focal point
-- Zero/negative aperture
-- Extreme focal lengths
-- Very fast/slow optics
+- **Compare with an independent value**, and say where it comes from in
+  the module docstring or the test name.
+- **Use realistic values**, in SI units: focal lengths of 10–500 mm,
+  visible wavelengths, catalog glasses.
+- **Set tolerances from the reference.** A program's printed output
+  supports 4–6 significant figures; a closed form supports much more.
+  `pytest.approx(expected, rel=...)` states it.
+- **Build lenses with `LensData`**, or start from a sample:
+  `kestrova.sample("geiser-triplet")`.
 
-### Numerical Stability Tests
-
-Test floating point precision:
-- Small perturbations (1e-12)
-- Large dynamic range (1e-9 to 1e3)
-- Matrix operation stability
-- Cancellation error avoidance
-
-### Scientific Validation Tests
-
-Compare the engine with results computed independently, never with the
-engine's own formulas:
-- Refractive indices against the SCHOTT data sheets and published
-  literature (Malitson, Li, Tatian), and every vendor glass against its own
-  catalog nd
-- Thick-lens EFL and BFL against the lensmaker equation
-- Exact defocus wavefront geometry; aberration-free ideal lenses
-- Airy radius, 83.8 % encircled energy at the first dark ring, MTF 0.391
-  at half cutoff, and the FFT MTF of a perfect lens
-- Relative illumination against the exact off-axis disk irradiance
-- Spherical mirror h^2/(4R), paraboloid without spherical aberration,
-  Petzval sum from surface curvatures, third-order aberrations against
-  real rays at small aperture
-- Snell's law and total internal reflection in the exact tracer
-- Published lenses (`test_reference_lenses.py`): first-order data, paraxial
-  rays, surface-by-surface Seidel sums and exact real rays through odd and
-  even aspheres against ray-optics' output for the same prescriptions;
-  designers' focal lengths; COMSOL's best focus; the Hubble Space
-  Telescope's published focal length and its aplanatism (see OPTICS.md,
-  Reference lenses)
-
-### Performance Tests
-
-Benchmark execution speed:
-- Ray tracing: < 50ms for 11 rays
-- Analysis: < 100ms
-- Optimization: < 5s for 2 variables
-- Tolerance: < 2s for 50 trials
-
-### Bug Finding Tests
-
-Systematic bug detection:
-- Fuzzing with random inputs
-- Property-based testing
-- Differential testing
-- Regression tests
-
-### Integration Tests
-
-End-to-end workflows:
-- Design → Optimize → Analyze
-- Import → Export → Import
-- Multi-wavelength analysis
-- Tolerance → Sensitivity → Re-optimize
-
-## Writing New Tests
-
-### Test Structure
-
-```python
-import pytest
-import sys
-import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from optics.models import OpticalSystem, ThinLens
-
-class TestMyFeature:
-    """Test suite for MyFeature."""
-    
-    def test_basic_functionality(self):
-        """Test basic functionality."""
-        # Arrange
-        system = OpticalSystem(
-            components=[ThinLens(id="L1", position=0.1, focal_length=0.1, aperture_diameter=0.025)],
-            wavelengths=[550e-9],
-            object=Object(position=0.0, height=0.01),
-            image_plane=ImagePlane(position=0.3),
-            analysis_settings=AnalysisSettings(num_rays=11, ray_types=['chief', 'marginal', 'fill'], aperture_fraction=1.0, wavelength=550e-9),
-        )
-        
-        # Act
-        result = analyze_system(system)
-        
-        # Assert
-        assert result.effective_focal_length > 0
-```
-
-### Test Naming
-
-- Test files: `test_<feature>.py`
-- Test classes: `Test<FeatureName>`
-- Test functions: `test_<description>`
-
-### Test Data
-
-Use realistic optical values:
-- Focal lengths: 10mm to 500mm
-- Wavelengths: 400nm to 700nm (visible)
-- Aperture diameters: 1mm to 50mm
-- Refractive indices: 1.4 to 1.8
-
-### Assertions
-
-Use pytest.approx for floating point:
-```python
-assert value == pytest.approx(expected, rel=1e-6)
-```
-
-Check for finite values:
 ```python
 import math
-assert math.isfinite(result)
+import pytest
+import kestrova as ks
+from optics.lens_data import LensData, LensSurface
+from optics.materials import refractive_index
+
+
+def test_singlet_focal_length_matches_the_lensmaker_equation():
+    r1, r2, t = 0.05, -0.08, 0.004
+    lens = ks.Lens(
+        LensData(
+            surfaces=[
+                LensSurface(radius=r1, thickness=t, material="N-BK7",
+                            semi_diameter=0.01, is_stop=True),
+                LensSurface(radius=r2, thickness=0.09, semi_diameter=0.01),
+            ],
+            field_angle=math.radians(2),
+            wavelengths=[587.5618e-9],
+        )
+    )
+    # first-order values are at the reference wavelength
+    # (analysis_settings.wavelength, 550 nm unless set)
+    n = refractive_index("N-BK7", lens.data.analysis_settings.wavelength)
+    power = (n - 1) * (1 / r1 - 1 / r2 + (n - 1) * t / (n * r1 * r2))
+    assert lens.efl == pytest.approx(1 / power, rel=1e-9)
 ```
 
-## Coverage
+## Continuous integration
 
-### Running Coverage
-
-```bash
-pytest tests/ --cov=optics --cov-report=html
-```
-
-### Coverage Targets
-
-| Module | Target |
-|--------|--------|
-| optics/units.py | 95% |
-| optics/lenses.py | 95% |
-| optics/rays.py | 90% |
-| optics/analysis.py | 90% |
-| optics/optimization.py | 85% |
-| optics/tolerance.py | 80% |
-| **Overall** | **80%** |
-
-## Continuous Integration
-
-Tests run automatically on:
-- Push to main/master
-- Pull requests to main/master
-- Version tags (v*)
-
-See `.github/workflows/test.yml` for details.
-
-## Troubleshooting
-
-### Tests Fail After Code Changes
-
-1. Run the specific failing test:
-   ```bash
-   pytest tests/test_file.py::TestClass::test_name -v
-   ```
-
-2. Check for:
-   - Changed function signatures
-   - Modified data structures
-   - Updated validation rules
-
-### Coverage Drops Below Threshold
-
-1. Identify uncovered code:
-   ```bash
-   pytest tests/ --cov=optics --cov-report=term-missing
-   ```
-
-2. Add tests for uncovered lines
-
-### Performance Tests Fail
-
-1. Check system load
-2. Run tests individually
-3. Adjust thresholds if needed
+The tests run on every push and pull request to `master`. See
+[CI_CD.md](./CI_CD.md) for the platforms, the lint checks and the desktop
+build's smoke test.
 
 ## References
 
-- Born & Wolf, "Principles of Optics", 7th Edition
-- Smith, "Modern Optical Engineering", 4th Edition
-- Hecht, "Optics", 5th Edition
-- Schott Glass Catalog, 2024
+- M. Born and E. Wolf, *Principles of Optics*, 7th ed.
+- W. J. Smith, *Modern Optical Engineering*, 4th ed.
+- W. T. Welford, *Aberrations of Optical Systems*
+- S. A. Self, "Focusing of spherical Gaussian beams", *Appl. Opt.* 22,
+  658 (1983)
+- The SCHOTT, OHARA, HOYA and CDGM glass catalogs

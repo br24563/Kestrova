@@ -16,7 +16,7 @@ this holds even if the app crashes.
 
 Installers are built by the `Desktop builds` workflow
 (`.github/workflows/desktop.yml`) on real Windows and macOS machines. Push a
-version tag (`git tag v0.3.0 && git push origin v0.3.0`) to publish them on
+version tag (`git tag v0.5.0 && git push origin v0.5.0`) to publish them on
 the repository's Releases page; the workflow can also be run by hand from
 the Actions tab, and the installers are then attached to the run.
 

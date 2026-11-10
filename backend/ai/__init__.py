@@ -1,5 +1,5 @@
 """
-AI abstraction layer for the AI Optical Design Engineer.
+AI abstraction layer for Kestrova.
 
 This package provides a structured-command interface between an LLM
 (or any AI provider) and the validated optics engine. The AI never

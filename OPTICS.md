@@ -1,6 +1,6 @@
 # Optics Reference
 
-This document describes the optical conventions, formulas, and assumptions used in the AI Optical Design Engineer.
+This document describes the optical conventions, formulas, and assumptions used in Kestrova.
 
 ## Sign Convention
 
@@ -453,6 +453,75 @@ truncation.
 The image simulator (`optics/imaging.py`) can use the wavelength-weighted
 PSF of all the system's wavelengths (`polychromatic`).
 
+## Layout, CAD and Drawings
+
+### Element solids
+
+`optics/io/cad_export.py` builds each glass element (one per glass, so a
+cemented doublet gives two) and each mirror as a solid of revolution.
+Its outline in the meridional half plane runs:
+
+1. over the front surface from the axis to its clear aperture;
+2. along a flat land to the outer diameter (the clear diameter plus
+   `edge_margin`, 1 mm by default);
+3. along a cylindrical edge;
+4. back over the rear surface to the axis.
+
+Past its clear aperture a surface continues as that flat land, the sag
+at its semi-diameter, as on a real element. A mirror's substrate ends in
+a flat back `mirror_thickness` (default D/8) behind its deepest point,
+on the side the light leaves toward.
+
+How each face is written:
+
+- **Spheres:** exact (`SPHERICAL_SURFACE` in STEP; rational quadratic arcs
+  in IGES).
+- **Planes:** `PLANE`.
+- **Conics, aspheres and Q surfaces:** surfaces of revolution of a cubic
+  B-spline. It interpolates the sag by global interpolation (Piegl and
+  Tiller, *The NURBS Book*, A9.1) with chord-length parameters. The
+  number of points doubles until the curve matches the sag to 10 nm
+  between them (`PROFILE_TOLERANCE`).
+- **STEP (AP214):** each element is a `MANIFOLD_SOLID_BREP`. Revolved
+  faces carry their seam edge (the profile from the rim to the pole) as
+  CAD kernels expect.
+- **IGES 5.3:** every face is a type 120 surface of revolution.
+
+Units are millimetres. Tilted, decentred or non-rotationally-symmetric
+surfaces, and ideal lenses, are left out and listed.
+
+The tests check these against closed forms, not against the exporter:
+
+- element volumes against a cylinder plus two spherical segments,
+  πs(3a² + s²)/6;
+- that every STEP shell is closed;
+- when OpenCascade is installed, that the files read back as valid
+  solids whose volumes match the outline's (Pappus).
+
+### Layout
+
+`optics/lens_layout.py` returns the same outlines, sampled, and exact
+rays per field:
+
+- **2D:** the meridional fan.
+- **3D:** the chief ray and the marginal ring.
+
+Each ray is listed through every surface to the image plane.
+Vignetted rays are dropped.
+
+### ISO 10110 drawings
+
+`optics/io/element_drawing.py` gives each glass element:
+
+- the radius with its sense (CX/CC seen from outside the element), the
+  clear aperture and the centre and edge thickness;
+- 3/ power in fringes and 4/ centring in arc minutes, both from the
+  tolerance set (DLF; TRX/TRY and the element tilts);
+- nd and νd with their tolerances (DLN, DLV).
+
+Codes the design does not determine (5/ surface imperfections, 0/ 1/ 2/
+material imperfections, irregularity) print as "—" unless supplied.
+
 ## How the Engine Traces Rays
 
 All analyses are built on one sequential engine (`backend/optics/raytrace.py`).
@@ -572,5 +641,10 @@ Reference wavelengths: d line 587.56 nm (helium), e line 546.07 nm
    Non-sequential tracing lives in `optics/nsc` and is separate.
 2. Ideal thin lenses are aberration-free by construction (see above).
 3. Polychromatic analyses sample the wavelengths you list.
-4. Coatings, polarization and scatter are modelled in their own modules
-   and are not yet folded into the sequential image-quality analyses.
+4. Coatings and polarization are traced through the prescription for
+   transmittance, diattenuation, retardance and ghosts. The MTF and PSF
+   use the scalar wavefront (amplitude apodization from coatings and
+   polarization is not included). Scatter is modelled in `optics/nsc`.
+5. First-order values (EFL, BFL, pupils, solves) are computed at the
+   reference wavelength, `analysis_settings.wavelength`, which defaults to
+   550 nm and is independent of the order of `wavelengths`.

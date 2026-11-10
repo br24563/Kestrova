@@ -1,178 +1,80 @@
-# CI/CD Pipeline Documentation
+# CI/CD
 
-## Overview
+GitHub Actions runs four kinds of checks. `master` is protected: changes
+arrive through pull requests, which must pass the tests and lint.
 
-This project uses GitHub Actions for continuous integration and continuous deployment.
+## Test Suite (`.github/workflows/test.yml`)
 
-## Workflows
+Runs on pushes and pull requests to `master` (and `main`).
 
-### 1. Test Suite (`.github/workflows/test.yml`)
+| Job | What it does |
+|-----|--------------|
+| backend-tests | Runs pytest with coverage on Ubuntu (Python 3.11 and 3.12), Windows and macOS (3.12). Fails below 80% coverage of `optics/`, a ratchet that is raised as tests are added. A failing platform does not cancel the others. Uploads the coverage report |
+| frontend-tests | Runs Vitest and the production build on Node 18 and 20. Uploads the build |
+| integration-tests | After both pass: starts the backend, runs `tests/test_workflows.py` and calls the health and default-system endpoints |
 
-Runs on every push and pull request to main/master branches.
+## Lint and Format (`.github/workflows/lint.yml`)
 
-**Jobs:**
-- **backend-tests**: Tests the Python backend on Ubuntu (Python 3.11 and
-  3.12), Windows and macOS (3.12); one failing platform does not cancel
-  the others
-  - Runs all pytest tests with coverage in one pass
-  - Fails below 80% coverage of `optics/` (a ratchet at the current level;
-    raised as tests are added)
-  - Uploads coverage artifact
+- **Backend:**
+  - `flake8` (syntax errors and undefined names);
+  - `black --check` on `optics/ ai/ api/`;
+  - `mypy optics/`.
+- **Frontend:** ESLint and Prettier.
 
-- **frontend-tests**: Tests React frontend across Node 18 and 20
-  - Runs Vitest tests
-  - Builds production bundle
-  - Uploads build artifact
+## Desktop builds (`.github/workflows/desktop.yml`)
 
-- **integration-tests**: Runs after backend and frontend tests pass
-  - Starts backend server
-  - Runs workflow integration tests
-  - Tests API endpoints
+Builds the installers on Windows, macOS on Apple Silicon (`macos-15`) and
+macOS on Intel (`macos-15-intel`):
 
-**Triggers:**
-- Push to main/master
-- Pull requests to main/master
+1. Build the web interface.
+2. Freeze the backend with PyInstaller (`backend/kestrova-server.spec`).
+3. Smoke-test the frozen engine: it must start, answer `/api/health` and
+   serve the interface.
+4. Package with electron-builder. The build is signed when the signing
+   secrets exist: Azure Trusted Signing or a certificate file on Windows,
+   and a Developer ID certificate with notarization on macOS.
+5. Verify the signatures of signed builds: signtool on Windows, codesign
+   and Gatekeeper on macOS.
+6. Write a `.sha256` checksum for each installer, and upload them all as
+   run artifacts.
 
-### 2. Lint and Format (`.github/workflows/lint.yml`)
+It runs on version tags `v*` (and then publishes a GitHub Release with
+the installers), by hand from the Actions tab, and on pull requests that
+change the packaging (`desktop-app/`, the server entry point or spec,
+`requirements.txt`, the workflow).
 
-Runs code quality checks.
+The secret names and how to obtain certificates are in
+[desktop-app/README.md](./desktop-app/README.md#signing-optional).
 
-**Backend:**
-- flake8: Linting for syntax errors and style
-- black: Code formatting check
-- mypy: Type checking
+## Dependabot (`.github/dependabot.yml`)
 
-**Frontend:**
-- ESLint: Linting for TypeScript/React
-- Prettier: Code formatting check
+Weekly update pull requests for the Python packages (`backend/`), the npm
+packages (`frontend/`) and the Actions versions.
 
-### 3. Desktop builds (`.github/workflows/desktop.yml`)
+## Releasing
 
-Builds the desktop installers on Windows, macOS on Apple Silicon
-(`macos-15`) and macOS on Intel (`macos-15-intel`):
+1. Move the `[Unreleased]` entries in CHANGELOG.md under the new version.
+2. Raise the version in `backend/optics/__init__.py` (`__version__`),
+   `frontend/package.json` and `desktop-app/package.json`, and in the
+   README badge.
+3. Merge to `master`, then tag it:
+   `git tag v0.5.0 && git push origin v0.5.0`.
+4. The desktop workflow builds, verifies and publishes the release.
 
-1. Build the web interface
-2. Freeze the backend with PyInstaller (`backend/kestrova-server.spec`)
-3. Smoke-test the frozen backend (it must start and answer `/api/health`)
-4. Package with electron-builder (signed when the signing secrets exist;
-   see `desktop-app/README.md`)
-5. Upload the installers as run artifacts
+## When CI fails
 
-**Triggers:** version tags `v*` (then a GitHub Release is published with
-the installers), manual runs, and pull requests that change the packaging.
-
-### 4. Dependabot (`.github/dependabot.yml`)
-
-Automated dependency updates.
-
-- **pip**: Weekly checks for Python dependencies
-- **npm**: Weekly checks for Node.js dependencies
-- **github-actions**: Weekly checks for action versions
-
-## Status Badges
-
-Add to README.md:
-
-```markdown
-![Tests](https://github.com/USERNAME/ai-optical-design-engineer/workflows/Test%20Suite/badge.svg)
-![Lint](https://github.com/USERNAME/ai-optical-design-engineer/workflows/Lint%20and%20Format/badge.svg)
-```
-
-## Running Tests Locally
-
-### Backend
-
-```bash
-cd backend
-source venv/bin/activate
-pytest tests/ -v                    # Run all tests
-pytest tests/ --cov=optics         # With coverage
-pytest tests/test_edge_cases.py -v  # Specific test file
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm test -- --run               # Run all tests
-npm run build                    # Build for production
-```
-
-## Deployment
-
-### Manual Deployment
-
-1. Create a virtual environment:
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-2. Start the backend:
-   ```bash
-   uvicorn api.main:app --host 0.0.0.0 --port 8000
-   ```
-
-3. Start the frontend:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-### Docker Deployment (Future)
-
-```dockerfile
-# Backend
-FROM python:3.12-slim
-WORKDIR /app
-COPY backend/requirements.txt .
-RUN pip install -r requirements.txt
-COPY backend/ .
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
-# Frontend
-FROM node:20-alpine
-WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ .
-RUN npm run build
-CMD ["npm", "run", "preview"]
-```
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OLLAMA_ENABLED` | Enable Ollama AI | `false` |
-| `OLLAMA_MODEL` | Ollama model name | `llama3.2` |
-| `OLLAMA_URL` | Ollama server URL | `http://localhost:11434` |
-
-## Monitoring
-
-- GitHub Actions dashboard for CI/CD status
-- Code coverage reports via artifacts
-- Release notes in GitHub Releases
-
-## Troubleshooting
-
-### Tests Fail in CI but Pass Locally
-
-1. Check Python/Node version matches
-2. Verify all dependencies are in requirements.txt/package.json
-3. Check for environment-specific code
-
-### Coverage Below Threshold
-
-1. Run `pytest --cov=optics --cov-report=html`
-2. Open `htmlcov/index.html` to see uncovered lines
-3. Add tests for uncovered code
-
-### Build Failures
-
-1. Check for TypeScript errors: `npx tsc --noEmit`
-2. Check for lint errors: `npx eslint src/`
-3. Verify all imports are correct
+- **Tests fail in CI but pass locally:**
+  - check the Python and Node versions;
+  - check new packages are in `requirements.txt` or `package.json`;
+  - check for platform differences (paths, line endings, float
+    round-off on another BLAS).
+- **Coverage below the gate:** run
+  `pytest tests/ --cov=optics --cov-report=term-missing` and test the
+  uncovered lines.
+- **Lint:** run the commands in
+  [DEVELOPMENT.md](./DEVELOPMENT.md#checks) locally. On Windows, Prettier
+  reports files checked out with CRLF line endings; CI checks out LF, so
+  those warnings do not appear there.
+- **Desktop build:** the smoke test prints the frozen engine's log.
+  Missing modules usually mean a package now imports something
+  dynamically. Add it to `hiddenimports` in `kestrova-server.spec`.

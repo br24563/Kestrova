@@ -1,6 +1,6 @@
 @echo off
 REM ==============================================================================
-REM AI Optical Design Engineer - Launcher Script (Windows)
+REM Kestrova - Launcher Script (Windows)
 REM ==============================================================================
 
 setlocal enabledelayedexpansion
@@ -19,7 +19,7 @@ cd /d %SCRIPT_DIR%
 REM Print banner
 echo.
 echo ================================================================================
-echo           AI Optical Design Engineer v0.2.0
+echo           Kestrova v0.4.0
 echo           ===================================
 echo           Free, Professional Optical Design
 echo ================================================================================
