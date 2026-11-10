@@ -85,6 +85,11 @@ interface LensDataEditorProps {
   onResolved: (result: LensResolveResult) => void;
   /** A lens converted from the component system (no analysis change). */
   onImported: (lens: LensData) => void;
+  /** Step through the lens's edit history (edits, resolves, optimizations). */
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 const LENGTH_PARAMS = new Set([
@@ -200,6 +205,10 @@ export function LensDataEditor({
   onChange,
   onResolved,
   onImported,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: LensDataEditorProps) {
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [flagCell, setFlagCell] = useState<{
@@ -711,6 +720,26 @@ export function LensDataEditor({
           )}
         </h3>
         <div className="flex flex-wrap items-center gap-1">
+          {onUndo && (
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              title="Undo the last lens edit, resolve or optimization"
+              className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+            >
+              Undo
+            </button>
+          )}
+          {onRedo && (
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              title="Redo the lens edit"
+              className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+            >
+              Redo
+            </button>
+          )}
           <button
             onClick={() => insertRow("before")}
             className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
@@ -754,6 +783,22 @@ export function LensDataEditor({
             className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
           >
             Save .zmx
+          </button>
+          <button
+            onClick={() => saveFile("step")}
+            disabled={busy !== null}
+            title="Export the elements as STEP solids for CAD"
+            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+          >
+            STEP
+          </button>
+          <button
+            onClick={() => saveFile("igs")}
+            disabled={busy !== null}
+            title="Export the element surfaces as IGES for CAD"
+            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40"
+          >
+            IGES
           </button>
           <button
             onClick={resolve}

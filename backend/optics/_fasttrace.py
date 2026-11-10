@@ -276,9 +276,15 @@ def _kernel_impl(
     return pts, dout, opl_out, valid, img, sopl
 
 
-#: Numba's on-disk cache is keyed on the source file, which a frozen
-#: (PyInstaller) build does not have: compile at first use there instead.
-_CACHE = not getattr(sys, "frozen", False)
+#: Numba's on-disk cache is keyed on this source file. A frozen
+#: (PyInstaller) build ships the file next to its bytecode for that, and
+#: caches in NUMBA_CACHE_DIR (the server sets it to the user's data folder,
+#: since the install folder may not be writable); without either it
+#: compiles at first use instead.
+_CACHE = not getattr(sys, "frozen", False) or (
+    os.path.isfile(os.path.abspath(__file__))
+    and bool(os.environ.get("NUMBA_CACHE_DIR"))
+)
 
 #: One caller at a time: the kernels hold the GIL anyway (no nogil), and
 #: concurrent calls from several Python threads abort the process on macOS.
@@ -319,3 +325,36 @@ def trace(seq, p0, d0, clip: bool):
     for s in seq.surfaces:
         n_cur = s.n_after
     return pts, d, opl, valid, img, n_cur, sopl
+
+
+def warm_up() -> None:
+    """Compile (or load from the cache) the kernels with a small trace, so
+    the first analysis does not wait for them. Safe to call from a thread."""
+    if not AVAILABLE:
+        return
+    from . import raytrace as rt
+    from .lens_data import LensData, LensSurface, to_system
+
+    lens = LensData(
+        surfaces=[
+            LensSurface(
+                radius=0.05,
+                thickness=0.004,
+                material="N-BK7",
+                semi_diameter=0.005,
+                is_stop=True,
+            ),
+            LensSurface(radius=-0.05, thickness=0.05, semi_diameter=0.005),
+        ],
+        wavelengths=[587.6e-9],
+    )
+    seq = rt.build_sequence(to_system(lens))
+    if not supports(seq):
+        return
+    for n in (4, PARALLEL_MIN_RAYS):
+        p0 = np.zeros((n, 3))
+        p0[:, 1] = np.linspace(0.0, 0.004, n)
+        p0[:, 2] = -0.01
+        d0 = np.zeros((n, 3))
+        d0[:, 2] = 1.0
+        trace(seq, p0, d0, True)

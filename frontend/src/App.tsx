@@ -6,7 +6,7 @@
  * and spot diagram.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type {
   OpticalSystem,
   OpticalComponent,
@@ -56,6 +56,7 @@ import { EnvironmentPanel } from "./components/analysis/EnvironmentPanel";
 import { GhostTracePanel } from "./components/analysis/GhostTracePanel";
 import { BeamPanel } from "./components/analysis/BeamPanel";
 import { ImageSimulationPanel } from "./components/analysis/ImageSimulationPanel";
+import { LensLayoutPanel } from "./components/analysis/LensLayoutPanel";
 import { ChromaticAberrationPlot } from "./components/analysis/ChromaticAberrationPlot";
 import { GhostAnalysisPanel } from "./components/analysis/GhostAnalysisPanel";
 import { AdvancedOptimizationPanel } from "./components/optimization/AdvancedOptimizationPanel";
@@ -75,6 +76,7 @@ const STORAGE_KEY = "ai-optical-design-engineer-system";
 // Analysis tabs under the optical bench; only the active one is mounted,
 // so only it queries the backend.
 const ANALYSIS_TABS = [
+  { id: "layout", label: "Lens Layout" },
   { id: "ray-fan", label: "Ray Fan" },
   { id: "opd", label: "OPD" },
   { id: "field", label: "Field Curvature" },
@@ -115,12 +117,16 @@ function App() {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [analysisTab, setAnalysisTab] = useState<AnalysisTab>("ray-fan");
   // Surface-by-surface prescription shown in the lens data editor
-  const [lens, setLens] = useState<LensData | null>(null);
+  // Its edits, resolves and optimizations have their own undo history.
+  const lensHistory = useHistory<LensData | null>(null);
+  const lens = lensHistory.state;
   const [lensDirty, setLensDirty] = useState(false);
   const [showLensEditor, setShowLensEditor] = useState(true);
 
   // History for system state (undo/redo)
   const systemHistory = useHistory<OpticalSystem | null>(null);
+  // Undo/redo act on whichever was edited last: the system or the lens.
+  const lastEdited = useRef<"system" | "lens">("system");
 
   // Wrapper for setSystem that tracks history
   const setSystem = (
@@ -129,6 +135,7 @@ function App() {
       | null
       | ((prev: OpticalSystem | null) => OpticalSystem | null),
   ) => {
+    lastEdited.current = "system";
     if (typeof newSystem === "function") {
       const newVal = newSystem(systemHistory.state);
       systemHistory.set(newVal);
@@ -140,14 +147,30 @@ function App() {
   };
 
   // Undo/Redo handlers
+  const undoLens = () => {
+    lensHistory.undo();
+    setLensDirty(true);
+  };
+  const redoLens = () => {
+    lensHistory.redo();
+    setLensDirty(true);
+  };
+  const lensFirst = (can: boolean) => lastEdited.current === "lens" && can;
+
   const handleUndo = () => {
-    systemHistory.undo();
-    setSystemState(systemHistory.state);
+    if (lensFirst(lensHistory.canUndo) || !systemHistory.canUndo) {
+      if (lensHistory.canUndo) undoLens();
+      return;
+    }
+    setSystemState(systemHistory.undo());
   };
 
   const handleRedo = () => {
-    systemHistory.redo();
-    setSystemState(systemHistory.state);
+    if (lensFirst(lensHistory.canRedo) || !systemHistory.canRedo) {
+      if (lensHistory.canRedo) redoLens();
+      return;
+    }
+    setSystemState(systemHistory.redo());
   };
 
   // Load the default system on mount
@@ -186,15 +209,31 @@ function App() {
         e.preventDefault();
         updateSimulation();
       }
+      // Text fields keep the browser's own undo
+      const t = e.target as HTMLElement | null;
+      const editing =
+        !!t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable);
       // Ctrl/Cmd + Z: Undo
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      if (
+        !editing &&
+        (e.ctrlKey || e.metaKey) &&
+        e.key === "z" &&
+        !e.shiftKey
+      ) {
         e.preventDefault();
         handleUndo();
       }
       // Ctrl/Cmd + Shift + Z or Ctrl+Y: Redo
       if (
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z") ||
-        ((e.ctrlKey || e.metaKey) && e.key === "y")
+        !editing &&
+        (((e.ctrlKey || e.metaKey) &&
+          e.shiftKey &&
+          e.key.toLowerCase() === "z") ||
+          ((e.ctrlKey || e.metaKey) && e.key === "y"))
       ) {
         e.preventDefault();
         handleRedo();
@@ -207,7 +246,14 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [system]);
+  }, [
+    system,
+    lens,
+    systemHistory.canUndo,
+    systemHistory.canRedo,
+    lensHistory.canUndo,
+    lensHistory.canRedo,
+  ]);
 
   const loadDefaultSystem = async () => {
     try {
@@ -254,29 +300,32 @@ function App() {
   const loadLensData = async (sys: OpticalSystem) => {
     try {
       const { lens: converted } = await lensFromSystem(sys);
-      setLens(converted);
+      lensHistory.reset(converted);
     } catch (err) {
       console.warn("No lens data for this system:", err);
-      setLens(null);
+      lensHistory.reset(null);
     }
     setLensDirty(false);
   };
 
   const handleLensChange = (next: LensData) => {
-    setLens(next);
+    lensHistory.set(next);
+    lastEdited.current = "lens";
     setLensDirty(true);
   };
 
   // A resolved or optimized lens drives the bench and every analysis panel.
   const handleLensResolved = (result: LensResolveResult) => {
-    setLens(result.lens);
+    lensHistory.set(result.lens);
     setLensDirty(false);
     setSystem(result.system);
+    lastEdited.current = "lens";
     setSelectedComponentId(result.system.components[0]?.id ?? null);
   };
 
   const handleLensImported = (imported: LensData) => {
-    setLens(imported);
+    lensHistory.set(imported);
+    lastEdited.current = "lens";
     setLensDirty(false);
   };
 
@@ -653,9 +702,9 @@ function App() {
             </button>
             <button
               onClick={handleUndo}
-              disabled={!systemHistory.canUndo}
+              disabled={!systemHistory.canUndo && !lensHistory.canUndo}
               className={`px-2 py-1.5 rounded text-sm font-medium transition-colors ${
-                systemHistory.canUndo
+                systemHistory.canUndo || lensHistory.canUndo
                   ? "bg-white/20 hover:bg-white/30"
                   : "bg-white/10 opacity-50 cursor-not-allowed"
               }`}
@@ -665,9 +714,9 @@ function App() {
             </button>
             <button
               onClick={handleRedo}
-              disabled={!systemHistory.canRedo}
+              disabled={!systemHistory.canRedo && !lensHistory.canRedo}
               className={`px-2 py-1.5 rounded text-sm font-medium transition-colors ${
-                systemHistory.canRedo
+                systemHistory.canRedo || lensHistory.canRedo
                   ? "bg-white/20 hover:bg-white/30"
                   : "bg-white/10 opacity-50 cursor-not-allowed"
               }`}
@@ -813,6 +862,10 @@ function App() {
                   onChange={handleLensChange}
                   onResolved={handleLensResolved}
                   onImported={handleLensImported}
+                  onUndo={undoLens}
+                  onRedo={redoLens}
+                  canUndo={lensHistory.canUndo}
+                  canRedo={lensHistory.canRedo}
                 />
               </div>
             )}
@@ -845,6 +898,9 @@ function App() {
               ))}
             </div>
             <div role="tabpanel">
+              {analysisTab === "layout" && (
+                <LensLayoutPanel lens={lens} displayUnit={displayUnit} />
+              )}
               {analysisTab === "ray-fan" && (
                 <RayFanPlot system={system} displayUnit={displayUnit} />
               )}

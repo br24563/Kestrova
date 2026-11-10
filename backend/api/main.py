@@ -1614,6 +1614,34 @@ async def script_reference():
     return {"reference": api_reference()}
 
 
+class LensLayoutRequest(BaseModel):
+    lens: _ld.LensData
+    configuration: int = _CONFIGURATION
+    rays: int = Field(7, ge=2, le=41, description="Rays per field across the pupil")
+    pupil: Literal["fan", "ring"] = Field(
+        "fan", description="fan: the meridional fan (2D); ring: the marginal ring (3D)"
+    )
+    wavelength: Optional[float] = None
+
+
+@app.post("/api/lens/layout")
+def lens_layout_view(request: LensLayoutRequest):
+    """Element outlines (meridional section, m) and exact rays per field
+    (3D points through every surface) for the 2D and 3D layout views."""
+    from optics.lens_layout import lens_layout
+
+    try:
+        return lens_layout(
+            request.lens,
+            request.configuration,
+            request.rays,
+            request.pupil,
+            request.wavelength,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/analyze/field-plots")
 async def analyze_field_plots(request: FieldPlotsRequest):
     """Distortion, F-theta distortion (object at infinity), lateral colour
@@ -1628,8 +1656,16 @@ async def analyze_field_plots(request: FieldPlotsRequest):
 
 class LensExportRequest(BaseModel):
     lens: _ld.LensData
-    format: Literal["seq", "zmx"] = Field(
-        ..., description="seq: Code V sequence file; zmx: Zemax text lens file"
+    format: Literal["seq", "zmx", "step", "igs"] = Field(
+        ...,
+        description="seq: Code V sequence file; zmx: Zemax text lens file; "
+        "step / igs: the elements as CAD solids (STEP AP214) or surfaces (IGES)",
+    )
+    edge_margin: float = Field(
+        1e-3, ge=0, description="CAD: outer minus clear diameter of an element (m)"
+    )
+    mirror_thickness: Optional[float] = Field(
+        None, gt=0, description="CAD: mirror substrate thickness (default D/8)"
     )
 
 
@@ -1692,14 +1728,22 @@ async def lens_sample(sample_id: str):
 
 @app.post("/api/lens/export")
 async def lens_export(request: LensExportRequest):
-    """A Code V or Zemax lens file of the prescription: ``content`` (text),
-    a suggested ``filename`` and ``warnings`` for anything written as plain
-    values (solves and pickups the format cannot express here)."""
+    """A Code V or Zemax lens file of the prescription, or its elements as
+    STEP solids / IGES surfaces: ``content`` (text), a suggested
+    ``filename`` and ``warnings`` (solves and pickups written as plain
+    values; elements CAD export cannot represent)."""
+    from optics.io.cad_export import write_iges, write_step
     from optics.io.lensfile import write_codev, write_zemax
 
     try:
-        write = write_codev if request.format == "seq" else write_zemax
-        content, warnings = write(request.lens)
+        if request.format in ("step", "igs"):
+            cad = write_step if request.format == "step" else write_iges
+            content, warnings = cad(
+                request.lens, request.edge_margin, request.mirror_thickness
+            )
+        else:
+            write = write_codev if request.format == "seq" else write_zemax
+            content, warnings = write(request.lens)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     stem = (

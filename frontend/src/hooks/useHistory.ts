@@ -1,10 +1,12 @@
 /**
  * useHistory Hook.
  *
- * Provides undo/redo functionality for state management.
+ * Undo/redo for a piece of state. `undo` and `redo` return the state they
+ * move to, so callers that mirror it elsewhere get the new value at once
+ * (React applies the hook's own state on the next render).
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 interface HistoryState<T> {
   past: T[];
@@ -13,86 +15,70 @@ interface HistoryState<T> {
 }
 
 export function useHistory<T>(initialState: T, maxHistory = 50) {
-  const [state, setState] = useState<HistoryState<T>>({
+  const [state, setStateRaw] = useState<HistoryState<T>>({
     past: [],
     present: initialState,
     future: [],
   });
+  // The latest history, updated synchronously with every change.
+  const ref = useRef(state);
+  const setState = useCallback((next: HistoryState<T>) => {
+    ref.current = next;
+    setStateRaw(next);
+  }, []);
 
   const canUndo = state.past.length > 0;
   const canRedo = state.future.length > 0;
 
   const set = useCallback(
     (newPresent: T | ((prev: T) => T)) => {
-      setState((currentState) => {
-        const resolvedPresent =
-          typeof newPresent === "function"
-            ? (newPresent as (prev: T) => T)(currentState.present)
-            : newPresent;
-
-        if (
-          JSON.stringify(resolvedPresent) ===
-          JSON.stringify(currentState.present)
-        ) {
-          return currentState;
-        }
-
-        const newPast = [...currentState.past, currentState.present];
-        if (newPast.length > maxHistory) {
-          newPast.shift();
-        }
-
-        return {
-          past: newPast,
-          present: resolvedPresent,
-          future: [],
-        };
-      });
+      const current = ref.current;
+      const resolved =
+        typeof newPresent === "function"
+          ? (newPresent as (prev: T) => T)(current.present)
+          : newPresent;
+      if (JSON.stringify(resolved) === JSON.stringify(current.present)) {
+        return;
+      }
+      const past = [...current.past, current.present];
+      if (past.length > maxHistory) past.shift();
+      setState({ past, present: resolved, future: [] });
     },
-    [maxHistory],
+    [maxHistory, setState],
   );
 
-  const undo = useCallback(() => {
-    setState((currentState) => {
-      if (currentState.past.length === 0) {
-        return currentState;
-      }
-
-      const previous = currentState.past[currentState.past.length - 1];
-      const newPast = currentState.past.slice(0, -1);
-
-      return {
-        past: newPast,
-        present: previous,
-        future: [currentState.present, ...currentState.future],
-      };
-    });
-  }, []);
-
-  const redo = useCallback(() => {
-    setState((currentState) => {
-      if (currentState.future.length === 0) {
-        return currentState;
-      }
-
-      const next = currentState.future[0];
-      const newFuture = currentState.future.slice(1);
-
-      return {
-        past: [...currentState.past, currentState.present],
-        present: next,
-        future: newFuture,
-      };
-    });
-  }, []);
-
-  const reset = useCallback((newPresent: T) => {
+  /** Step back; returns the state now current. */
+  const undo = useCallback((): T => {
+    const current = ref.current;
+    if (current.past.length === 0) return current.present;
+    const previous = current.past[current.past.length - 1];
     setState({
-      past: [],
-      present: newPresent,
-      future: [],
+      past: current.past.slice(0, -1),
+      present: previous,
+      future: [current.present, ...current.future],
     });
-  }, []);
+    return previous;
+  }, [setState]);
+
+  /** Step forward; returns the state now current. */
+  const redo = useCallback((): T => {
+    const current = ref.current;
+    if (current.future.length === 0) return current.present;
+    const next = current.future[0];
+    setState({
+      past: [...current.past, current.present],
+      present: next,
+      future: current.future.slice(1),
+    });
+    return next;
+  }, [setState]);
+
+  const reset = useCallback(
+    (newPresent: T) => {
+      setState({ past: [], present: newPresent, future: [] });
+    },
+    [setState],
+  );
 
   return {
     state: state.present,
