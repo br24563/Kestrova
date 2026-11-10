@@ -53,6 +53,28 @@ def _exit_with(pid: int) -> None:
     os._exit(0)
 
 
+def numba_cache_dir() -> "str | None":
+    """Where a frozen build caches the compiled ray-trace kernels across
+    launches: with the user's data (the install folder may be read-only).
+    None from source (Numba caches beside the module) or when set already."""
+    if not getattr(sys, "frozen", False) or os.environ.get("NUMBA_CACHE_DIR"):
+        return None
+    base = os.environ.get("KESTROVA_DATA_DIR") or os.path.join(
+        os.path.expanduser("~"), ".kestrova"
+    )
+    return os.path.join(base, "numba-cache")
+
+
+def _warm_up() -> None:
+    """Load the compiled ray-trace kernels while the window opens."""
+    try:
+        from optics import _fasttrace
+
+        _fasttrace.warm_up()
+    except Exception as e:  # never fatal: the first trace compiles instead
+        print(f"warm-up skipped: {e}", flush=True)
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Kestrova backend server")
     parser.add_argument("--host", default="127.0.0.1")
@@ -67,6 +89,10 @@ def main(argv=None) -> None:
         ).start()
     port = args.port or free_port(args.host)
 
+    cache = numba_cache_dir()
+    if cache:
+        os.environ["NUMBA_CACHE_DIR"] = cache
+
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import uvicorn
 
@@ -76,6 +102,7 @@ def main(argv=None) -> None:
         async def startup(self, sockets=None):
             await super().startup(sockets=sockets)
             print(f"KESTROVA_PORT={port}", flush=True)
+            threading.Thread(target=_warm_up, daemon=True).start()
 
     Server(uvicorn.Config(app, host=args.host, port=port, log_level="warning")).run()
 

@@ -69,8 +69,25 @@ Add these repository secrets and the workflow signs the builds:
 - **macOS** (needs an Apple Developer account): `MAC_CERT_P12` (a base64
   Developer ID Application certificate), `MAC_CERT_PASSWORD`, and for
   notarization `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`.
-- **Windows**: `WIN_CERT_P12` (a base64 code-signing certificate) and
-  `WIN_CERT_PASSWORD`.
+- **Windows**, either Azure Trusted Signing (Microsoft's signing service,
+  which builds SmartScreen reputation without a hardware token):
+  `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` (an app
+  registration with the Trusted Signing Certificate Profile Signer role),
+  `AZURE_SIGNING_ENDPOINT` (e.g. `https://eus.codesigning.azure.net`),
+  `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE` and
+  `AZURE_SIGNING_PUBLISHER` (the certificate's subject CN); or a
+  certificate file: `WIN_CERT_P12` (base64) and `WIN_CERT_PASSWORD`.
+
+Signed builds are verified in the workflow (signtool on Windows, codesign
+and Gatekeeper on macOS) before they are uploaded, and each installer gets
+a `.sha256` checksum file.
+
+## Start-up
+
+The engine's compiled ray trace (Numba) caches its kernels in the
+user-data folder (`numba-cache`) and loads them in the background while
+the window opens. The first launch after installing compiles them (about
+15 s before the first analysis); later launches take about 1 s.
 
 The icon is drawn by `tools/make_icon.py` (`assets/icon.png`;
 electron-builder derives the `.ico` and `.icns` from it).

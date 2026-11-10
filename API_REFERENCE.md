@@ -190,6 +190,18 @@ brightest first.
 Rayleigh range, divergence, beam radius at the image plane and along the
 axis. `/api/analyze/imaging` also takes `polychromatic`.
 
+#### POST /api/lens/layout
+
+`{ "lens", "configuration": 0, "rays": 7, "pupil": "fan" | "ring",
+"wavelength": null }` → `{ "elements": [{ "name", "outline": [[z, r],
+...] }], "rays": [{ "field", "pupil": [px, py], "points": [[x, y, z],
+...] }], "fields", "stop": { "z", "semi_diameter" }, "image": { "z",
+"half_height" }, "warnings" }`: element outlines (meridional section, m)
+and exact rays through every surface. `/api/lens/export` also takes
+`"format": "step" | "igs"` (with `edge_margin`, default 0.001 m, and
+`mirror_thickness`, default D/8): the elements as STEP AP214 solids or
+IGES surfaces of revolution, in mm.
+
 #### POST /api/lens/report
 
 `{ "lens", "configuration": 0, "title": null, "author": "", "mtf": true,

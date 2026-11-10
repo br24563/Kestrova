@@ -1082,7 +1082,7 @@ export async function analyzeFieldPlots(
 // Lens files (Code V .seq, Zemax .zmx)
 // ---------------------------------------------------------------------------
 
-export type LensFileFormat = "seq" | "zmx";
+export type LensFileFormat = "seq" | "zmx" | "step" | "igs";
 
 /** Read a Code V or Zemax lens file; warnings list what was not carried over. */
 export async function importLensFile(
@@ -1102,7 +1102,7 @@ export async function importLensFile(
   return response.json();
 }
 
-/** A Code V or Zemax lens file of the prescription. */
+/** A Code V or Zemax lens file, or the elements as STEP / IGES CAD. */
 export async function exportLensFile(
   lens: LensData,
   format: LensFileFormat,
@@ -1110,7 +1110,12 @@ export async function exportLensFile(
   return postJson(
     "/lens/export",
     { lens, format },
-    format === "seq" ? "write the Code V file" : "write the Zemax file",
+    {
+      seq: "write the Code V file",
+      zmx: "write the Zemax file",
+      step: "write the STEP file",
+      igs: "write the IGES file",
+    }[format],
   );
 }
 
@@ -1475,4 +1480,39 @@ export async function scriptReference(): Promise<{
     );
   }
   return response.json();
+}
+
+/** Element outlines and traced rays of the lens (metres). */
+export interface LensLayout {
+  elements: { name: string; outline: [number, number][] }[];
+  rays: {
+    field: number;
+    pupil: [number, number];
+    points: [number, number, number][];
+  }[];
+  fields: number;
+  stop: { z: number; semi_diameter: number };
+  image: { z: number; half_height: number };
+  warnings: string[];
+}
+
+/** Layout of the lens for the 2D section ("fan") or 3D view ("ring"). */
+export async function lensLayout(
+  lens: LensData,
+  options: {
+    pupil?: "fan" | "ring";
+    rays?: number;
+    configuration?: number;
+  } = {},
+): Promise<LensLayout> {
+  return postJson(
+    "/lens/layout",
+    {
+      lens,
+      pupil: options.pupil ?? "fan",
+      rays: options.rays ?? 7,
+      configuration: options.configuration ?? 0,
+    },
+    "lay out the lens",
+  );
 }

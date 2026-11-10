@@ -138,7 +138,21 @@ The interface is divided into three panels:
    - ISO 10110 (Optical drawing)
 2. Download the file
 
-### 6. Report, Drawings and Scripts
+### 6. Layout, CAD and Undo
+
+- **Lens Layout** tab: the lens drawn with its true surface shapes and
+  real rays per field. 2D shows the meridional section; 3D shows the
+  elements and the marginal ray ring (drag to turn it).
+- **STEP** / **IGES** (Lens Data Editor): the elements as CAD solids (STEP)
+  or surfaces (IGES) in millimetres, for the mechanical design. Each
+  element has a flat land and a cylindrical edge 0.5 mm outside its clear
+  aperture; mirrors get a substrate D/8 thick. Tilted and non-symmetric
+  surfaces are left out and listed.
+- **Undo / Redo** in the Lens Data Editor step through its edits,
+  resolves and optimizations. The header buttons and Ctrl+Z / Ctrl+Shift+Z
+  act on whatever you edited last (the lens or the component system).
+
+### 7. Report, Drawings and Scripts
 
 - **Report** tab: generate the design report of the lens in the Lens Data
   Editor (prescription, first order, fields, MTF, Seidel, tolerance

@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (CAD, layout and editor)
+- STEP and IGES export of the lens (Lens Data Editor, `/api/lens/export`
+  formats `step` and `igs`): each element and mirror as a solid of
+  revolution in place, exact spheres and planes, aspheres as B-spline
+  surfaces of revolution within 10 nm of the sag, flat lands and a
+  cylindrical edge out to the outer diameter. STEP AP214 closed B-rep
+  solids; IGES 5.3 surfaces of revolution. Checked by reading the files
+  back in OpenCascade (valid solids, the closed-form volumes).
+- Lens Layout tab (`/api/lens/layout`): a 2D section with the true surface
+  shapes and the meridional ray fan per field, and a 3D view of the
+  elements and the marginal ray ring, turned by dragging.
+- Undo and redo for the lens data editor: edits, resolves, optimizations
+  and imports, from its own buttons or Ctrl+Z / Ctrl+Shift+Z (which act on
+  whatever was edited last; text fields keep their own undo).
+
+### Changed (desktop app)
+- The compiled ray trace caches its kernels across launches in the
+  user's data folder, and loads them in the background at startup: the
+  first analysis after a launch takes about 1 s instead of about 15 s.
+- The engine imports its modules on first use: the server is ready about
+  1.5 s sooner.
+- Smaller install: only the English Electron locale (-41 MB); the engine
+  leaves out Numba's GPU support, type checkers, SymPy and Pillow.
+- Windows builds can be signed with Azure Trusted Signing (or a
+  certificate file); signed builds are verified before upload, and every
+  installer gets a SHA-256 checksum file.
+
+### Fixed
+- The header Undo moved the undo history back but kept showing the same
+  system (it applied the state from before the undo).
+- The frozen engine failed to start with SciPy 1.18 (its array-API layer
+  moved); the build now collects it wherever SciPy keeps it.
+
 ### Added (scripting, reports and drawings)
 - Python scripting API (`import kestrova as ks`, see SCRIPTING.md):
   open, edit, analyse, optimise, tolerance and save lenses from scripts.

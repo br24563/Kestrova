@@ -26,6 +26,10 @@
   "build": {
     "appId": "com.kestrova.app",
     "productName": "Kestrova",
+    "electronLanguages": [
+      "en-US"
+    ],
+    "compression": "maximum",
     "artifactName": "Kestrova-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "dist-electron",

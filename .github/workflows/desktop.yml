@@ -9,7 +9,14 @@ name: Desktop builds
 #   macOS:   MAC_CERT_P12 (base64 Developer ID Application certificate),
 #            MAC_CERT_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD,
 #            APPLE_TEAM_ID (notarization)
-#   Windows: WIN_CERT_P12 (base64 code-signing certificate), WIN_CERT_PASSWORD
+#   Windows, either
+#            Azure Trusted Signing: AZURE_TENANT_ID, AZURE_CLIENT_ID,
+#            AZURE_CLIENT_SECRET, AZURE_SIGNING_ENDPOINT,
+#            AZURE_SIGNING_ACCOUNT, AZURE_SIGNING_PROFILE,
+#            AZURE_SIGNING_PUBLISHER (the certificate's subject CN)
+#   or       WIN_CERT_P12 (base64 code-signing certificate), WIN_CERT_PASSWORD
+# Signed builds are verified (signtool / codesign, Gatekeeper) before they
+# are uploaded.
 
 on:
   push:
@@ -83,13 +90,60 @@ jobs:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+        AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+        AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        AZURE_SIGNING_PUBLISHER: ${{ secrets.AZURE_SIGNING_PUBLISHER }}
       run: |
         cd desktop-app
         npm ci
-        # without a certificate, build unsigned instead of searching the keychain
-        if [ -z "$CSC_LINK" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; unset CSC_LINK CSC_KEY_PASSWORD; fi
+        extra=()
+        if [ "$RUNNER_OS" = "Windows" ] && [ -n "$AZURE_SIGNING_ENDPOINT" ]; then
+          # Azure Trusted Signing takes precedence over a certificate file
+          unset CSC_LINK CSC_KEY_PASSWORD
+          extra+=("-c.win.azureSignOptions.endpoint=$AZURE_SIGNING_ENDPOINT"
+                  "-c.win.azureSignOptions.codeSigningAccountName=$AZURE_SIGNING_ACCOUNT"
+                  "-c.win.azureSignOptions.certificateProfileName=$AZURE_SIGNING_PROFILE"
+                  "-c.win.azureSignOptions.publisherName=$AZURE_SIGNING_PUBLISHER")
+          echo "SIGNED=1" >> "$GITHUB_ENV"
+        elif [ -n "$CSC_LINK" ]; then
+          echo "SIGNED=1" >> "$GITHUB_ENV"
+        else
+          # without a certificate, build unsigned instead of searching the keychain
+          export CSC_IDENTITY_AUTO_DISCOVERY=false; unset CSC_LINK CSC_KEY_PASSWORD
+        fi
         if [ -z "$APPLE_ID" ]; then unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; fi
-        npx electron-builder ${{ matrix.target }} --publish=never
+        npx electron-builder ${{ matrix.target }} --publish=never "${extra[@]}"
+
+    - name: Verify the signatures
+      if: env.SIGNED == '1'
+      shell: bash
+      run: |
+        cd desktop-app/dist-electron
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          signtool=$(ls "/c/Program Files (x86)/Windows Kits/10/bin/"*/x64/signtool.exe | tail -1)
+          for f in *.exe win-unpacked/Kestrova.exe win-unpacked/resources/backend/kestrova-server/kestrova-server.exe; do
+            "$signtool" verify //pa //v "$f"
+          done
+        else
+          app=$(ls -d mac*/Kestrova.app | head -1)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          if [ -n "$APPLE_ID_SET" ]; then spctl --assess --type execute --verbose "$app"; fi
+        fi
+      env:
+        APPLE_ID_SET: ${{ secrets.APPLE_ID != '' }}
+
+    - name: Checksums
+      shell: bash
+      run: |
+        cd desktop-app/dist-electron
+        for f in *.exe *.dmg *.zip; do
+          [ -f "$f" ] || continue
+          if command -v sha256sum >/dev/null; then sha256sum "$f"; else shasum -a 256 "$f"; fi > "$f.sha256"
+        done
 
     - uses: actions/upload-artifact@v4
       with:
@@ -98,6 +152,7 @@ jobs:
           desktop-app/dist-electron/*.exe
           desktop-app/dist-electron/*.dmg
           desktop-app/dist-electron/*.zip
+          desktop-app/dist-electron/*.sha256
         if-no-files-found: error
 
   release:
