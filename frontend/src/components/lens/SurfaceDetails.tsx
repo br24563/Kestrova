@@ -8,7 +8,19 @@
  * Zernike and XY terms as lengths, phase terms of r^k in rad / unit^k.
  */
 import { LENGTH_UNIT_FACTORS, LENGTH_UNIT_LABELS } from "../../types";
-import type { LengthUnit, LensSurface } from "../../types";
+import type { CoatingSpec, LengthUnit, LensSurface } from "../../types";
+
+/** MgF2 near 550 nm, for the quarter-wave preset (edit the thickness for others). */
+const MGF2_INDEX = 1.38;
+
+function quarterWave(wavelengthNm: number): CoatingSpec {
+  return {
+    name: `QW MgF2 @ ${wavelengthNm} nm`,
+    layers: [
+      { material: "MgF2", thickness: (wavelengthNm * 1e-9) / (4 * MGF2_INDEX) },
+    ],
+  };
+}
 
 type Patch = Partial<LensSurface>;
 
@@ -322,6 +334,119 @@ export function SurfaceDetails({
             onChange={(next) => onChange({ phase_coefficients: next })}
           />
         </>
+      )}
+
+      {hasAperture && type !== "paraxial" && (
+        <fieldset className="mt-2" data-testid="coating-editor">
+          <legend className="text-xs font-medium text-gray-700">
+            Coating{" "}
+            <span className="font-normal text-gray-400">
+              (layers in the order light meets them; none = bare surface)
+            </span>
+          </legend>
+          <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-600">
+            <select
+              aria-label="Coating"
+              value={
+                !surface.coating
+                  ? "none"
+                  : surface.coating.name?.startsWith("QW MgF2")
+                    ? "qw"
+                    : "custom"
+              }
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "none") onChange({ coating: null });
+                else if (v === "qw") onChange({ coating: quarterWave(550) });
+                else
+                  onChange({
+                    coating: {
+                      name: "Custom",
+                      layers: surface.coating?.layers.length
+                        ? surface.coating.layers
+                        : [{ material: "MgF2", thickness: 1e-7 }],
+                    },
+                  });
+              }}
+              className="border border-gray-200 rounded text-xs py-0.5"
+            >
+              <option value="none">None (bare)</option>
+              <option value="qw">Quarter-wave MgF2 @ 550 nm</option>
+              <option value="custom">Custom layers</option>
+            </select>
+            {surface.coating && (
+              <button
+                onClick={() =>
+                  onChange({
+                    coating: {
+                      name: "Custom",
+                      layers: [
+                        ...(surface.coating?.layers ?? []),
+                        { material: "SiO2", thickness: 1e-7 },
+                      ],
+                    },
+                  })
+                }
+                className="px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Add layer
+              </button>
+            )}
+          </div>
+          {surface.coating?.layers.map((layer, k) => (
+            <div key={k} className="flex items-center gap-2 mt-1 text-xs">
+              <span className="text-gray-500 w-12">Layer {k + 1}</span>
+              <input
+                key={`m-${layer.material}`}
+                aria-label={`Coating layer ${k + 1} material`}
+                defaultValue={layer.material ?? ""}
+                onBlur={(e) => {
+                  const material = e.target.value.trim();
+                  if (!material || material === layer.material) return;
+                  onChange({
+                    coating: {
+                      name: "Custom",
+                      layers: surface.coating!.layers.map((x, i) =>
+                        i === k ? { ...x, material, n: null } : x,
+                      ),
+                    },
+                  });
+                }}
+                className="w-20 border border-gray-200 rounded px-1"
+              />
+              <NumberField
+                label={`L${k + 1} nm`}
+                value={layer.thickness * 1e9}
+                unit="nm"
+                onCommit={(v) =>
+                  v > 0 &&
+                  onChange({
+                    coating: {
+                      name: "Custom",
+                      layers: surface.coating!.layers.map((x, i) =>
+                        i === k ? { ...x, thickness: v * 1e-9 } : x,
+                      ),
+                    },
+                  })
+                }
+              />
+              <button
+                aria-label={`Remove coating layer ${k + 1}`}
+                onClick={() => {
+                  const layers = surface.coating!.layers.filter(
+                    (_, i) => i !== k,
+                  );
+                  onChange({
+                    coating: layers.length ? { name: "Custom", layers } : null,
+                  });
+                }}
+                className="text-gray-400 hover:text-red-500"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </fieldset>
       )}
 
       {hasAperture && (

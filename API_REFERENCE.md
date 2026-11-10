@@ -158,6 +158,38 @@ A desensitizing term is set on the lens (`merit.desensitize`: `weight`,
 `tolerances` as for `/api/lens/tolerance`, `rings`; wavefront merit
 only). `/api/lens/merit` reports it per tolerance.
 
+#### POST /api/analyze/polarization
+
+`{ "system", "field": 0, "wavelength": null, "grid": 21 }` → pupil maps of
+`transmittance`, `diattenuation` and `retardance` (rad; null outside the
+pupil) and `summary` (pupil-averaged transmittance per wavelength and
+weighted). Lens surfaces take a `coating`: `{ "name", "layers": [{
+"material" | "n", "k", "thickness" (m) }] }`, layers in the order light
+meets them.
+
+#### POST /api/lens/environment
+
+`{ "lens", "temperatures": [..], "pressure": 101325, "mount_cte": null,
+"configuration": 0, "system_at": null }` → `{ "rows": [{ "temperature",
+"pressure", "efl", "bfl", "focus_shift", "rms_wavefront",
+"depth_of_focus" }], "system"? }`. `focus_shift` is the paraxial focus
+minus the image plane. Systems carry `environment: { "temperature",
+"pressure" }`.
+
+#### POST /api/analyze/ghost-trace
+
+`{ "system", "field": 0, "wavelength": null, "rings": 6, "top": null }`
+→ `{ "ghosts": [{ "surfaces", "fraction", "power", "rms_radius",
+"centroid", "focus_shift", "relative_irradiance" }], "image_rms_radius" }`,
+brightest first.
+
+#### POST /api/analyze/gaussian-beam
+
+`{ "system", "waist_radius", "waist_distance": 0, "wavelength": null,
+"m2": 1 }` → output waist radius and position (from the image plane),
+Rayleigh range, divergence, beam radius at the image plane and along the
+axis. `/api/analyze/imaging` also takes `polychromatic`.
+
 #### POST /api/lens/merit
 
 `{ "lens" }` → `{ "configurations": [{ "configuration", "image_kind",

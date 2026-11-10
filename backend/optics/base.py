@@ -8,7 +8,7 @@ so that both ``models.py`` and ``advanced_surfaces.py`` can import
 All length values are in meters (SI base unit).
 """
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -40,6 +40,10 @@ class OpticalComponentBase(BaseModel):
     aperture_half_y: Optional[float] = Field(
         default=None,
         description="Half-width in y of a rectangular/elliptical aperture (m)",
+    )
+    coating: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Thin-film coating of the surface (optics.coating_spec.CoatingSpec)",
     )
 
     @field_validator("id")

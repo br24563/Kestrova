@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (physical optics and environment)
+- Polarization ray tracing through the prescription:
+  - Fresnel losses at bare surfaces, thin-film coatings per surface;
+  - pupil maps of transmittance, diattenuation and retardance;
+  - system transmittance per wavelength (Polarization tab; a coating
+    editor in the surface details).
+- Temperature and pressure analysis of the prescription:
+  - glass dn/dT and CTE, the air index, housing expansion;
+  - focus drift against depth of focus, and every analysis can run at
+    temperature (Environment tab).
+- Ghost analysis of the real prescription: every double reflection traced
+  exactly with coating or Fresnel reflectances (Ghosts tab).
+- Gaussian beam propagation through the prescription's ABCD matrix, with
+  M^2 (Gaussian Beam tab).
+- Image simulation with a wavelength-weighted PSF, and an Image Simulation
+  tab.
+
 ### Added (desensitizing and glass substitution)
 - Desensitized optimization (`merit.desensitize`, wavefront merit): the
   predicted wavefront degradation under a tolerance set is added to the

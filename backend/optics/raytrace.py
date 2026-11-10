@@ -463,6 +463,7 @@ class Surface:
     obscuration: Optional[float] = None  # radius of a central obscuration
     # ("rectangular" | "elliptical", half-width in x, half-width in y)
     aperture_xy: Optional[tuple] = None
+    coating: Optional[dict] = None  # CoatingSpec data (polarization tracing)
     component_id: str = ""
     label: str = ""
     material_after: Optional[str] = None
@@ -617,8 +618,10 @@ def mirror_shape_component(mirror):
 
 
 def _apply_aperture_shape(comp, surface: "Surface") -> None:
-    """Copy a component's obscuration and non-circular aperture to one of
-    its surfaces."""
+    """Copy a component's obscuration, non-circular aperture and coating to
+    one of its surfaces."""
+    if getattr(comp, "coating", None):
+        surface.coating = comp.coating
     if comp.obscuration_diameter:
         surface.obscuration = comp.obscuration_diameter / 2.0
     if comp.aperture_shape != "circular":
@@ -646,8 +649,16 @@ def build_sequence(
         wavelength = system.analysis_settings.wavelength
     offsets = index_offsets or {}
 
+    env = system.environment
+    at_reference = env is None or (env.temperature == 20.0 and env.pressure == 101325.0)
+
     def med_index(material):
-        n = _medium_index(material, wavelength)
+        if at_reference or not material or str(material).lower() == "air":
+            n = _medium_index(material, wavelength)
+        else:
+            from .environment import glass_index
+
+            n = glass_index(material, wavelength, env.temperature, env.pressure)
         if material and material in offsets:
             n += offsets[material]
         return n

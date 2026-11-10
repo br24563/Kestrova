@@ -774,6 +774,7 @@ def simulate_image(
     num_rays: int = 9,
     seed: Optional[int] = None,
     target_kwargs: Optional[dict] = None,
+    polychromatic: bool = False,
 ) -> SimulationResult:
     """
     Simulate an image of a test target through the real system.
@@ -797,6 +798,9 @@ def simulate_image(
         with_noise: Apply shot, dark and read noise.
         peak_fraction_of_full_well: Exposure level of the brightest pixel.
         num_rays: Unused (kept for compatibility); sampling is automatic.
+        polychromatic: Use the wavelength-weighted PSF of all the system's
+            wavelengths (each its own diffraction PSF from the real
+            wavefront) instead of the analysis wavelength's.
         seed: RNG seed for reproducible noise.
         target_kwargs: Extra keyword arguments for :func:`test_target`.
 
@@ -829,6 +833,17 @@ def simulate_image(
     # --- point spread function -------------------------------------------
     def make_psf(ff, size=None):
         if with_diffraction and with_aberration:
+            if polychromatic and len(system.wavelengths) > 1:
+                from .fields import wavelength_weights
+
+                ps = [
+                    psf_for_system(system, ff, sensor, wl, size=size)
+                    for wl in system.wavelengths
+                ]
+                m = max(p.shape[0] for p in ps)
+                ps = [_pad_psf(p, m) for p in ps]
+                total = sum(w * p for w, p in zip(wavelength_weights(system), ps))
+                return total / total.sum()
             return psf_for_system(system, ff, sensor, wavelength, size=size)
         if with_diffraction:
             return airy_psf(

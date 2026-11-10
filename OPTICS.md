@@ -389,6 +389,70 @@ of the vendor glasses' (nd, Vd) points. `snap_glasses` then replaces each
 model glass by the nearest catalog glass, with 0.01 in nd counting as 1 in
 Vd and SCHOTT inquiry glasses skipped; re-optimize after snapping.
 
+## Physical Optics and Environment
+
+### Polarization and coatings
+
+`optics/polarization_trace.py` traces the 3x3 polarization ray-tracing
+matrix (Chipman, Lam and Young) of every ray through the prescription. Each
+surface contributes tau_s s s^T + tau_p p' p^T + k' k^T, as follows:
+- **bare surface:** Fresnel coefficients;
+- **coated surface:** the thin-film characteristic matrix of its coating
+  (`LensSurface.coating`: layers in the order light meets them);
+- **ideal mirror:** tau_s = -1, tau_p = +1;
+- **ideal lenses and stops:** non-polarizing.
+
+A parallel trace with non-polarizing interfaces removes the geometric
+frame rotation. The result per ray is the polarization-averaged
+transmittance, the diattenuation and the retardance; the pupil-averaged
+transmittance comes per wavelength. `tests/test_polarization_trace.py`
+checks:
+- the Fresnel losses at normal and oblique incidence;
+- a Brewster window;
+- a quarter-wave MgF2 layer;
+- a coated surface's retardance against the thin-film phases.
+
+### Temperature and pressure
+
+`optics/environment.py`: catalogue indices are relative to air at 20 C and
+1 atm. At temperature T and pressure P:
+- **indices:** each glass index becomes (n n_air,ref + dn_abs(T)) /
+  n_air(T, P). The vendors' Schott dn/dT constants give dn_abs(T), and
+  Edlen / Birch and Downs give the air index;
+- **glass:** elements grow with their glass CTE (radii, aspheric terms,
+  apertures, centre thickness);
+- **air spaces:** grow with an optional housing CTE.
+
+The traced system carries the environment, so every analysis can run at
+temperature. `tests/test_environment_ghost_beam.py` checks:
+- the air index (n - 1 = 2.718e-4 at 633 nm, 20 C, 1 atm);
+- a thin singlet's f(T);
+- vacuum;
+- that a housing matched to the back focal length's thermal coefficient
+  keeps focus.
+
+### Ghosts
+
+`optics/ghost_trace.py` traces every double reflection (i, j) of the
+prescription with the exact tracer. Each ghost gets:
+- the reflectances (Fresnel, or the coating) at the rays' angles;
+- the ghost spot, its focus position and its irradiance relative to the
+  image.
+
+Checked on a plate in a converging beam: the ghost focuses 2t/n before the
+image, with power R^2 (bare) or R_coat R_bare.
+
+### Gaussian beams and image simulation
+
+`optics/beam_lens.py` carries a beam's complex parameter q (with M^2)
+through the prescription's exact paraxial ABCD matrix. It is checked
+against Self's thin-lens waist formulas and against the thick-lens matrix
+of `optics.physical.gaussian`. This is paraxial: no aberrations or
+truncation.
+
+The image simulator (`optics/imaging.py`) can use the wavelength-weighted
+PSF of all the system's wavelengths (`polychromatic`).
+
 ## How the Engine Traces Rays
 
 All analyses are built on one sequential engine (`backend/optics/raytrace.py`).
