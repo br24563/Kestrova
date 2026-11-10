@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added (scripting, reports and drawings)
+- Python scripting API (`import kestrova as ks`, see SCRIPTING.md):
+  open, edit, analyse, optimise, tolerance and save lenses from scripts.
+- Script tab: a console that runs Python with the API on the editor's
+  lens, each run in its own process with a time limit; the resulting
+  lens can be sent back to the editor. It answers only Kestrova's own
+  pages on this computer.
+- Design report (Report tab, `lens.report()`, `/api/lens/report`): system
+  data, first order, prescription, field performance, MTF, Seidel sums,
+  tolerance budget and element drawings in one self-contained page,
+  saved as PDF (the desktop app writes the file) or HTML.
+- ISO 10110 element drawings (Drawings tab, `/api/lens/drawings`): a
+  to-scale section with centre and edge thickness, and the surface and
+  material data with 3/ and 4/ codes from the tolerance set.
+
+### Fixed
+- A stop on a concave front surface that is not the limiting aperture
+  (for example after an air space changes) no longer loses every
+  off-axis ray: the flat aperture standing in for it sits at the
+  surface's rim, not inside the surface.
+
 ### Added (physical optics and environment)
 - Polarization ray tracing through the prescription:
   - Fresnel losses at bare surfaces, thin-film coatings per surface;

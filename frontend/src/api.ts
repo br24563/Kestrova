@@ -1374,3 +1374,105 @@ export async function simulateImage(
     "simulate the image",
   );
 }
+
+/** Options of the design report (see /api/lens/report). */
+export interface LensReportOptions {
+  title?: string | null;
+  author?: string;
+  mtf?: boolean;
+  tolerances?: boolean;
+  trials?: number;
+  drawings?: boolean;
+  configuration?: number;
+}
+
+/** Design report of the prescription: one self-contained HTML page. */
+export async function lensReport(
+  lens: LensData,
+  options: LensReportOptions = {},
+): Promise<{ html: string }> {
+  return postJson(
+    "/lens/report",
+    {
+      lens,
+      title: options.title || null,
+      author: options.author ?? "",
+      mtf: options.mtf ?? true,
+      tolerances: options.tolerances ?? true,
+      trials: options.trials ?? 2000,
+      drawings: options.drawings ?? true,
+      configuration: options.configuration ?? 0,
+    },
+    "generate the report",
+  );
+}
+
+/** One ISO 10110 element drawing: (label, value) rows and the SVG. */
+export interface ElementDrawing {
+  name: string;
+  surfaces: [number, number];
+  glass: string;
+  center_thickness: number;
+  edge_thickness: number;
+  clear_diameter: number;
+  outer_diameter: number;
+  left: [string, string][];
+  material: [string, string][];
+  right: [string, string][];
+  svg: string;
+  html: string;
+}
+
+/** ISO 10110 drawings of every glass element. */
+export async function lensDrawings(
+  lens: LensData,
+  options: { notes?: Record<string, string>; edgeMargin?: number } = {},
+): Promise<{ drawings: ElementDrawing[] }> {
+  return postJson(
+    "/lens/drawings",
+    {
+      lens,
+      notes: options.notes ?? {},
+      edge_margin: options.edgeMargin ?? 1e-3,
+    },
+    "draw the elements",
+  );
+}
+
+/** Result of a console script. */
+export interface ScriptResult {
+  output: string;
+  error: string | null;
+  lens: LensData | null;
+  duration: number;
+  timed_out: boolean;
+}
+
+/** Run a script with the kestrova API (`lens` is the editor's lens). */
+export async function runScript(
+  code: string,
+  lens: LensData | null,
+  timeout = 120,
+): Promise<ScriptResult> {
+  return postJson("/script/run", { code, lens, timeout }, "run the script");
+}
+
+/** One call of the scripting API. */
+export interface ScriptReferenceEntry {
+  name: string;
+  signature: string;
+  doc: string;
+}
+
+/** The scripting API reference for the console's help. */
+export async function scriptReference(): Promise<{
+  reference: ScriptReferenceEntry[];
+}> {
+  const response = await fetch(`${API_BASE}/script/reference`);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load the script reference: ${await errorDetail(response)}`,
+    );
+  }
+  return response.json();
+}

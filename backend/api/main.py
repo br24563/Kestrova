@@ -20,7 +20,7 @@ from typing import Literal, Optional
 
 import numpy as np
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1474,6 +1474,144 @@ async def analyze_gaussian_beam(request: BeamRequest):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class LensReportRequest(BaseModel):
+    lens: _ld.LensData
+    configuration: int = _CONFIGURATION
+    title: Optional[str] = None
+    author: str = ""
+    mtf: bool = True
+    tolerances: bool = True
+    trials: int = Field(2000, ge=100, le=100000)
+    drawings: bool = True
+
+
+@app.post("/api/lens/report")
+def lens_report(request: LensReportRequest):
+    """
+    Design report of the prescription as one self-contained HTML page
+    (system data, first order, prescription, field performance, MTF,
+    Seidel sums, tolerance budget, ISO 10110 element drawings), laid out
+    for printing to PDF.
+    """
+    from optics.lens_report import lens_report_html
+
+    try:
+        html = lens_report_html(
+            request.lens,
+            title=request.title,
+            configuration=request.configuration,
+            mtf=request.mtf,
+            tolerances=request.tolerances,
+            trials=request.trials,
+            drawings=request.drawings,
+            author=request.author,
+        )
+        return {"html": html}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class LensDrawingsRequest(BaseModel):
+    lens: _ld.LensData
+    configuration: int = _CONFIGURATION
+    tolerances: Optional[list[_tol.Tolerance]] = Field(
+        None, description="Default: optics.tolerancing.default_tolerances"
+    )
+    edge_margin: float = Field(1e-3, ge=0, description="Outer minus clear diameter (m)")
+    notes: dict[str, str] = Field(
+        default_factory=dict,
+        description='Codes the design does not set: "0/", "1/", "2/", "5/", "irregularity"',
+    )
+
+
+@app.post("/api/lens/drawings")
+def lens_drawings(request: LensDrawingsRequest):
+    """ISO 10110 element drawings: per glass element an SVG cross-section
+    and the surface and material data table."""
+    from optics.io.element_drawing import element_drawings
+
+    try:
+        return {
+            "drawings": element_drawings(
+                _configured(request.lens, request.configuration),
+                request.tolerances,
+                request.edge_margin,
+                request.notes,
+            )
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+def _hostname(value: str) -> str:
+    """Host name of a Host header or Origin ("[::1]:8000" -> "::1")."""
+    from urllib.parse import urlsplit
+
+    if "://" not in value:
+        value = "//" + value
+    return (urlsplit(value).hostname or "").lower()
+
+
+def _check_local(request: Request) -> None:
+    """
+    The script console runs code, so it answers only this computer's own
+    pages: the client must be on the loopback interface, the Host header a
+    loopback name (no DNS rebinding) and any Origin a loopback page (no
+    other web site can post scripts from the user's browser).
+    """
+    if os.environ.get("KESTROVA_DISABLE_SCRIPTING"):
+        raise HTTPException(status_code=403, detail="Scripting is disabled")
+    client = request.client.host if request.client else ""
+    if client not in _LOOPBACK and client != "testclient":
+        raise HTTPException(
+            status_code=403, detail="Scripts run only from this computer"
+        )
+    host = _hostname(request.headers.get("host", ""))
+    if host not in _LOOPBACK and host != "testserver":
+        raise HTTPException(
+            status_code=403, detail="Scripts run only from this computer"
+        )
+    origin = request.headers.get("origin")
+    if origin is not None and _hostname(origin) not in _LOOPBACK:
+        raise HTTPException(
+            status_code=403, detail="Scripts run only from Kestrova itself"
+        )
+
+
+class ScriptRequest(BaseModel):
+    code: str = Field(..., max_length=200_000)
+    lens: Optional[_ld.LensData] = Field(
+        None, description="Available to the script as `lens` (a kestrova.Lens)"
+    )
+    timeout: float = Field(120.0, gt=0, le=3600)
+
+
+@app.post("/api/script/run")
+def script_run(request: ScriptRequest, http: Request):
+    """
+    Run a Python script with the kestrova scripting API (``ks``, ``np``
+    and ``lens``) in its own process. Returns the printed output, the
+    traceback on error and the resulting lens when ``lens`` is a Lens.
+    Accepted only from this computer's own pages.
+    """
+    from kestrova.runner import run_script
+
+    _check_local(http)
+    lens = request.lens.model_dump(mode="json") if request.lens is not None else None
+    return run_script(request.code, lens, request.timeout)
+
+
+@app.get("/api/script/reference")
+async def script_reference():
+    """The scripting API: name, signature and summary of each call."""
+    from kestrova.runner import api_reference
+
+    return {"reference": api_reference()}
 
 
 @app.post("/api/analyze/field-plots")

@@ -1071,6 +1071,30 @@ def surface_shape(s: LensSurface):
     return rt._shape_for(comp)
 
 
+def _stop_plane_offset(s: LensSurface, semi: float, back: bool) -> float:
+    """
+    Axial offset from the vertex of the flat aperture that stands in for a
+    stop on a curved surface. At the vertex the plane would cut through a
+    surface curving toward it, and rays would have to run backwards to
+    reach the surface; at the surface's rim sag the plane lies wholly in
+    front of a front surface (behind a back one).
+    """
+    if s.surface_type not in SHAPED_TYPES or semi <= 0:
+        return 0.0
+    try:
+        shape = surface_shape(s)
+        sags = [
+            float(shape.sag(np.array(0.0), np.array(semi))),
+            float(shape.sag(np.array(semi), np.array(0.0))),
+        ]
+    except (ValueError, ZeroDivisionError):
+        return 0.0
+    sags = [z for z in sags if math.isfinite(z)]
+    if not sags:
+        return 0.0
+    return max(0.0, *sags) if back else min(0.0, *sags)
+
+
 def _build(
     lens: LensData, stop_semi: float, placeholder: bool
 ) -> tuple[OpticalSystem, dict[int, str]]:
@@ -1371,7 +1395,8 @@ def _build(
             back_of_pair = labels[stop].endswith(".back")
             ap = ApertureStop(
                 id=_unique(f"{labels[stop].split('.')[0]}_stop", used),
-                position=zs[stop],
+                position=zs[stop]
+                + _stop_plane_offset(surfaces[stop], stop_semi, back_of_pair),
                 diameter=2 * stop_semi,
             )
             comps.insert(k + 1 if back_of_pair else k, ap)

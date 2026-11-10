@@ -185,6 +185,7 @@ third-order aberrations against real rays. See [TESTING.md](./TESTING.md).
 | [QUICKSTART.md](./QUICKSTART.md) | Quick start guide |
 | [USER_GUIDE.md](./USER_GUIDE.md) | User guide |
 | [OPTICS.md](./OPTICS.md) | Conventions, formulas and engine methods |
+| [SCRIPTING.md](./SCRIPTING.md) | Python scripting API, script console, reports and drawings |
 | [API_REFERENCE.md](./API_REFERENCE.md) | API documentation |
 | [TESTING.md](./TESTING.md) | Testing guide |
 | [CI_CD.md](./CI_CD.md) | CI/CD documentation |
