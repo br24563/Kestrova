@@ -31,6 +31,15 @@ All notable changes to this project will be documented in this file.
   certificate file); signed builds are verified before upload, and every
   installer gets a SHA-256 checksum file.
 
+### Changed (documentation)
+- README, QUICKSTART, USER_GUIDE, ARCHITECTURE, DEVELOPMENT, TESTING and
+  CI_CD rewritten for the current app (the Kestrova name, the lens data
+  editor workflow, every analysis tab, environment variables, the release
+  steps); API_REFERENCE documents every endpoint and the security model;
+  OPTICS.md describes the CAD solids, layout and ISO 10110 drawings.
+- The launchers, the API title and module docstrings use the Kestrova
+  name.
+
 ### Fixed
 - The header Undo moved the undo history back but kept showing the same
   system (it applied the state from before the undo).

@@ -1,5 +1,5 @@
 #==============================================================================
-# AI Optical Design Engineer - Launcher Script (Windows PowerShell)
+# Kestrova - Launcher Script (Windows PowerShell)
 #==============================================================================
 
 # Configuration
@@ -32,7 +32,7 @@ function Cleanup {
 # Print banner
 Write-Host "" -ForegroundColor Cyan
 Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║          AI Optical Design Engineer v0.2.0                   ║" -ForegroundColor Cyan
+Write-Host "║          Kestrova v0.4.0                                     ║" -ForegroundColor Cyan
 Write-Host "║          ═══════════════════════════════════════             ║" -ForegroundColor Cyan
 Write-Host "║          Free, Professional Optical Design                   ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan

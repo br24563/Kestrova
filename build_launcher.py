@@ -3,7 +3,7 @@
 Build a standalone .exe launcher for Windows using PyInstaller.
 
 This creates a simple double-clickable executable that starts
-the AI Optical Design Engineer application.
+the Kestrova application.
 """
 
 import subprocess

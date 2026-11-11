@@ -1,6 +1,6 @@
 #!/bin/bash
 #==============================================================================
-# AI Optical Design Engineer - Launcher Script (Linux/Mac)
+# Kestrova - Launcher Script (Linux/Mac)
 #==============================================================================
 
 set -e
@@ -44,7 +44,7 @@ trap cleanup SIGINT SIGTERM EXIT
 # Print banner
 echo -e "${BLUE}"
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║          AI Optical Design Engineer v0.2.0                   ║"
+echo "║          Kestrova v0.4.0                                     ║"
 echo "║          ═══════════════════════════════════════             ║"
 echo "║          Free, Professional Optical Design                   ║"
 echo "╚══════════════════════════════════════════════════════════════╝"

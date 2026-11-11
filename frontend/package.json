@@ -2,7 +2,7 @@
   "name": "ai-optical-design-engineer",
   "version": "0.4.0",
   "private": true,
-  "description": "AI Optical Design Engineer - A local-first optical design and ray-tracing application",
+  "description": "Kestrova - a local-first optical design and ray-tracing application",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

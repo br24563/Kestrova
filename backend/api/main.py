@@ -1,5 +1,5 @@
 """
-FastAPI backend for the AI Optical Design Engineer.
+FastAPI backend for Kestrova.
 
 This API provides endpoints for:
     - Getting and setting the optical system
@@ -300,7 +300,7 @@ class SafeJSONResponse(_BaseJSONResponse):
 from optics import __version__ as _optics_version  # noqa: E402
 
 app = FastAPI(
-    title="AI Optical Design Engineer API",
+    title="Kestrova API",
     description="A local-first optical design and ray-tracing engine.",
     version=_optics_version,
     default_response_class=SafeJSONResponse,
@@ -402,7 +402,7 @@ async def root():
 async def api_info():
     """API information."""
     return {
-        "name": "AI Optical Design Engineer API",
+        "name": "Kestrova API",
         "version": _optics_version,
         "description": "A local-first optical design and ray-tracing engine.",
         "endpoints": {

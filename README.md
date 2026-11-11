@@ -1,118 +1,134 @@
-# AI Optical Design Engineer
+# Kestrova
 
-[![Version](https://img.shields.io/badge/version-0.2.0-orange)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-orange)](./CHANGELOG.md)
+[![Tests](https://github.com/br24563/Kestrova/actions/workflows/test.yml/badge.svg)](https://github.com/br24563/Kestrova/actions/workflows/test.yml)
+[![Lint](https://github.com/br24563/Kestrova/actions/workflows/lint.yml/badge.svg)](https://github.com/br24563/Kestrova/actions/workflows/lint.yml)
 
-A free, local-first optical design application for designing, simulating and
-analyzing optical systems, with a Python engine, a FastAPI backend and a
-React frontend.
+Kestrova is a free, local-first optical design program. It is built on a
+Python optics engine, a FastAPI backend, a React interface and an
+Electron desktop app. It works the way Code V and Zemax do:
 
-## 🚀 Quick Start
+- a surface-by-surface lens data editor;
+- exact real-ray analysis;
+- constrained optimization and global search;
+- fast tolerancing;
+- physical optics;
+- interchange with Code V and Zemax files and with CAD.
 
-### Option 1: One-Click Launcher
+Every result is checked against an independent reference (published
+designs, closed forms or other programs), never against the engine
+itself.
 
-```bash
-# Linux / Mac
-./launch.sh
+## Quick start
 
-# Windows
-launch.bat
-```
+- **Desktop app:** Windows and macOS (Apple Silicon and Intel)
+  installers with the engine bundled are built by CI, and each version
+  tag publishes them on the Releases page. See
+  [desktop-app/README.md](./desktop-app/README.md), which also covers
+  signing.
+- **From source:** run `./launch.sh` (Linux/macOS), `launch.bat` or
+  `.\launch.ps1` (Windows). The launcher sets up Python and Node and
+  opens the app in your browser. [QUICKSTART.md](./QUICKSTART.md) has
+  the manual steps.
 
-### Option 2: Manual Setup
+Then open **Samples** in the Lens Data Editor and pick a published lens
+to start from.
 
-See [QUICKSTART.md](./QUICKSTART.md) for detailed instructions.
+## Features
 
-### Desktop app
+### Lens design
 
-Windows and macOS (Apple Silicon and Intel) installers, with the optics
-engine bundled, are built by CI and published on the Releases page for each
-version tag; see [desktop-app/README.md](./desktop-app/README.md). They are
-unsigned for now, so Windows SmartScreen and macOS Gatekeeper ask for
-confirmation on first launch.
-
----
-
-## ✨ Features
-
-### Optical Design
-- **820 vendor glasses** read from the SCHOTT, OHARA, HOYA and CDGM catalog
+- **Lens data editor:** Code V / Zemax style, with undo and redo.
+  - Thicknesses, radii, conics and surface data.
+  - Solves (paraxial image, ray heights and angles, F-number), pickups
+    and variable flags.
+  - Field tables (object height, angle or image height, with weights and
+    vignetting) and wavelength weights.
+- **Surface types:**
+  - standard, even and odd aspheres, Forbes Q;
+  - toroids, Zernike and XY polynomials;
+  - diffractive and paraxial surfaces;
+  - mirrors of any of these shapes;
+  - coordinate breaks;
+  - central obscurations and rectangular or elliptical apertures.
+- **Multi-configuration (zoom) lenses:** per-configuration values,
+  weights and constraints.
+- **820 vendor glasses** from the SCHOTT, OHARA, HOYA and CDGM catalog
   files, plus 18 crystals, IR materials, polymers and water from cited
-  literature dispersion formulas
-- Surface-by-surface lens data (Code V / Zemax style): thicknesses, solves
-  (paraxial image, ray heights and angles, F-number), pickups and variable
-  flags, with constrained damped least squares optimization (Code V style):
-  exact EFL / BFL / F-number / magnification / track / centre- and
-  edge-thickness constraints, model glasses (nd, Vd) as variables held inside
-  the catalog glass map, and snapping to the nearest real glass, plus fast
-  Code V-style tolerancing (sensitivities, predicted RMS wavefront
-  distribution with compensators, inverse sensitivity) checked against
-  exact Monte Carlo. All of it is in the lens data editor: constraint rows,
-  nd/Vd variables on model glasses, an optimization report with convergence,
-  and a tolerancing panel (also available through `/api/lens/*`)
-- Ideal (paraxial) thin lenses, thick lenses, spherical surfaces, mirrors
-  (spherical and conic), aperture stops
-- Aspheres (even, odd, Forbes Q), Zernike, toroidal and diffractive surfaces,
-  coordinate breaks
-- Preset systems derived from first-order optics (telescopes, microscope,
-  relay, achromat, paraboloid)
-
-### Analysis
-- **Speed**: spherical and conic systems are traced by a compiled kernel
-  (Numba; optional) at millions of rays per second on an idle desktop,
-  with identical results to the NumPy path
-- **Ray tracing**: exact 3D sequential real-ray tracing with ray aiming, plus
-  a paraxial first-order trace (EFL, BFL, pupils, Lagrange invariant)
-- **Aberrations**: Seidel sums and third-order aberrations, checked against
-  exact real-ray measures; ray fans, OPD maps, Zernike fits
-- **Diffraction**: FFT PSF and MTF from the real wavefront, Strehl ratio,
-  encircled energy, diffraction-limit (Maréchal) test
-- **Chromatic**: longitudinal and lateral colour
-- **Spot diagrams**: real-ray 2D spots; RMS radii by Gaussian pupil quadrature
-- **Fields**: Code V style field tables (object height, angle or image
-  height; x and y; weights; vignetting factors) and wavelength weights,
-  with per-field spot, distortion and MTF (API: `/api/analyze/fields`,
-  `/api/analyze/field-mtf`)
-- **Illumination**: vignetting and relative illumination from the projected
-  solid angle of the real ray bundle
+  dispersion formulas.
+- **Reference lenses**, reproduced from their published prescriptions:
+  - a Cooke triplet;
+  - a double Gauss;
+  - a Petzval;
+  - a phone camera lens with aspheres;
+  - the Hubble telescope.
 
 ### Optimization
-- Global search (differential evolution, particle swarm) and local
-  refinement (damped least squares on residuals, L-BFGS-B)
-- Constraints: edge and centre thickness, air gaps, EFL, BFL, distortion
-- Tolerance-aware (high-yield) optimization and Pareto fronts
 
-### Tolerance Analysis
-- Monte Carlo with errors added to nominal values; decenters and tilts as
-  exact coordinate-break pairs
-- Sensitivity ranking, focus and air-space compensators, yield and Cpk
+- **Damped least squares** with exact constraints:
+  - EFL, BFL, F-number, magnification and track;
+  - thicknesses, distortion, chief-ray angle and colour.
+- **Merit functions:** transverse ray error or wavefront variance, plus
+  weighted operands.
+- **Model glasses (nd, νd):** optimized as variables inside the glass
+  map, then snapped to real catalog glasses.
+- **Global search:** Sobol multi-start over the variables, run in
+  parallel.
+- **Desensitized optimization:** trades nominal performance against the
+  tolerance budget.
+- **Glass expert:** substitutes nearby catalog glasses, re-optimizing
+  each.
 
-### Stray Light
-- Ghost reflections traced with real rays
-- First-order point source transmittance (PST) and narcissus (YNI)
+### Analysis
 
-### AI Copilot
-- Explain results, suggest design families, and verify claims; every number
-  comes from the optics engine, and answers state whether they were computed
-  or are rules of thumb
-- Optional local LLM through Ollama or an OpenAI-compatible endpoint
+- **Ray tracing:** exact 3D sequential tracing with ray aiming.
+  - A compiled kernel (Numba, optional) traces millions of rays per
+    second.
+  - Paraxial first-order data comes from the same engine.
+- **Aberrations:** Seidel sums, ray fans, OPD, field curvature,
+  distortion and lateral and axial colour.
+- **Image quality:**
+  - polychromatic diffraction MTF (FFT and Hopkins), including obscured
+    pupils;
+  - PSF, encircled energy and Strehl ratio;
+  - through-focus MTF and MTF across the field.
+- **Physical optics:**
+  - polarization ray tracing (Fresnel losses, thin-film coatings,
+    diattenuation and retardance pupil maps);
+  - Gaussian beams;
+  - image simulation.
+- **Environment:** temperature and pressure, using glass dn/dT, CTE,
+  the air index and housing expansion.
+- **Stray light:** double-reflection ghosts traced exactly with the
+  coating reflectances.
+- **Tolerancing:** sensitivities and the predicted RMS wavefront
+  distribution with compensators, checked against exact Monte Carlo;
+  also inverse sensitivity.
 
-### Import/Export
-- **Zemax** .ZMX and **Code V** .SEQ open and save in the lens editor,
-  keeping wavelength weights, the field table with weights and vignetting,
-  model glasses, coordinate breaks and Code V's image solve and variables;
-  anything not carried over is listed (ideal thin lenses export to Zemax as
-  paraxial surfaces; Code V has no equivalent, so they are refused)
-- **CAD**: STL, OBJ and PLY meshes of the lens elements (STEP and IGES are
-  not supported)
-- **Drawings**: SVG lens drawings and ISO 10110 drawings (tolerances only
-  when you supply them)
-- **BOM**: element list with vendor glass and mass from vendor density
-  (no cost estimates: prices are not published)
-- **Sag tables** and Markdown engineering reports
+### Output
 
----
+- **Code V `.seq` and Zemax `.zmx`:** open and save. Anything a format
+  cannot hold is listed.
+- **CAD:** STEP solids and IGES surfaces of every element and mirror.
+  Spheres are exact; aspheres become B-spline surfaces within 10 nm of
+  the true shape.
+- **Lens layout:** a 2D section and a 3D view with real rays.
+- **Design report:** PDF or HTML, covering the prescription, first
+  order, fields, MTF, Seidel, the tolerance budget and drawings.
+- **ISO 10110 element drawings:** form and centring codes come from the
+  tolerance set.
+- **Python scripting API** and an in-app script console for automating
+  studies; see [SCRIPTING.md](./SCRIPTING.md).
 
-## 📊 Materials Catalog
+### AI copilot
+
+- Explains results, suggests design families and verifies claims.
+- Every number comes from the engine, and each answer says whether it
+  was computed or is a rule of thumb.
+- Works offline with a rule-based parser. A local LLM is optional,
+  through Ollama or an OpenAI-compatible endpoint.
+
+## Materials catalog
 
 | Source | Count | Examples |
 |--------|-------|----------|
@@ -122,151 +138,105 @@ confirmation on first launch.
 | OHARA (catalog 2025-03) | 134 | S-BSL7, S-LAH51, S-FPL51 |
 | Literature | 18 | Fused silica, CaF2, ZnSe, Ge, Si, sapphire, PMMA, water |
 
-Each vendor glass carries what its catalog publishes: nd, Vd, the vendor
-dispersion formula, and where given dn/dT constants, CTE, density,
-conductivity, specific heat, Young's modulus, Poisson's ratio, Knoop
-hardness, internal transmittance, status and relative price. Values a
-catalog does not give are left empty.
+Each vendor glass carries what its catalog publishes:
 
----
+- nd, Vd and the vendor dispersion formula;
+- where given: dn/dT constants, CTE, density, conductivity, specific
+  heat, Young's modulus, Poisson's ratio, Knoop hardness, internal
+  transmittance, status and relative price.
 
-## 🏗️ Architecture
+Values a catalog does not give are left empty.
+
+## Project layout
 
 ```
-├── backend/                 # Python FastAPI backend
-│   ├── optics/             # Core optical engine
-│   │   ├── raytrace.py     # Sequential engine (paraxial + real rays)
-│   │   ├── pupil.py        # Wavefront, PSF, MTF, Strehl
-│   │   ├── materials.py    # Glass and material data
-│   │   ├── data/           # Vendor glass catalog (JSON)
-│   │   ├── optimization.py, advanced_optimization.py
-│   │   ├── tolerance.py
-│   │   ├── nonsequential.py, ghost.py   # Stray light
-│   │   └── io/             # Zemax, Code V, drawings, BOM
-│   ├── tools/              # Catalog builder
-│   ├── ai/                 # AI copilot
-│   ├── api/                # FastAPI endpoints
-│   └── tests/
-├── frontend/               # React/TypeScript frontend
-├── desktop-app/            # Electron desktop app
-├── launch.sh / launch.bat  # Launchers
-└── .github/workflows/      # CI
+├── backend/
+│   ├── optics/          # optics engine (no web or UI dependencies)
+│   │   ├── raytrace.py      # sequential engine: paraxial + exact rays
+│   │   ├── lens_data.py     # the surface-by-surface prescription
+│   │   ├── lens_optimize.py, merit.py, global_lens.py, glass_expert.py
+│   │   ├── tolerancing.py   # fast tolerancing
+│   │   ├── fields.py, mtf_analysis.py, image_quality.py
+│   │   ├── polarization_trace.py, environment.py, ghost_trace.py
+│   │   ├── reference_lenses.py
+│   │   ├── lens_layout.py, lens_report.py
+│   │   └── io/              # Code V, Zemax, STEP/IGES, ISO 10110 drawings
+│   ├── kestrova/        # Python scripting API
+│   ├── api/             # FastAPI endpoints
+│   ├── ai/              # AI copilot
+│   ├── tests/           # pytest suite (about 1,640 tests)
+│   └── kestrova_server.py, kestrova-server.spec   # desktop engine
+├── frontend/            # React + TypeScript + Vite interface
+├── desktop-app/         # Electron shell
+└── .github/workflows/   # tests, lint, desktop builds
 ```
 
-All frontend components in `frontend/src/components` are wired into the
-app. The tabs under the optical bench hold the real-ray ray fan, OPD,
-field curvature/distortion and chromatic focal shift plots
-(`/api/analyze/ray-fan`, `/opd-fan`, `/field-curves`, `/aberration`), ghost
-analysis, advanced (hybrid / high-yield) optimization with its constraint
-editor (`/api/optimize/constraints`), and the engineering report
-(`/api/report`). Afocal systems return 400 for the image-plane plots.
+[ARCHITECTURE.md](./ARCHITECTURE.md) describes how the pieces fit
+together.
 
----
-
-## 🧪 Testing
+## Testing
 
 ```bash
-cd backend
-pytest tests/ -q
+cd backend && pytest tests/ -q          # backend (CI gate: 80% coverage)
+cd frontend && npm test -- --run        # frontend
 ```
 
-The validation tests compare the engine with results computed
-independently: vendor and literature refractive indices, the thick-lens
-lensmaker equation, exact defocus geometry, the Airy pattern and the
-diffraction-limited MTF, the exact off-axis irradiance of a disk, and
-third-order aberrations against real rays. See [TESTING.md](./TESTING.md).
+The validation tests compare the engine with independent results:
 
----
+- vendor and literature refractive indices;
+- published lenses (first order, Seidel sums and exact rays against
+  ray-optics, designers' focal lengths, the Hubble aplanat);
+- the lensmaker equation;
+- the Airy pattern and the diffraction-limited MTF;
+- Fresnel and thin-film formulas;
+- Gaussian beam optics;
+- closed-form volumes of the exported CAD solids.
 
-## 📖 Documentation
+See [TESTING.md](./TESTING.md).
 
-| Document | Description |
-|----------|-------------|
-| [QUICKSTART.md](./QUICKSTART.md) | Quick start guide |
-| [USER_GUIDE.md](./USER_GUIDE.md) | User guide |
-| [OPTICS.md](./OPTICS.md) | Conventions, formulas and engine methods |
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [QUICKSTART.md](./QUICKSTART.md) | Getting it running |
+| [USER_GUIDE.md](./USER_GUIDE.md) | Using the app |
 | [SCRIPTING.md](./SCRIPTING.md) | Python scripting API, script console, reports and drawings |
-| [API_REFERENCE.md](./API_REFERENCE.md) | API documentation |
-| [TESTING.md](./TESTING.md) | Testing guide |
-| [CI_CD.md](./CI_CD.md) | CI/CD documentation |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Architecture overview |
-| [desktop-app/README.md](./desktop-app/README.md) | Desktop app docs |
+| [OPTICS.md](./OPTICS.md) | Conventions, formulas and engine methods |
+| [API_REFERENCE.md](./API_REFERENCE.md) | HTTP API |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | How the code is organised |
+| [DEVELOPMENT.md](./DEVELOPMENT.md) | Developer setup and conventions |
+| [TESTING.md](./TESTING.md) | Test suite and validation |
+| [CI_CD.md](./CI_CD.md) | Workflows |
+| [desktop-app/README.md](./desktop-app/README.md) | Desktop app, builds and signing |
+| [CHANGELOG.md](./CHANGELOG.md) | Changes by version |
 
----
+## Development
 
-## 🛠️ Development
+Requirements:
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+
+- Python 3.11+ (CI also runs 3.12);
+- Node.js 18+ (CI runs 18 and 20).
 
-### Setup
 ```bash
-# Backend
-cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+cd backend && python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Frontend
-cd ../frontend
-npm install
-```
-
-### Running
-```bash
-# Terminal 1: Backend
-cd backend
 uvicorn api.main:app --reload --port 8000
 
-# Terminal 2: Frontend
-cd frontend
-npm run dev
+cd frontend && npm install && npm run dev    # http://localhost:5173
 ```
 
-### Rebuilding the glass catalog
-`backend/tools/build_glass_catalog.py` regenerates
-`backend/optics/data/glass_catalog.json` from the vendors' Excel files
-(requires `openpyxl`).
+[DEVELOPMENT.md](./DEVELOPMENT.md) covers conventions, environment
+variables and rebuilding the glass catalog.
 
----
-
-## 🤖 AI Integration
-
-Optional local LLM through Ollama:
-
-```bash
-# Install Ollama: https://ollama.ai
-ollama pull llama3.2
-
-export AI_PROVIDER=ollama          # or "auto" (default)
-export OLLAMA_MODEL=llama3.2
-export OLLAMA_URL=http://localhost:11434
-```
-
-Set `AI_ENABLED=false` to use only the built-in rule-based parser.
-
----
-
-## 📈 Roadmap
-
-- Wire the remaining frontend components into the app
-- Polarization and coatings in the sequential image-quality analyses
-- Multi-configuration optimization in the UI
-- STEP/IGES export through a CAD kernel
-- PDF report generation
-
----
-
-## 📄 License
+## License
 
 No license file has been added yet.
 
----
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - SCHOTT, OHARA, HOYA and CDGM for their published glass catalogs
+- M. Hayford's [ray-optics](https://github.com/mjhoptics/ray-optics), whose
+  printed results validate the reference lenses
 - W. T. Welford, *Aberrations of Optical Systems*
 - W. J. Smith, *Modern Optical Engineering*
 - M. Born and E. Wolf, *Principles of Optics*

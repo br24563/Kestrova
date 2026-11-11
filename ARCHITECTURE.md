@@ -1,147 +1,150 @@
 # Architecture
 
-## Design Principles
+## Principles
 
-1. **Separation of concerns**: The core optics engine is independent of the UI. It can be used from Python directly, through the FastAPI backend, or in future CLI tools.
-2. **Simplicity over cleverness**: Modules are kept small and readable. Each file has a single responsibility.
-3. **Scientific correctness**: All calculations use SI base units internally (meters, radians). Unit conversions happen only at the boundary (UI input → API → engine).
-4. **Testability**: Mathematical functions are pure and easily testable with known physical cases.
-5. **Extensibility**: The component architecture uses a discriminated union pattern, making it easy to add new optical component types.
+1. **The engine stands alone.** `backend/optics` has no web or UI
+   dependencies. The API, the scripting API, the AI layer and the tests
+   all use it the same way.
+2. **SI units inside.** The engine works in metres and radians. Unit
+   conversion happens only at the edges: the interface converts for
+   display, and CAD files are written in millimetres.
+3. **Independent validation.** Every result is checked against something
+   the engine did not compute: published designs, closed forms, vendor
+   data or another program. The engine is never checked against itself.
+4. **Stateless API.** Each request carries the whole lens or system and
+   gets results back. The backend keeps no session state (saved projects
+   aside).
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────┐
-│                Frontend (React)                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐ │
-│  │Component │ │Optical   │ │Analysis  │ │Spot     │ │
-│  │Editor    │ │Bench     │ │Panel     │ │Diagram  │ │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬────┘ │
-│       │            │            │            │      │
-│       └────────────┴────────────┴────────────┘      │
-│                        │                              │
-│                   { API calls via fetch }             │
-└────────────────────────┼──────────────────────────────┘
-                         │ HTTP/JSON
-┌────────────────────────┴──────────────────────────────┐
-│                Backend (FastAPI)                      │
-│  ┌──────────────────────────────────────┐           │
-│  │  api/main.py                         │           │
-│  │  - GET  /api/system/default         │           │
-│  │  - POST /api/trace                  │           │
-│  │  - POST /api/analyze                │           │
-│  │  - POST /api/validate               │           │
-│  └──────────┬───────────────────────────┘            │
-│             │ Python imports                         │
-└─────────────┼───────────────────────────────────────┘
-              │
-┌─────────────┴───────────────────────────────────────┐
-│           Core Optics Engine (optics/)              │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐        │
-│  │ units.py │ models.py │ lenses.py │ rays.py │     │
-│  │          │ surfaces │ systems │ analysis │    │
-│  │          │ materials │         │          │    │
-│  └────────┘ ┌────────┘ ┌────────┘ ┌────────┘    │
-│             │          │          │              │
-│  All modules use SI base units (meters, radians)  │
-└───────────────────────────────────────────────────┘
-```
-
-## Component Layers
-
-### Layer 1: Core Optics Engine (`backend/optics/`)
-
-The optics engine is a pure Python library with zero dependencies on the web framework or UI. Each module has a specific role:
-
-| Module | Responsibility |
-|--------|---------------|
-| `units.py` | Centralized unit conversions (nm, mm, cm, m, degrees → meters/radians) |
-| `models.py` | Pydantic data models for all optical components, rays, and results |
-| `lenses.py` | Thin lens equations, ABCD matrix method, F-number, NA |
-| `surfaces.py` | Spherical refractive surface math, lensmaker's equation |
-| `rays.py` | Ray generation, propagation, tracing through systems, spot diagram |
-| `systems.py` | System creation, component management (add/remove/update), validation |
-| `materials.py` | Refractive index database and Sellmeier equation support |
-| `analysis.py` | Full system analysis (EFL, magnification, distances, NA, F/#) |
-| `optimization.py` | Parameter sweeps and SciPy-based numerical optimization |
-| `aberration.py` | Chromatic aberration analysis (LCA, TCA) |
-
-### Layer 2: API Layer (`backend/api/`)
-
-FastAPI REST API that wraps the optics engine. The API is **stateless** — the frontend sends the complete optical system with each request, and the backend returns results. This keeps the backend simple and scalable.
-
-### Layer 2.5: AI Abstraction Layer (`backend/ai/`)
-
-The AI layer provides a structured-command interface between an LLM (or any AI provider) and the validated optics engine. The AI never performs optical calculations directly; it only emits structured commands that are validated and applied by the optics engine.
-
-| Module | Responsibility |
-|--------|---------------|
-| `commands.py` | Pydantic models for structured AI commands (modify/add/remove component, set object/image plane, analyze, optimize) |
-| `engine.py` | Validates and applies commands to the optics engine (the only place AI commands become optics operations) |
-| `interpreter.py` | Abstract interface for LLM providers |
-| `local_provider.py` | Offline rule-based parser + optional Ollama provider |
-
-### Layer 2.75: Persistence (`backend/persistence.py`)
-
-SQLite-based project persistence using Python's built-in `sqlite3`. Stores serialized `OpticalSystem` JSON with metadata (name, timestamps).
-
-### Layer 3: Frontend (`frontend/`)
-
-React application built with Vite and TypeScript. Uses Tailwind CSS for styling.
-
-## Data Model
-
-The optical system is represented by `OpticalSystem` (Pydantic model in `models.py`, mirrored as TypeScript interfaces in `types.ts`):
+## Overview
 
 ```
-OpticalSystem
-├── components: list[OpticalComponent]  (discriminated by "type" field)
-│   ├── ThinLens (type: "thin_lens")
-│   ├── SphericalSurface (type: "spherical_surface")
-│   ├── ApertureStop (type: "aperture")
-│   └── Mirror (type: "mirror")
-├── wavelengths: list[float]  (meters, default: 550e-9 = 550nm)
-├── object: Object (position, height, orientation)
-├── image_plane: ImagePlane (position)
-└── analysis_settings: AnalysisSettings (num_rays, ray_types, etc.)
+┌──────────────────────────── Desktop app (Electron) ────────────────────────────┐
+│  starts kestrova-server on a free local port, waits for KESTROVA_PORT=<port>,  │
+│  opens the interface it serves; saves PDFs (printToPDF) for the Report tab     │
+└────────────────────────────────────────┬───────────────────────────────────────┘
+                                         │
+┌─────────────── Frontend (React + TypeScript + Vite, frontend/src) ─────────────┐
+│ App.tsx: header, component editor, Lens Data Editor, optical bench,            │
+│          analysis tabs, right panel                                            │
+│ components/lens      Lens Data Editor, surface details, configurations,        │
+│                      merit, constraints, optimize, global search, glass expert,│
+│                      tolerancing                                               │
+│ components/analysis  layout, ray fan, OPD, MTF, PSF, polarization,             │
+│                      environment, beam, image simulation, ghosts               │
+│ components/report    design report, ISO 10110 drawings                         │
+│ components/script    script console                                            │
+│ api.ts (fetch client), types.ts (mirrors the engine's models)                  │
+└────────────────────────────────────────┬───────────────────────────────────────┘
+                                         │ HTTP / JSON
+┌──────────────────────── Backend (FastAPI, backend/api/main.py) ────────────────┐
+│ /api/lens/*      prescription: resolve, optimize, global search, tolerance,    │
+│                  merit, configurations, environment, layout, report, drawings, │
+│                  import/export (.seq, .zmx, STEP, IGES), samples               │
+│ /api/analyze/*   analyses of a component system (ray fans, MTF, PSF, fields,   │
+│                  polarization, ghosts, beams, imaging, ...)                    │
+│ /api/script/*    script console (loopback pages only)                          │
+│ /api/ai/*        AI copilot             /api/systems  saved projects (SQLite)  │
+└──────┬──────────────────────────┬────────────────────────────┬─────────────────┘
+       │                          │                            │
+┌──────┴───────────┐  ┌───────────┴───────────┐  ┌─────────────┴──────────────┐
+│ backend/kestrova │  │ backend/ai            │  │ backend/persistence.py     │
+│ scripting API    │  │ copilot: structured   │  │ projects in SQLite         │
+│ and script runner│  │ commands, providers   │  │ ($KESTROVA_DATA_DIR)       │
+└──────┬───────────┘  └───────────┬───────────┘  └────────────────────────────┘
+       └────────────┬─────────────┘
+┌───────────────────┴──────── Optics engine (backend/optics) ────────────────────┐
+│ lens_data.py   LensData: the surface-by-surface prescription; resolve          │
+│                (solves, pickups, apertures), configurations, to_system         │
+│ models.py      OpticalSystem: components along the axis (lenses, surfaces,     │
+│                mirrors, stops, aspheres, ...)                                  │
+│ raytrace.py    the sequential engine: Sequence, paraxial first order, exact    │
+│                3D tracing with ray aiming, OPD     (_fasttrace.py: Numba kernel)│
+│ analyses       fields, mtf_analysis, image_quality, seidel, merit,             │
+│                polarization_trace, environment, ghost_trace, beam_lens,        │
+│                imaging, lens_layout                                            │
+│ design         lens_optimize, global_lens, glass_expert, tolerancing           │
+│ data           materials (+ data/ vendor catalogs), reference_lenses           │
+│ io/            lensfile (Code V, Zemax), cad_export (STEP, IGES),              │
+│                element_drawing (ISO 10110); lens_report.py (HTML report)       │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Extensibility
+## The two system models
 
-New component types can be added by:
-1. Creating a new Pydantic model in `models.py` with a `type: Literal["..."]` discriminator
-2. Adding it to the `OpticalComponent` union
-3. Handling it in `rays.py` (ray tracing) and `analysis.py` (analysis)
-4. Adding TypeScript interface to `frontend/src/types.ts`
+- **`OpticalSystem`** (`models.py`): components at positions along the
+  axis. It covers thin lenses, thick lenses, spherical and aspheric
+  surfaces, mirrors, stops and the advanced surface types. The component
+  editor and the `/api/analyze/*` endpoints work on it. It is mirrored
+  in `frontend/src/types.ts`.
+- **`LensData`** (`lens_data.py`): one row per surface, as in Code V or
+  Zemax. Each row has its type, radius, thickness, material, semi-diameter
+  and terms, plus its solves, pickups and variables. On top of the rows
+  sit the field table, wavelengths and weights, configurations,
+  constraints and the merit function.
 
-## Sign Convention
+`lens_data.resolve()` applies the solves and pickups and fills automatic
+semi-diameters. `to_system()` then builds the equivalent
+`OpticalSystem`, so every analysis is written once and serves both.
 
-The project uses the **optics sign convention** (as used in optical design software like Zemax):
+`raytrace.build_sequence()` turns an `OpticalSystem` into the `Sequence`
+that everything traces: surfaces with shapes, frames, indices and
+apertures. Spheres and conics run in the compiled kernel when Numba is
+installed; other shapes take the NumPy path, which gives identical
+results.
 
-- Light travels from left to right (z-axis)
-- Heights above the optical axis are positive (y-axis)
-- Angles measured counterclockwise from the axis are positive
-- Object distance (s): **NEGATIVE** if object is to the left of the lens
-- Object distance (s): **POSITIVE** if object is to the right of the lens
-- Image distance (s'): **NEGATIVE** if image is to the left of the lens
-- Image distance (s'): **POSITIVE** if image is to the right of the lens
-- Focal length (f): positive for converging lenses, negative for diverging
-- Magnification (m): m = s' / s (negative = inverted)
+## Adding a surface type
 
-## AI Architecture
+1. Add the shape to `raytrace.py` (sag, normal, intersection), or to
+   `advanced_surfaces.py` as a component.
+2. Add the row fields to `LensSurface` and map them in
+   `lens_data._shaped_component` / `surface_shape`.
+3. Read and write it in `io/lensfile.py` where Code V or Zemax can hold
+   it (otherwise the writers list it in their warnings).
+4. Add it to `SurfaceDetails.tsx` and `types.ts`.
+5. Test it against a closed form or published result.
 
-The LLM never performs calculations directly. Instead:
+## Scripting and the console
 
-```
-User (natural language)
-    ↓
-LLM generates structured command (validated JSON)
-    ↓
-App validates & applies command to optics engine
-    ↓
-Optics engine performs calculation
-    ↓
-LLM explains results to user
-```
+`backend/kestrova` wraps the engine in a `Lens` class (see
+[SCRIPTING.md](./SCRIPTING.md)).
 
-This ensures all numerical results come from the validated engine, not from LLM-generated math. The AI abstraction layer (`backend/ai/`) implements this flow, with a rule-based parser for offline use and an optional Ollama provider for more complex prompts.
+The Script tab posts code to `/api/script/run`. `kestrova/runner.py` runs
+it in a freshly spawned process with a time limit, and returns the
+printed output, the traceback and the resulting lens. The endpoint
+refuses any request that does not come from this computer: it checks
+the client address, the Host header (against DNS rebinding) and the
+Origin (so other web sites cannot post scripts).
+
+## AI layer
+
+The language model never computes optics. It emits structured commands
+(`ai/commands.py`). `ai/engine.py` validates them and applies them to the
+engine, and the results are explained from the engine's own numbers.
+
+The providers (`ai/providers.py`) are a rule-based offline parser,
+Ollama, or any OpenAI-compatible endpoint.
+
+## Desktop app
+
+`desktop-app/electron/main.js` starts the bundled engine
+(`backend/kestrova_server.py`, frozen by PyInstaller with
+`kestrova-server.spec`) with `--port 0 --parent-pid <pid>`. Then it:
+
+- waits for the engine to print `KESTROVA_PORT=<port>`;
+- loads the interface the engine serves from that port;
+- passes `KESTROVA_DATA_DIR` (the app's user-data folder) for projects,
+  the log and the Numba kernel cache.
+
+The engine exits with the app. Once listening, it loads the cached
+kernels in a background thread.
+
+## Sign convention
+
+- Light travels left to right along +z, and heights are positive above
+  the axis.
+- A radius is positive when its centre of curvature is to the right.
+- Thicknesses are signed and turn negative after a mirror.
+- Distances to the left are negative, so a real object in front of a lens
+  has s < 0 and magnification is m = s'/s.
+
+See [OPTICS.md](./OPTICS.md).

@@ -1,5 +1,5 @@
 """
-AI Optical Design Engineer - Core Optics Engine
+Kestrova - Core Optics Engine
 
 A local-first, open-source optical design and ray-tracing engine.
 

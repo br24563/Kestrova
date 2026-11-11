@@ -1,317 +1,219 @@
 # User Guide
 
-## Overview
+Kestrova is a free, local-first optical design program. This guide walks
+through the app. [QUICKSTART.md](./QUICKSTART.md) covers installing it,
+[SCRIPTING.md](./SCRIPTING.md) automating it, and [OPTICS.md](./OPTICS.md)
+the conventions and methods behind every number.
 
-AI Optical Design Engineer is a free, professional-grade optical design application for designing, simulating, and analyzing optical systems.
+## The window
 
-## Features
+| Area | What it holds |
+|------|---------------|
+| Header | Presets, display units, Save/Load, Undo/Redo, dark mode |
+| Left panel | The component editor, the AI assistant and saved projects |
+| Lens Data Editor | The surface-by-surface prescription (above the bench; it can be collapsed) |
+| Optical bench | A quick 2D view of the component system with its rays |
+| Analysis tabs | Every analysis of the current lens (listed below) |
+| Right panel | First-order data, the spot diagram, diffraction, Seidel and component tolerancing |
 
-- **Optical System Designer**: Create and edit optical systems with an intuitive interface
-- **Ray Tracing**: Sequential ray tracing through optical systems
-- **Aberration Analysis**: Seidel aberrations, chromatic aberration, diffraction
-- **Optimization**: Hybrid global+local optimization with constraints
-- **Tolerance Analysis**: Monte Carlo tolerance analysis with sensitivity ranking
-- **Stray Light Analysis**: Ghost reflections, PST, scatter paths
-- **Import/Export**: Zemax, Code V, SVG drawings, BOM
-- **AI Copilot**: Natural language interface with explainability
+### Two ways to describe a system
 
-## Quick Start
+- **Components** (left panel): ideal thin lenses, thick lenses,
+  surfaces, mirrors and stops at positions along the axis. This suits
+  first-order layouts.
+- **Lens data** (the Lens Data Editor): one row per surface, as in Code V
+  or Zemax. This is where design happens.
 
-### Prerequisites
+**From components** turns the component system into lens data.
+**Resolve** applies the lens data: it computes the solves and pickups,
+fills automatic apertures and drives the bench, the analysis tabs and
+the right panel. A lens that has been edited but not resolved is marked
+as changed.
 
-- Python 3.11+
-- Node.js 18+
-- npm
+## The Lens Data Editor
 
-### Installation
+### Rows
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/USERNAME/ai-optical-design-engineer.git
-   cd ai-optical-design-engineer
-   ```
+Each row is a surface. Its columns are type, radius, thickness, material
+(a catalog glass, empty for air, `MIRROR` to reflect), semi-diameter,
+conic and the stop flag. Thickness is the distance to the next surface.
 
-2. **Set up the backend:**
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   # or: venv\Scripts\activate  # Windows
-   pip install -r requirements.txt
-   ```
+- **Insert before / after** and **Delete** edit the rows.
+- Click a cell's **f** marker to make it a variable, or to give it a
+  solve or a pickup.
+- Selecting a row opens its surface details:
+  - aspheric, Q, Zernike, XY polynomial and diffractive terms;
+  - toroid radii;
+  - decentres and tilts;
+  - obscurations and rectangular or elliptical apertures;
+  - a thin-film coating (layers by material or index, or a quarter-wave
+    AR layer).
+- Object distance, object height and entrance pupil diameter sit above
+  the table. The field table and wavelengths come with the lens or a
+  sample.
 
-3. **Set up the frontend:**
-   ```bash
-   cd frontend
-   npm install
-   ```
+### Files
 
-### Running the Application
+| Button | What it does |
+|--------|--------------|
+| **Samples** | Published lenses with their sources: the Geiser triplet, a double Gauss (US 2,784,643), Kidger's Petzval, a phone camera lens with aspheres (US 7,535,658) and the Hubble telescope |
+| **Open .seq / .zmx** | Reads Code V and Zemax files; anything not carried over is listed |
+| **Save .seq / .zmx** | Writes them back, listing anything the format cannot hold |
+| **STEP / IGES** | The elements and mirrors as CAD solids (STEP) or surfaces (IGES) in millimetres. Each element has a flat land and a cylindrical edge 0.5 mm outside its clear aperture, and mirrors a substrate D/8 thick. Tilted and non-rotationally-symmetric surfaces are left out and listed |
 
-1. **Start the backend:**
-   ```bash
-   cd backend
-   source venv/bin/activate
-   uvicorn api.main:app --reload --port 8000
-   ```
+### Undo and redo
 
-2. **Start the frontend:**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
+The editor's **Undo** and **Redo** step through its edits, resolves,
+optimizations and imports. The header buttons and Ctrl+Z /
+Ctrl+Shift+Z act on whatever was edited last: the lens or the component
+system. Inside a text field, Ctrl+Z undoes typing as usual.
 
-3. **Open in browser:**
-   Navigate to `http://localhost:5173`
+### Configurations
 
-## Interface
+**Configurations** turns the lens into a zoom or multi-configuration
+lens:
 
-### Main Window
+- each configuration overrides chosen values: any surface parameter
+  (thicknesses, radii, ...) and the object distance, object height,
+  field angle and entrance pupil diameter;
+- configurations carry weights in the merit function;
+- constraints can apply to a single configuration.
 
-The interface is divided into three panels:
+### Optimization
 
-1. **Left Panel**: Component editor and project management
-2. **Center**: Optical bench visualization
-3. **Right Panel**: Analysis results and tools
+1. Mark the variables: radii, thicknesses, conics, aspheric terms, and
+   nd/νd on model glasses.
+2. Optionally edit the **Merit function**:
+   - the image term is transverse ray error or wavefront variance (from
+     the chief ray or the spot centroid);
+   - add weighted operands, such as distortion or colour.
+3. Add **Constraints** that must hold exactly: EFL, BFL, working
+   F-number, magnification, track, centre and edge thickness, distortion,
+   chief-ray angle, image height and others. **Check** shows their
+   current values.
+4. **Optimize** runs damped least squares. The report shows the merit
+   before and after and the convergence.
+5. **Global search** starts the optimizer from many points (Sobol
+   sampling, in parallel worker processes) and keeps the distinct
+   solutions.
+6. **Substitute glasses** tries nearby catalog glasses on each glass,
+   re-optimizing each, and keeps the ones that help.
+7. **Desensitize** (in the merit function, with the wavefront merit)
+   adds the predicted tolerance degradation, so the optimizer prefers
+   designs that are easier to build.
 
-### Header Controls
+### Tolerancing
 
-- **Preset**: Load preset optical systems
-- **Units**: Switch between nm, μm, mm, cm, m
-- **Save/Load**: Save and load projects
-- **Undo/Redo**: History navigation
-- **Dark/Light**: Theme toggle
+**Analyse with default tolerances** gives the lens's tolerance budget:
 
-### Keyboard Shortcuts
+- **Default tolerances:** for each element, power in fringes, thickness,
+  index, Abbe number, surface tilt, element decentre and element tilt.
+  **Load default tolerances** puts them in the table to edit.
+- **Sensitivity:** how much each tolerance raises the RMS wavefront,
+  with the back-focus compensator (**Refocus limit**).
+- **Predicted distribution:** of the RMS wavefront over many builds
+  (**Builds**), checked against exact Monte Carlo.
+- **Inverse sensitivity:** tolerance limits that fit a **Budget** in
+  waves.
 
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+S | Save project |
-| Ctrl+L | Load project |
-| Ctrl+D | Toggle dark mode |
-| Ctrl+R | Refresh simulation |
-| Ctrl+Z | Undo |
-| Ctrl+Shift+Z | Redo |
-| Ctrl+Y | Redo (alternative) |
-| Escape | Clear error |
+## Analysis tabs
 
-## Workflows
+| Tab | Contents |
+|-----|----------|
+| Lens Layout | The lens with its true surface shapes and real rays per field. In 2D, the meridional section with the stop marked; in 3D, the elements and the marginal ray ring (drag to turn) |
+| Ray Fan | Transverse ray errors, tangential and sagittal, per field |
+| OPD | Optical path difference fans |
+| Field Curvature | Tangential and sagittal focus against field |
+| MTF | Polychromatic diffraction MTF (FFT or Hopkins), against frequency, through focus and across the field |
+| PSF | Diffraction PSF and encircled energy |
+| Distortion & Colour | Distortion, F-theta distortion, lateral colour and relative illumination against field |
+| Polarization | Transmittance, diattenuation and retardance over the pupil, and transmittance per wavelength (Fresnel losses and coatings) |
+| Environment | Focus drift, EFL and wavefront from -20 to 60 °C (or any range) and at any pressure, with an optional housing CTE |
+| Gaussian Beam | A beam's waist, Rayleigh range and size through the lens (with M²) |
+| Image Simulation | A test target imaged through the lens: wavelength-weighted PSF, illumination, distortion and sensor noise |
+| Chromatic | Longitudinal and lateral colour |
+| Ghosts | Every double reflection traced exactly with coating or Fresnel reflectances, brightest first; and the component-system ghost analysis |
+| Advanced Optimization | Global and hybrid optimization of the component system |
+| Report | The design report (prescription, first order, fields, MTF, Seidel, tolerance budget, drawings) as PDF or HTML, and the component-system engineering report |
+| Drawings | ISO 10110 drawings of every glass element, with codes you can fill in (surface imperfections, bubbles, ...) |
+| Script | A Python console with the scripting API on the editor's lens (Ctrl+Enter runs; see [SCRIPTING.md](./SCRIPTING.md)) |
 
-### 1. Design a System
+Analyses that need the lens data (Lens Layout, Environment, Report,
+Drawings, Script) ask for a lens when there is none.
 
-1. Select a preset from the dropdown or start from scratch
-2. Edit surface parameters in the prescription editor
-3. See real-time updates in the optical bench
-
-### 2. Analyze Performance
-
-1. View spot diagram for geometric aberrations
-2. Check ray fan for transverse aberrations
-3. Examine OPD/wavefront for wavefront error
-4. Review field curvature and distortion plots
-5. Analyze chromatic aberration (LCA/TCA)
-
-### 3. Optimize
-
-1. Select parameters to optimize
-2. Choose objective (RMS spot, EFL, magnification)
-3. Set constraints (thickness, air gaps, etc.)
-4. Run hybrid optimization
-5. Review results
-
-### 4. Tolerance Analysis
-
-1. Define tolerance parameters
-2. Run Monte Carlo analysis
-3. Review sensitivity ranking
-4. Check yield statistics
-5. Apply compensators
-
-### 5. Export
-
-1. Choose export format:
-   - ZMX (Zemax)
-   - SEQ (Code V)
-   - SVG (2D drawing)
-   - BOM (Bill of Materials)
-   - SAG (Sag table)
-   - ISO 10110 (Optical drawing)
-2. Download the file
-
-### 6. Layout, CAD and Undo
-
-- **Lens Layout** tab: the lens drawn with its true surface shapes and
-  real rays per field. 2D shows the meridional section; 3D shows the
-  elements and the marginal ray ring (drag to turn it).
-- **STEP** / **IGES** (Lens Data Editor): the elements as CAD solids (STEP)
-  or surfaces (IGES) in millimetres, for the mechanical design. Each
-  element has a flat land and a cylindrical edge 0.5 mm outside its clear
-  aperture; mirrors get a substrate D/8 thick. Tilted and non-symmetric
-  surfaces are left out and listed.
-- **Undo / Redo** in the Lens Data Editor step through its edits,
-  resolves and optimizations. The header buttons and Ctrl+Z / Ctrl+Shift+Z
-  act on whatever you edited last (the lens or the component system).
-
-### 7. Report, Drawings and Scripts
-
-- **Report** tab: generate the design report of the lens in the Lens Data
-  Editor (prescription, first order, fields, MTF, Seidel, tolerance
-  budget, element drawings) and save it as PDF or HTML.
-- **Drawings** tab: ISO 10110 drawings of every glass element.
-- **Script** tab: run Python with the scripting API on the editor's lens
-  (Ctrl+Enter runs); see [SCRIPTING.md](./SCRIPTING.md).
-
-## Preset Systems
+## Presets
 
 | Preset | Description |
 |--------|-------------|
-| Single Lens | Single 100mm focal length lens |
-| Keplerian Telescope | Two positive lenses (200mm + 100mm) |
-| Galilean Telescope | Positive objective + negative eyepiece |
-| Simple Microscope | Short FL objective + longer eyepiece |
-| Beam Expander | Expands collimated beam |
-| 4f Relay Lens | Two identical lenses at 2f spacing |
-| Beam Collimator | Single lens collimating point source |
-| Double-Gauss | Simplified 6-element camera lens |
-| Thick Lens | Single thick biconvex lens |
-| Parabolic Mirror | Newtonian telescope primary |
+| Single Thin Lens | One ideal lens |
+| Keplerian Telescope | Two positive lenses, afocal |
+| Galilean Telescope | Positive objective, negative eyepiece |
+| Compound Microscope (thin lenses) | Objective and eyepiece |
+| Beam Expander (Keplerian, 3x) | Expands a collimated beam |
+| 4f Relay | Two identical lenses 2f apart |
+| Collimator | Collimates a point source |
+| Thin-Lens Achromat (N-BK7 / N-SF5) | Cemented achromat from first-order design |
+| Thick Biconvex Lens | A real singlet |
+| Parabolic Mirror Telescope (prime focus) | A paraboloid without spherical aberration |
 
-## Optical Conventions
+Thin lenses are ideal (aberration-free). Use thick lenses, surfaces,
+mirrors or the samples to see real aberrations.
 
-### Sign Convention
+## Keyboard shortcuts
 
-- Light travels left to right (z-axis)
-- Heights above axis are positive (y-axis)
-- Object distance (s): NEGATIVE if object is to the LEFT
-- Image distance (s'): POSITIVE if image is to the RIGHT
-- Focal length: positive for converging, negative for diverging
-- Radius: positive if center of curvature is to the RIGHT
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+S / Ctrl+L | Save / load the project in the browser |
+| Ctrl+Z | Undo (the lens or the system, whichever was edited last) |
+| Ctrl+Shift+Z or Ctrl+Y | Redo |
+| Ctrl+D | Dark mode |
+| Ctrl+R | Refresh the simulation |
+| Ctrl+Enter | Run the script (Script tab) |
+| Escape | Clear the error message |
 
-### Units
+## Conventions
 
-All internal calculations use SI units (meters, radians). The UI displays values in the selected unit.
+- Light travels left to right along z, and heights are positive above
+  the axis.
+- A radius is positive when its centre of curvature lies to the right.
+- Thicknesses are signed. They turn negative after a mirror, as in
+  Code V and Zemax.
+- The engine works in SI units (metres, radians). The units menu only
+  changes the display. Scripts and the API use metres.
 
-## Analysis Types
+[OPTICS.md](./OPTICS.md) has the full conventions.
 
-### Geometric Analysis
+## AI assistant
 
-- **Spot Diagram**: Shows where rays intersect the image plane
-- **Ray Fan**: Transverse aberration vs. pupil coordinate
-- **Field Curvature**: Tangential/sagittal focus vs. field angle
-- **Distortion**: Image distortion vs. field angle
+The assistant in the left panel:
 
-### Wavefront Analysis
+- explains results ("Why does MTF drop at the field edge?");
+- suggests design families ("Suggest a design for 5x at f/2.8");
+- verifies claims ("Verify that the EFL is 100 mm");
+- edits the component system ("move lens_1 to 150 mm").
 
-- **OPD**: Optical path difference vs. pupil coordinate
-- **Wavefront**: Wavefront error map
-- **PSF**: Point spread function
-- **MTF**: Modulation transfer function
-
-### Diffraction Analysis
-
-- **Strehl ratio**: diffraction limited when Strehl >= 0.8 (Maréchal)
-- **Airy Disk**: first dark ring radius 0.61 lambda / NA
-- **Encircled Energy**: Energy fraction vs. radius
-- **MTF vs Frequency**: FFT MTF from the real wavefront, with the
-  diffraction limit for the same NA
-
-Thin lenses are ideal (aberration-free) lenses; use thick lenses, surfaces
-and mirrors to see real aberrations.
-
-### Chromatic Analysis
-
-- **LCA**: Longitudinal chromatic aberration
-- **TCA**: Transverse chromatic aberration
-
-## Optimization
-
-### Objectives
-
-- **RMS Spot**: Minimize RMS spot radius
-- **EFL**: Target effective focal length
-- **Magnification**: Target magnification
-
-### Algorithms
-
-- **Global**: Differential Evolution, Particle Swarm
-- **Local**: Damped Least Squares, L-BFGS-B
-- **Hybrid**: Global search followed by local refinement
-
-### Constraints
-
-- Center thickness (min/max)
-- Edge thickness (min)
-- Air gap (min)
-- Total track length (max)
-- Back focal length (target)
-- Distortion (max)
-
-## Tolerance Analysis
-
-### Error Sources
-
-- Radius error (power fringes at 546.1 nm over the clear aperture)
-- Center thickness error
-- Air-space error
-- Element decenter
-- Element tilt
-
-Index, Abbe, irregularity and wedge errors are not modelled yet.
-
-### Compensators
-
-Any system parameter can be a compensator (typically the image plane
-position or an air space); it is re-optimized within its range after each
-Monte Carlo trial.
-
-### Yield Analysis
-
-- **Yield**: Percentage within specification
-- **Cpk**: Process capability index
-- **Sensitivity**: Parameter contribution to variation
-
-## AI Copilot
-
-### Features
-
-- **Explain**: Explain why MTF drops or aberrations occur
-- **Suggest**: Get design family recommendations
-- **Verify**: Verify claims about the system
-- **NL to Prescription**: Convert natural language to prescription
-
-### Example Queries
-
-- "Why does MTF drop at the field edge?"
-- "What are the dominant aberrations?"
-- "Suggest a design for 5x magnification at f/2.8"
-- "Verify that EFL is 100mm"
+Every number comes from the engine, and each answer says whether it was
+computed or is a rule of thumb. It works offline with a rule-based
+parser. A local LLM is optional (see
+[DEVELOPMENT.md](./DEVELOPMENT.md#environment-variables)).
 
 ## Troubleshooting
 
-### Common Issues
+| Problem | What to do |
+|---------|------------|
+| "Failed to fetch default system" or nothing loads | The backend must be running on port 8000 (the desktop app starts its own) |
+| An analysis says the image space is afocal | Image-plane analyses need a focusing lens. Telescopes in afocal mode have no image |
+| No rays reach the image | Check the semi-diameters (fixed apertures can block the beam) and the field size |
+| The first analysis after starting is slow | The compiled ray trace compiles once and is then cached |
+| Optimization does not improve the merit | Check the variables are free to move (constraints may pin them), or try Global search |
+| A file opens with warnings | The warnings list what was not carried over from the Code V or Zemax file |
 
-| Issue | Solution |
-|-------|----------|
-| System won't load | Check backend is running on port 8000 |
-| Analysis fails | Check system has valid components |
-| Optimization doesn't converge | Try different initial parameters |
-| Export fails | Check file permissions |
+Bug reports and feature requests go to the repository's Issues page.
 
-### Getting Help
+## References
 
-1. Check the documentation
-2. Run tests: `pytest tests/ -v`
-3. Check GitHub Issues
-4. Submit a bug report
-
-## Scientific References
-
-- Born & Wolf, "Principles of Optics", 7th Edition
-- Smith, "Modern Optical Engineering", 4th Edition
-- Hecht, "Optics", 5th Edition
-- Schott Glass Catalog, 2024
-- ISO 10110: Optics and photonics - Indications in drawings
-
-## License
-
-This project is for educational and research purposes.
+- W. T. Welford, *Aberrations of Optical Systems*
+- W. J. Smith, *Modern Optical Engineering*
+- M. Born and E. Wolf, *Principles of Optics*
+- ISO 10110, *Optics and photonics: Preparation of drawings for optical
+  elements and systems*

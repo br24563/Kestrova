@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI Optical Design Engineer - Desktop Launcher
+Kestrova - Desktop Launcher
 
 A simple double-click launcher that starts the application.
 """
@@ -144,7 +144,7 @@ def open_browser(url):
 def main():
     """Main entry point."""
     print("=" * 60)
-    print("AI Optical Design Engineer")
+    print("Kestrova")
     print("=" * 60)
     print()
     
