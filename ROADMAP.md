@@ -22,7 +22,7 @@ documentation before relying on them.
 | Area | Kestrova today | Code V | Gap |
 |---|---|---|---|
 | Lens data | Solves, pickups, zoom table, field table with vignetting, 11 surface types | Dozens of surface types, several decenter types, non-sequential surface ranges | Medium |
-| Ray trace | Exact 3D with ray aiming; compiled kernel for conics, aspheres, XY polynomials and diffractive surfaces | Compiled throughout | Medium |
+| Ray trace | Exact 3D with ray aiming; compiled kernel for every surface type | Compiled throughout | Small: Python around the kernel still costs time |
 | Optimization | Damped least squares with exact constraints; 19 property kinds | Same method; hundreds of constraints, any ray datum, user-defined, MTF | Large |
 | Global search | Sobol multi-start | Global Synthesis | Large |
 | Tolerancing | Fast wavefront-differential method, 13 types, RMS wavefront only, one configuration | Also MTF, distortion and other metrics; irregularity, wedge, asphere, homogeneity; all zooms | Large |
@@ -48,10 +48,6 @@ deals with them.
   `nsc/`, `physical/fiber.py`, `physical/diffraction.py` and
   `wavefront.py` never reference `LensData`, so their features cannot be
   used on a real lens.
-- **Some surface types run on the slow path.** The compiled kernel
-  (`_fasttrace.py`) handles spheres, conics, even and odd aspheres, XY
-  polynomials and diffractive surfaces. A lens with a Q asphere, Zernike
-  surface, toroid or ideal lens uses the NumPy trace throughout.
 - **There is no licence file.** This blocks outside adoption and
   contribution.
 
@@ -59,13 +55,21 @@ deals with them.
 
 ### Phase 1: foundation
 
-- Extend the compiled kernel to every surface type.
-  - Done: spheres, conics, even and odd aspheres, XY polynomials and
-    diffractive surfaces, in any frames (coordinate breaks included).
-  - Left: Q aspheres, Zernike surfaces, toroids and ideal lenses. The
-    first three take their gradients numerically in the NumPy trace, so
-    they need analytic gradients first.
+- Extend the compiled kernel to every surface type. **Done.**
 - Retire the legacy modules and make `LensData` the only system model.
+  1. Remove the modules nothing imports. Started: `quality.py` and
+     `advanced_opt/` are gone. `surfaces.py`, `mechanical.py` and
+     `glass_optimization.py` are used only by their own tests, but
+     `optics/__init__.py` exports their names, so removing them changes
+     the public engine API.
+  2. Decide whether the component editor stays (as a bench or teaching
+     mode) or goes. Its panels and the `/api/optimize`, `/api/tolerance`,
+     `/api/trace` and `/api/analyze` endpoints depend on the old model.
+  3. Port the AI copilot (`ai/copilot.py`, `ai/design.py`,
+     `ai/engine.py`) to `LensData`.
+  4. Remove `tolerance.py`, `optimization.py`,
+     `advanced_optimization.py` and `ghost.py`, then reduce
+     `analysis.py`, which about 20 modules import.
 - Add a licence.
 - Build a regression corpus of 50 to 100 patent lenses with stored
   first-order, exact-ray and MTF results.

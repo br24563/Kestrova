@@ -54,7 +54,7 @@ from functools import lru_cache
 from typing import Any, Optional, TypeGuard
 
 import numpy as np
-from scipy.special import eval_jacobi
+from scipy.special import eval_jacobi, jacobi
 
 from .materials import refractive_index, F_LINE, C_LINE, D_LINE
 from .models import (
@@ -301,6 +301,92 @@ def q_aspheric_sag_function(c, k, coeffs, norm_radius, q_type):
     return f
 
 
+def q_polynomial(coeffs, q_type) -> tuple:
+    """
+    The Q departure's polynomial D(x) = sum a_m Q_m(x), x = (r / R)^2, as
+    power-series coefficients (lowest first): Q_m are the Qbfs polynomials,
+    or for Qcon the Jacobi polynomials P_m^(0,4)(2x - 1).
+    """
+    coeffs = [float(a) for a in coeffs]
+    if not coeffs:
+        return ()
+    out = np.zeros(len(coeffs))
+    if q_type == "qbfs":
+        for a, b in zip(coeffs, qbfs_basis(len(coeffs) - 1)):
+            out[: len(b)] += a * np.array(b)
+    else:
+        shift = np.polynomial.Polynomial([-1.0, 2.0])
+        for m, a in enumerate(coeffs):
+            pm = np.polynomial.Polynomial(jacobi(m, 0, 4).coef[::-1])(shift)
+            out[: m + 1] += a * pm.coef
+    return tuple(float(v) for v in out)
+
+
+class QAsphere(RadialNumeric):
+    """
+    Forbes Q asphere with an analytic slope. With x = (r / R)^2 and D(x)
+    from :func:`q_polynomial`, the sag is the conic's plus
+
+    - Qbfs: x (1 - x) D(x) / sqrt(1 - c^2 r^2);
+    - Qcon: x^2 D(x).
+    """
+
+    def __init__(self, c, k, coeffs, norm_radius, q_type):
+        qt = (q_type or "Qbfs").lower()
+        if qt not in ("qbfs", "qcon"):
+            raise ValueError(
+                f"Unknown Q-polynomial type '{q_type}' (use 'Qbfs' or 'Qcon')"
+            )
+        self.c, self.k = float(c), float(k)
+        self.rn = float(norm_radius)
+        self.qbfs = qt == "qbfs"
+        self.poly = q_polynomial(coeffs, qt)
+        super().__init__(
+            lambda r: self._radial(np.asarray(r, dtype=float))[0],
+            self.c,
+            self.k,
+            scale=self.rn,
+        )
+
+    def _radial(self, r):
+        c, k, rn = self.c, self.k, self.rn
+        r2 = r * r
+        arg = 1.0 - (1.0 + k) * c * c * r2
+        root = np.sqrt(np.where(arg >= 0, arg, np.nan))
+        s = c * r2 / (1.0 + root)
+        ds = c * r / root
+        if not self.poly:
+            return s, ds
+        x = r2 / (rn * rn)
+        D = np.zeros_like(x)
+        Dp = np.zeros_like(x)
+        for a in reversed(self.poly):  # Horner, with the derivative
+            Dp = Dp * x + D
+            D = D * x + a
+        if self.qbfs:
+            arg0 = 1.0 - c * c * r2
+            phi = np.sqrt(np.where(arg0 >= 0, arg0, np.nan))
+            w = x * (1.0 - x)
+            s = s + w / phi * D
+            ds = (
+                ds
+                + (2.0 * r / (rn * rn)) * ((1.0 - 2.0 * x) * D + w * Dp) / phi
+                + w * D * c * c * r / (phi * phi * phi)
+            )
+        else:
+            s = s + x * x * D
+            ds = ds + (2.0 * r / (rn * rn)) * (2.0 * x * D + x * x * Dp)
+        return s, ds
+
+    def grad(self, x, y):
+        r = np.hypot(x, y)
+        _, ds = self._radial(r)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            fx = np.where(r > 0, ds * x / np.where(r > 0, r, 1.0), 0.0)
+            fy = np.where(r > 0, ds * y / np.where(r > 0, r, 1.0), 0.0)
+        return fx, fy
+
+
 def _conic_sag_grad(c: float, k: float, x, y):
     """Sag of a conic and its x and y derivatives."""
     r2 = x * x + y * y
@@ -311,55 +397,44 @@ def _conic_sag_grad(c: float, k: float, x, y):
     return s, g * x, g * y
 
 
-class ZernikeShape(Shape):
-    """Sag = base conic + sum c_j Z_j(rho, theta) (Noll-normalised),
-    rho = r / norm_radius."""
+def zernike_xy_terms(coeffs) -> tuple:
+    """
+    The sum of Noll-normalised Zernike terms c_j Z_j as monomials
+    ((i, j, C_ij), ...) in u = rho cos(theta), v = rho sin(theta). The
+    expansion is exact: rho^|m| cos(m theta) and rho^|m| sin(|m| theta) are
+    the real and imaginary parts of (u + i v)^|m|, and the rest of each
+    radial term is a power of u^2 + v^2.
+    """
+    from .zernike.zernike import _noll_to_nm
 
-    rotationally_symmetric = False
-
-    def __init__(self, coeffs, norm_radius, c=0.0, k=0.0):
-        from .zernike import zernike_standard
-
-        self.coeffs = [float(a) for a in coeffs]
-        self.rn = float(norm_radius)
-        self.c, self.k = float(c), float(k)
-        self._z = zernike_standard
-
-    def _departure(self, x, y):
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-        rho = np.hypot(x, y) / self.rn
-        th = np.arctan2(y, x)
-        s = np.zeros(np.broadcast(x, y).shape)
-        for j, a in enumerate(self.coeffs, start=1):
-            if a:
-                s = s + a * self._z(j, rho, th)
-        return s
-
-    def sag(self, x, y):
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-        return _conic_sag_grad(self.c, self.k, x, y)[0] + self._departure(x, y)
-
-    def grad(self, x, y):
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-        _, bx, by = _conic_sag_grad(self.c, self.k, x, y)
-        h = 1e-7 * self.rn
-        fx = (self._departure(x + h, y) - self._departure(x - h, y)) / (2 * h)
-        fy = (self._departure(x, y + h) - self._departure(x, y - h)) / (2 * h)
-        return bx + fx, by + fy
-
-    def vertex_curvature(self):
-        # meridional (y-z) curvature at the vertex: the base conic's plus the
-        # r^2 term of the Zernike departure along y
-        r = self.rn * np.array([0.01, 0.02, 0.03])
-        z = self._departure(np.zeros(3), r) - self._departure(0.0, 0.0)
-        A = np.stack([r, r**2, r**3], axis=1)
-        return self.c + 2.0 * np.linalg.solve(A, z)[1]
-
-    def conic_base(self):
-        return self.c, self.k
+    total: dict = {}
+    for index, a in enumerate(coeffs, start=1):
+        a = float(a)
+        if not a:
+            continue
+        n, m = _noll_to_nm(index)
+        am = abs(m)
+        norm = math.sqrt(n + 1.0) if m == 0 else math.sqrt(2.0 * (n + 1.0))
+        # (u + i v)^|m|: the cosine terms have even powers of v, the sine odd
+        angular = []
+        term: dict = {}
+        for t in range(1 if m < 0 else 0, am + 1, 2):
+            angular.append((am - t, t, math.comb(am, t) * (-1) ** (t // 2)))
+        for kk in range((n - am) // 2 + 1):
+            radial = ((-1) ** kk * math.factorial(n - kk)) // (
+                math.factorial(kk)
+                * math.factorial((n + am) // 2 - kk)
+                * math.factorial((n - am) // 2 - kk)
+            )
+            q = (n - am) // 2 - kk  # this term is rho^|m| (u^2 + v^2)^q
+            for sv in range(q + 1):
+                for i, j, w in angular:
+                    key = (i + 2 * (q - sv), j + 2 * sv)
+                    term[key] = term.get(key, 0) + radial * math.comb(q, sv) * w
+        # the weights so far are exact integers; scale them once
+        for key, w in term.items():
+            total[key] = total.get(key, 0.0) + norm * a * w
+    return tuple((i, j, v) for (i, j), v in sorted(total.items()) if v != 0.0)
 
 
 class XYPolynomialShape(Shape):
@@ -403,6 +478,16 @@ class XYPolynomialShape(Shape):
         return self.c, self.k
 
 
+class ZernikeShape(XYPolynomialShape):
+    """Sag = base conic + sum c_j Z_j(rho, theta) (Noll-normalised),
+    rho = r / norm_radius. Held as the equivalent XY polynomial
+    (:func:`zernike_xy_terms`), so the gradient is analytic."""
+
+    def __init__(self, coeffs, norm_radius, c=0.0, k=0.0):
+        self.coeffs = [float(a) for a in coeffs]
+        super().__init__(c, k, zernike_xy_terms(self.coeffs), norm_radius)
+
+
 class YToroid(Shape):
     """
     Y-toroid (Code V 'YTO'): a conic in the y-z plane with vertex curvature
@@ -428,10 +513,19 @@ class YToroid(Shape):
         return R - np.sign(R) * np.sqrt(np.where(arg >= 0, arg, np.nan))
 
     def grad(self, x, y):
-        h = 1e-7
-        fx = (self.sag(x + h, y) - self.sag(x - h, y)) / (2 * h)
-        fy = (self.sag(x, y + h) - self.sag(x, y - h)) / (2 * h)
-        return fx, fy
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        arg = 1.0 - (1.0 + self.k) * self.cy**2 * y * y
+        root = np.sqrt(np.where(arg >= 0, arg, np.nan))
+        zy = self.cy * y * y / (1.0 + root)
+        zyp = self.cy * y / root
+        if self.cx == 0.0:
+            return 0.0 * x + 0.0 * zyp, zyp + 0.0 * x
+        R = 1.0 / self.cx
+        g = (R - zy) ** 2 - x**2
+        sq = np.sqrt(np.where(g >= 0, g, np.nan))
+        sgn = np.sign(R)
+        return sgn * x / sq, sgn * (R - zy) * zyp / sq
 
     def vertex_curvature(self):
         return self.cy  # meridional curvature
@@ -561,10 +655,7 @@ def _shape_for(comp) -> Shape:
     if isinstance(comp, QAsphericSurface):
         c = curvature_from_radius(comp.radius)
         k = comp.conic if (comp.q_type or "").lower() == "qcon" else 0.0
-        func = q_aspheric_sag_function(
-            c, k, comp.coefficients, comp.norm_radius, comp.q_type
-        )
-        return RadialNumeric(func, c, k, scale=comp.norm_radius)
+        return QAsphere(c, k, comp.coefficients, comp.norm_radius, comp.q_type)
     if isinstance(comp, ZernikeSurface):
         return ZernikeShape(
             comp.zernike_coeffs,
