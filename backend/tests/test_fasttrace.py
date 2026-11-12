@@ -77,6 +77,72 @@ def shaped_apertures():
     return s.model_copy(update={"components": comps})
 
 
+def _singlet(front: dict, back: dict | None = None, field_deg=3.0):
+    """A stop, then one N-BK7 element with the given front and back surfaces."""
+    return ld.to_system(LensData(
+        surfaces=[LensSurface(is_stop=True, semi_diameter=0.004, thickness=0.002),
+                  LensSurface(radius=0.04, thickness=0.004, material="N-BK7",
+                              semi_diameter=0.006, **front),
+                  LensSurface(radius=-0.06, thickness=0.05, semi_diameter=0.006,
+                              **(back or {}))],
+        object_distance=None, field_angle=math.radians(field_deg),
+        wavelengths=[587e-9], analysis_settings={"wavelength": 587e-9}))
+
+
+def even_asphere():
+    return _singlet(
+        {"surface_type": "even_asphere", "conic": -0.6, "asphere_4": -2.0e3,
+         "asphere_6": 4.0e7, "asphere_8": -1.0e11},
+        {"surface_type": "even_asphere", "asphere_4": 1.5e3, "asphere_10": 2.0e15})
+
+
+def odd_asphere():
+    return _singlet(
+        {"surface_type": "odd_asphere", "conic": 0.3, "asphere_3": 4.0,
+         "asphere_4": -1.0e3, "asphere_5": 3.0e5},
+        {"surface_type": "odd_asphere", "asphere_3": -2.0, "asphere_7": 1.0e9})
+
+
+def xy_polynomial():
+    return _singlet(
+        {"surface_type": "xy_polynomial", "conic": -0.2, "norm_radius": 0.006,
+         "x1y0": 2.0e-5, "x2y0": 3.0e-5, "x0y2": -2.0e-5, "x2y1": 1.5e-5,
+         "x0y3": -1.0e-5, "x4y0": 2.0e-5, "x2y2": 4.0e-5, "x0y4": 1.0e-5})
+
+
+def diffractive():
+    # the phase sits on a flat surface behind the element
+    lens = LensData(
+        surfaces=[LensSurface(is_stop=True, semi_diameter=0.004, thickness=0.002),
+                  LensSurface(radius=0.04, thickness=0.004, material="N-BK7",
+                              semi_diameter=0.006),
+                  LensSurface(surface_type="diffractive", radius=-0.2, thickness=0.05,
+                              semi_diameter=0.006, diffraction_order=1,
+                              phase_2=-4.0e4, phase_4=6.0e7, phase_6=-1.0e11)],
+        object_distance=None, field_angle=math.radians(3.0),
+        wavelengths=[587e-9], analysis_settings={"wavelength": 587e-9})
+    return ld.to_system(lens)
+
+
+def aspheric_mirror():
+    return ld.to_system(LensData(
+        surfaces=[LensSurface(label="M1", surface_type="even_asphere", radius=-1.0,
+                              conic=-1.02, asphere_4=2.0e-3, asphere_6=-1.0e-1,
+                              material="MIRROR", is_stop=True, semi_diameter=0.05,
+                              thickness=-0.35),
+                  LensSurface(label="M2", surface_type="even_asphere", radius=-0.4,
+                              conic=-2.5, asphere_4=-5.0e-2, material="MIRROR",
+                              thickness=0.6)],
+        object_distance=None, field_angle=math.radians(0.3), wavelengths=[587e-9],
+        analysis_settings={"wavelength": 587e-9}))
+
+
+def phone_lens():
+    from optics.reference_lenses import get_reference
+
+    return ld.to_system(get_reference("phone-camera-us7535658").build())
+
+
 SYSTEMS = {
     "thick": lambda: get_preset_by_id("thick_lens")["system"],
     "parabola": lambda: get_preset_by_id("parabolic_mirror")["system"],
@@ -85,6 +151,12 @@ SYSTEMS = {
     "tilted": tilted,
     "obscured": obscured,
     "shaped_apertures": shaped_apertures,
+    "even_asphere": even_asphere,
+    "odd_asphere": odd_asphere,
+    "xy_polynomial": xy_polynomial,
+    "diffractive": diffractive,
+    "aspheric_mirror": aspheric_mirror,
+    "phone_lens": phone_lens,
 }
 
 
@@ -123,6 +195,18 @@ def test_unsupported_surfaces_use_numpy():
         wavelengths=[587e-9], object=Object(position=0, height=0.001),
         image_plane=ImagePlane(position=0.3), analysis_settings=AnalysisSettings(wavelength=587e-9))
     assert not ft.supports(rt.build_sequence(asph))
+    # shapes whose gradients the NumPy trace takes numerically
+    for front in ({"surface_type": "q_asphere", "norm_radius": 0.006, "q_0": 1e-6},
+                  {"surface_type": "zernike", "norm_radius": 0.006, "z_5": 1e-6},
+                  {"surface_type": "toroid", "radius_x": 0.05}):
+        assert not ft.supports(rt.build_sequence(_singlet(front)))
+
+
+@needs_numba
+@pytest.mark.parametrize("name", ["even_asphere", "odd_asphere", "xy_polynomial",
+                                  "diffractive", "aspheric_mirror", "phone_lens"])
+def test_aspheres_and_polynomials_use_the_kernel(name):
+    assert ft.supports(rt.build_sequence(SYSTEMS[name]()))
 
 
 @needs_numba
@@ -168,11 +252,11 @@ def test_kernel_source_matches_numpy_in_python(name, clip, monkeypatch):
     rng = np.random.default_rng(11)
     px, py = rng.uniform(-1.3, 1.3, 150), rng.uniform(-1.3, 1.3, 150)
     p0, d0, _ = rt.aim_rays(seq, fo, 0.0, 0.8, px, py)
-    kind, c, k, origin, rot, ident, semi, ap, n1, n2 = ft._pack(seq)
+    monkeypatch.setattr(ft, "_sag_grad", ft._sag_grad_impl)
     with np.errstate(all="ignore"):
         pts, d, opl, valid, img, sopl = ft._kernel_impl(
             np.ascontiguousarray(p0, dtype=float), np.ascontiguousarray(d0, dtype=float),
-            kind, c, k, origin, rot, ident, semi, ap, n1, n2,
+            *ft._pack(seq), float(seq.wavelength),
             float(seq.surfaces[0].n_before),
             np.ascontiguousarray(seq.image_origin, dtype=float),
             np.ascontiguousarray(seq.image_rotation, dtype=float), clip,

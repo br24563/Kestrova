@@ -544,12 +544,20 @@ No small-angle approximation is made in these analyses.
 
 ### Speed
 
-Sequences made only of spheres and conics (refracting or reflecting),
-stops and dummies, in any frames, are traced by a compiled kernel
-(`optics/_fasttrace.py`, Numba) that performs the same operations as the
-NumPy trace ray by ray; small batches run serially and large ones (4096+
-rays) in parallel. Other surfaces use the NumPy trace. Without Numba, or
-with `OPTICS_NO_NUMBA=1`, everything uses NumPy and gives the same results.
+A compiled kernel (`optics/_fasttrace.py`, Numba) traces a sequence when
+every surface, refracting or reflecting and in any frame, is one of:
+
+- a sphere or conic;
+- an even or odd asphere;
+- an XY polynomial;
+- a diffractive surface;
+- a stop or dummy.
+
+It performs the same operations as the NumPy trace, ray by ray. Small
+batches run serially and large ones (4096+ rays) in parallel. A sequence
+with any other surface (an ideal lens, Q asphere, Zernike surface or
+toroid) uses the NumPy trace. Without Numba, or with `OPTICS_NO_NUMBA=1`,
+everything uses NumPy and gives the same results.
 
 ### Ideal (thin) lenses
 

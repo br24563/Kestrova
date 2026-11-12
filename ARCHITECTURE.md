@@ -88,14 +88,16 @@ semi-diameters. `to_system()` then builds the equivalent
 
 `raytrace.build_sequence()` turns an `OpticalSystem` into the `Sequence`
 that everything traces: surfaces with shapes, frames, indices and
-apertures. Spheres and conics run in the compiled kernel when Numba is
-installed; other shapes take the NumPy path, which gives identical
-results.
+apertures. Spheres, conics, even and odd aspheres, XY polynomials and
+diffractive surfaces run in the compiled kernel when Numba is installed;
+other shapes take the NumPy path, which gives identical results.
 
 ## Adding a surface type
 
 1. Add the shape to `raytrace.py` (sag, normal, intersection), or to
-   `advanced_surfaces.py` as a component.
+   `advanced_surfaces.py` as a component. To trace it at compiled speed,
+   add it to `_fasttrace.py` too (`supports`, `_pack`, `_sag_grad_impl`)
+   and to the systems in `tests/test_fasttrace.py`.
 2. Add the row fields to `LensSurface` and map them in
    `lens_data._shaped_component` / `surface_shape`.
 3. Read and write it in `io/lensfile.py` where Code V or Zemax can hold

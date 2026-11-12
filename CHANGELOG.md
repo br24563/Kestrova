@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed (ray trace speed)
+- The compiled ray trace now handles even and odd aspheres, XY
+  polynomials and diffractive surfaces, on lenses and mirrors, so lenses
+  with these surfaces no longer fall back to the NumPy trace. Q aspheres,
+  Zernike surfaces, toroids and ideal lenses still do.
+
 ### Added (CAD, layout and editor)
 - STEP and IGES export of the lens (Lens Data Editor, `/api/lens/export`
   formats `step` and `igs`): each element and mirror as a solid of

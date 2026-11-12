@@ -2,12 +2,20 @@
 Compiled real-ray trace for the common case (Numba, optional).
 
 :func:`optics.raytrace.trace_bundle` hands a sequence here when every
-surface is a sphere or conic (refracting or reflecting), an aperture stop
-or a dummy, in any frames (coordinate breaks included). The kernel performs
-exactly the operations of the NumPy trace, ray by ray and in parallel:
-the stable small root of the conic quadratic, the conic normal, vector
-Snell refraction or reflection, clear-aperture clipping and optical path.
-Other surfaces (ideal lenses, aspheres, DOEs, ...) use the NumPy trace.
+surface is one of these (refracting or reflecting), an aperture stop or a
+dummy, in any frames (coordinate breaks included):
+
+- a sphere or conic;
+- an even or odd asphere;
+- an XY polynomial;
+- a diffractive surface (a radial phase on a conic or asphere).
+
+The kernel performs the operations of the NumPy trace, ray by ray and in
+parallel: the stable small root of the conic quadratic (then Newton's
+method on the full sag for aspheres and polynomials), the surface normal,
+vector Snell refraction, reflection or the grating equation,
+clear-aperture clipping and optical path. Other surfaces (ideal lenses,
+Q aspheres, Zernike surfaces, toroids) use the NumPy trace.
 
 Numba is optional: without it (or with the environment variable
 ``OPTICS_NO_NUMBA`` set) everything uses the NumPy trace.
@@ -36,20 +44,23 @@ except ImportError:  # pragma: no cover
     AVAILABLE = False
 
 _REFRACT, _REFLECT, _PLANE = 0, 1, 2
+#: Shape kinds: a pure conic (closed-form intersection), a conic with even
+#: and odd radial terms, a conic with XY polynomial terms.
+_CONIC, _RADIAL, _XY = 0, 1, 2
 
 
 def supports(seq) -> bool:
     """Whether the compiled kernel can trace this sequence."""
     if not AVAILABLE:
         return False
-    from .raytrace import Conicoid
+    from .raytrace import Conicoid, XYPolynomialShape
 
     for s in seq.surfaces:
         if s.kind in ("stop", "dummy"):
             continue
-        if s.kind not in ("refract", "reflect") or s.phase is not None:
+        if s.kind not in ("refract", "reflect"):
             return False
-        if type(s.shape) is not Conicoid or s.shape.even or s.shape.odd:
+        if type(s.shape) not in (Conicoid, XYPolynomialShape):
             return False
     return True
 
@@ -72,10 +83,47 @@ def _pack(seq):
     ap[:, 0] = -1.0
     n1 = np.zeros(M)
     n2 = np.zeros(M)
+    from .raytrace import XYPolynomialShape
+
+    powered = [s for s in seq.surfaces if s.kind in ("refract", "reflect")]
+
+    def width(get):
+        return max([len(get(s)) for s in powered] + [1])
+
+    # shape kind per surface, then the number of even, odd, XY and phase terms
+    skind = np.zeros(M, dtype=np.int64)
+    cnt = np.zeros((M, 4), dtype=np.int64)
+    even = np.zeros((M, width(lambda s: getattr(s.shape, "even", ()))))
+    odd = np.zeros((M, width(lambda s: getattr(s.shape, "odd", ()))))
+    n_xy = width(lambda s: getattr(s.shape, "terms", ()))
+    xyij = np.zeros((M, n_xy, 2), dtype=np.int64)
+    xya = np.zeros((M, n_xy))
+    rn = np.ones(M)
+    phase = np.zeros((M, width(lambda s: s.phase[0] if s.phase else ())))
+    pord = np.zeros(M)
+    hasph = np.zeros(M, dtype=np.bool_)
     for j, s in enumerate(seq.surfaces):
         kind[j] = {"refract": _REFRACT, "reflect": _REFLECT}.get(s.kind, _PLANE)
         if kind[j] != _PLANE:
             c[j], k[j] = s.shape.c, s.shape.k
+            if type(s.shape) is XYPolynomialShape:
+                skind[j] = _XY
+                rn[j] = s.shape.rn
+                cnt[j, 2] = len(s.shape.terms)
+                for m, (pi, pj, a) in enumerate(s.shape.terms):
+                    xyij[j, m] = pi, pj
+                    xya[j, m] = a
+            elif s.shape.even or s.shape.odd:
+                skind[j] = _RADIAL
+                cnt[j, 0], cnt[j, 1] = len(s.shape.even), len(s.shape.odd)
+                even[j, : cnt[j, 0]] = s.shape.even
+                odd[j, : cnt[j, 1]] = s.shape.odd
+        if kind[j] == _REFRACT and s.phase is not None:
+            coeffs, order = s.phase
+            hasph[j] = True
+            cnt[j, 3] = len(coeffs)
+            phase[j, : cnt[j, 3]] = coeffs
+            pord[j] = order
         origin[j] = s.origin
         rot[j] = s.rotation
         ident[j] = bool(np.array_equal(s.rotation, np.eye(3)))
@@ -88,7 +136,10 @@ def _pack(seq):
             ap[j, 1] = 1.0 if shape == "rectangular" else 2.0
             ap[j, 2], ap[j, 3] = hx, hy
         n1[j], n2[j] = s.n_before, s.n_after
-    packed = (kind, c, k, origin, rot, ident, semi, ap, n1, n2)
+    packed = (
+        kind, c, k, origin, rot, ident, semi, ap, n1, n2,
+        skind, cnt, even, odd, xyij, xya, rn, phase, pord, hasph,
+    )  # fmt: skip
     try:
         seq._fast_pack = packed
     except AttributeError:  # pragma: no cover
@@ -100,6 +151,43 @@ def _pack(seq):
 #: serial kernel avoids thread start-up (about 0.5 ms per call), which
 #: dominates small traces such as ray aiming and optimizer merits.
 PARALLEL_MIN_RAYS = 4096
+
+
+def _sag_grad_impl(sk, cj, kj, x, y, ev, od, ij, xa, rnj, cn):
+    """Sag and its x and y derivatives for a shape that is not a pure
+    conic: the operations of Conicoid._radial and XYPolynomialShape."""
+    r2 = x * x + y * y
+    arg = 1.0 - (1.0 + kj) * cj * cj * r2
+    root = np.sqrt(arg) if arg >= 0.0 else np.nan
+    s = cj * r2 / (1.0 + root)
+    if sk == _RADIAL:
+        r = np.sqrt(r2)
+        ds = cj * r / root
+        for m in range(cn[0]):
+            p = 2 * m + 4
+            s += ev[m] * r**p
+            ds += p * ev[m] * r ** (p - 1)
+        for m in range(cn[1]):
+            p = 2 * m + 1
+            s += od[m] * r**p
+            ds += p * od[m] * r ** (p - 1)
+        if r > 0.0:
+            return s, ds * x / r, ds * y / r
+        return s, 0.0, 0.0
+    g = cj / root
+    gx, gy = g * x, g * y
+    u, v = x / rnj, y / rnj
+    for m in range(cn[2]):
+        pi, pj, a = ij[m, 0], ij[m, 1], xa[m]
+        s += a * u**pi * v**pj
+        if pi:
+            gx += a * pi * u ** (pi - 1) * v**pj / rnj
+        if pj:
+            gy += a * pj * u**pi * v ** (pj - 1) / rnj
+    return s, gx, gy
+
+
+_sag_grad = _sag_grad_impl
 
 
 def _kernel_impl(
@@ -115,6 +203,17 @@ def _kernel_impl(
     ap,
     n1,
     n2,
+    skind,
+    cnt,
+    even,
+    odd,
+    xyij,
+    xya,
+    rn,
+    phase,
+    pord,
+    hasph,
+    lam,
     n_start,
     img_o,
     img_R,
@@ -160,9 +259,44 @@ def _kernel_impl(
             ok = np.isfinite(t0)
             qx, qy, qz = lx + t0 * ldx, ly + t0 * ldy, lz + t0 * ldz
             cj, kj = c[j], k[j]
-            if kind[j] == _PLANE or cj == 0.0:
+            sk = skind[j]
+            gxs, gys = 0.0, 0.0
+            if kind[j] == _PLANE or (sk == _CONIC and cj == 0.0):
                 t = t0
                 hx, hy, hz = qx, qy, qz
+            elif sk != _CONIC:
+                # start on the base conic, then Newton's method on the sag
+                dt = 0.0
+                if cj != 0.0:
+                    A = cj * (ldx * ldx + ldy * ldy) + cj * (1.0 + kj) * ldz * ldz
+                    B = 2.0 * (cj * (qx * ldx + qy * ldy) - ldz)
+                    C = cj * (qx * qx + qy * qy)
+                    disc = B * B - 4.0 * A * C
+                    if not (disc >= 0.0):
+                        ok = False
+                    sq = np.sqrt(disc) if disc >= 0.0 else 0.0
+                    denom = B + (sq if B >= 0.0 else -sq)
+                    dt = -2.0 * C / denom if abs(denom) > 0.0 else 0.0
+                t = t0 + dt
+                for _ in range(30):
+                    sg, gxs, gys = _sag_grad(
+                        sk, cj, kj, lx + t * ldx, ly + t * ldy,
+                        even[j], odd[j], xyij[j], xya[j], rn[j], cnt[j],
+                    )  # fmt: skip
+                    df = ldz - gxs * ldx - gys * ldy
+                    step = (lz + t * ldz - sg) / df if abs(df) > 1e-300 else 0.0
+                    if not np.isfinite(step):
+                        step = 0.0
+                    t -= step
+                    if abs(step) < 1e-15:
+                        break
+                hx, hy, hz = lx + t * ldx, ly + t * ldy, lz + t * ldz
+                sg, gxs, gys = _sag_grad(
+                    sk, cj, kj, hx, hy,
+                    even[j], odd[j], xyij[j], xya[j], rn[j], cnt[j],
+                )  # fmt: skip
+                if not (np.isfinite(sg) and abs(hz - sg) < 1e-9):
+                    ok = False
             else:
                 A = cj * (ldx * ldx + ldy * ldy) + cj * (1.0 + kj) * ldz * ldz
                 B = 2.0 * (cj * (qx * ldx + qy * ldy) - ldz)
@@ -202,9 +336,12 @@ def _kernel_impl(
                         ok_all = False
             # direction change
             if kind[j] != _PLANE:
-                nx = -cj * hx
-                ny = -cj * hy
-                nz = 1.0 - cj * (1.0 + kj) * hz
+                if sk == _CONIC:
+                    nx = -cj * hx
+                    ny = -cj * hy
+                    nz = 1.0 - cj * (1.0 + kj) * hz
+                else:
+                    nx, ny, nz = -gxs, -gys, 1.0
                 nl = np.sqrt(nx * nx + ny * ny + nz * nz)
                 nx /= nl
                 ny /= nl
@@ -214,6 +351,36 @@ def _kernel_impl(
                     ldx -= 2.0 * cos_i * nx
                     ldy -= 2.0 * cos_i * ny
                     ldz -= 2.0 * cos_i * nz
+                elif hasph[j]:
+                    # the phase adds (m lambda / 2 pi) grad(phi) to the
+                    # tangential component of n d
+                    rr = np.sqrt(hx * hx + hy * hy)
+                    gm = pord[j] * lam / (2.0 * np.pi)
+                    dphi = 0.0
+                    for m in range(cnt[j, 3]):
+                        pw = 2 * (m + 1)
+                        dphi += pw * phase[j, m] * rr ** (pw - 1)
+                        opl += gm * phase[j, m] * rr**pw
+                    pgx, pgy = 0.0, 0.0
+                    if rr > 0.0:
+                        pgx, pgy = dphi * hx / rr, dphi * hy / rr
+                    if cos_i < 0.0:
+                        nx, ny, nz = -nx, -ny, -nz
+                    kx = n1[j] * ldx + gm * pgx
+                    ky = n1[j] * ldy + gm * pgy
+                    kz = n1[j] * ldz
+                    kn = kx * nx + ky * ny + kz * nz
+                    kx -= kn * nx
+                    ky -= kn * ny
+                    kz -= kn * nz
+                    kn2 = n2[j] * n2[j] - (kx * kx + ky * ky + kz * kz)
+                    if not (kn2 >= 0.0):
+                        ok_all = False
+                    kq = np.sqrt(kn2) if kn2 > 0.0 else 0.0
+                    ldx = (kx + kq * nx) / n2[j]
+                    ldy = (ky + kq * ny) / n2[j]
+                    ldz = (kz + kq * nz) / n2[j]
+                    ncur = n2[j]
                 else:
                     if cos_i < 0.0:
                         nx, ny, nz = -nx, -ny, -nz
@@ -292,13 +459,17 @@ _LOCK = threading.Lock()
 
 if AVAILABLE:  # pragma: no branch
     # prange is an ordinary range in the serial compilation
-    _kernel_serial = numba.njit(cache=_CACHE)(_kernel_impl)
-    _kernel_parallel = numba.njit(parallel=True, cache=_CACHE)(_kernel_impl)
+    # error_model "numpy": a division by zero gives inf or nan, as in the
+    # NumPy trace, where the kernel does not guard it
+    _sag_grad = numba.njit(cache=_CACHE, error_model="numpy")(_sag_grad_impl)
+    _kernel_serial = numba.njit(cache=_CACHE, error_model="numpy")(_kernel_impl)
+    _kernel_parallel = numba.njit(parallel=True, cache=_CACHE, error_model="numpy")(
+        _kernel_impl
+    )
 
 
 def trace(seq, p0, d0, clip: bool):
     """(points, directions, opl, valid, image, n_image, surface_opl)."""
-    kind, c, k, origin, rot, ident, semi, ap, n1, n2 = _pack(seq)
     p0 = np.ascontiguousarray(p0, dtype=float)
     d0 = np.ascontiguousarray(d0, dtype=float)
     kernel = _kernel_parallel if len(p0) >= PARALLEL_MIN_RAYS else _kernel_serial
@@ -306,16 +477,8 @@ def trace(seq, p0, d0, clip: bool):
         pts, d, opl, valid, img, sopl = kernel(
             p0,
             d0,
-            kind,
-            c,
-            k,
-            origin,
-            rot,
-            ident,
-            semi,
-            ap,
-            n1,
-            n2,
+            *_pack(seq),
+            float(seq.wavelength),
             float(seq.surfaces[0].n_before),
             np.ascontiguousarray(seq.image_origin, dtype=float),
             np.ascontiguousarray(seq.image_rotation, dtype=float),
