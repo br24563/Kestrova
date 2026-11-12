@@ -209,6 +209,7 @@ See [TESTING.md](./TESTING.md).
 | [CI_CD.md](./CI_CD.md) | Workflows |
 | [desktop-app/README.md](./desktop-app/README.md) | Desktop app, builds and signing |
 | [CHANGELOG.md](./CHANGELOG.md) | Changes by version |
+| [ROADMAP.md](./ROADMAP.md) | Comparison with Code V and the plan to close the gaps |
 
 ## Development
 
