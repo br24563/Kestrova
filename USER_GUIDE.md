@@ -10,25 +10,29 @@ the conventions and methods behind every number.
 | Area | What it holds |
 |------|---------------|
 | Header | Presets, display units, Save/Load, Undo/Redo, dark mode |
-| Left panel | The component editor, the AI assistant and saved projects |
-| Lens Data Editor | The surface-by-surface prescription (above the bench; it can be collapsed) |
-| Optical bench | A quick 2D view of the component system with its rays |
+| Left panel | The AI assistant and saved projects |
+| Lens Data Editor | The surface-by-surface prescription (it can be collapsed) |
 | Analysis tabs | Every analysis of the current lens (listed below) |
-| Right panel | First-order data, the spot diagram, diffraction, Seidel and component tolerancing |
+| Right panel | First-order data, the spot diagram, diffraction and Seidel |
 
-### Two ways to describe a system
+### Describing a system
 
-- **Components** (left panel): ideal thin lenses, thick lenses,
-  surfaces, mirrors and stops at positions along the axis. This suits
-  first-order layouts.
-- **Lens data** (the Lens Data Editor): one row per surface, as in Code V
-  or Zemax. This is where design happens.
+The **Lens Data Editor** holds the lens: one row per surface, as in
+Code V or Zemax. A **Preset** from the header loads a first-order
+layout, and **From components** turns it into lens data.
 
-**From components** turns the component system into lens data.
 **Resolve** applies the lens data: it computes the solves and pickups,
-fills automatic apertures and drives the bench, the analysis tabs and
-the right panel. A lens that has been edited but not resolved is marked
-as changed.
+fills automatic apertures and drives the analysis tabs and the right
+panel. A lens that has been edited but not resolved is marked as
+changed.
+
+### The component editor (hidden)
+
+The original component editor is hidden by default: the component list,
+the optical bench, the Advanced Optimization tab and the component
+tolerance, comparison and optimizer panels. To show it again, run
+`localStorage.setItem("kestrova.componentEditor", "1")` in the developer
+console and reload.
 
 ## The Lens Data Editor
 
