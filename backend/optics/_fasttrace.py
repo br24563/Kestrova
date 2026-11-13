@@ -2,12 +2,22 @@
 Compiled real-ray trace for the common case (Numba, optional).
 
 :func:`optics.raytrace.trace_bundle` hands a sequence here when every
-surface is a sphere or conic (refracting or reflecting), an aperture stop
-or a dummy, in any frames (coordinate breaks included). The kernel performs
-exactly the operations of the NumPy trace, ray by ray and in parallel:
-the stable small root of the conic quadratic, the conic normal, vector
-Snell refraction or reflection, clear-aperture clipping and optical path.
-Other surfaces (ideal lenses, aspheres, DOEs, ...) use the NumPy trace.
+surface is one of these (refracting or reflecting), an ideal lens, an
+aperture stop or a dummy, in any frames (coordinate breaks included):
+
+- a sphere or conic;
+- an even or odd asphere, or a Forbes Q asphere;
+- an XY polynomial or a Zernike surface;
+- a toroid or cylinder;
+- a diffractive surface (a radial phase on a conic or asphere).
+
+The kernel performs the operations of the NumPy trace, ray by ray and in
+parallel: the stable small root of the conic quadratic (then Newton's
+method on the full sag for aspheres and polynomials), the surface normal,
+vector Snell refraction, reflection or the grating equation,
+clear-aperture clipping and optical path. Only a shape the kernel does
+not know (a user-supplied sag function) sends a sequence to the NumPy
+trace.
 
 Numba is optional: without it (or with the environment variable
 ``OPTICS_NO_NUMBA`` set) everything uses the NumPy trace.
@@ -35,21 +45,28 @@ except ImportError:  # pragma: no cover
     numba = None
     AVAILABLE = False
 
-_REFRACT, _REFLECT, _PLANE = 0, 1, 2
+_REFRACT, _REFLECT, _PLANE, _IDEAL = 0, 1, 2, 3
+#: Shape kinds: a pure conic (closed-form intersection); a conic with even
+#: and odd radial terms; a conic with XY polynomial terms (Zernike surfaces
+#: are held as these); Forbes Qbfs and Qcon aspheres; a Y-toroid.
+_CONIC, _RADIAL, _XY, _QBFS, _QCON, _TOROID = 0, 1, 2, 3, 4, 5
 
 
 def supports(seq) -> bool:
     """Whether the compiled kernel can trace this sequence."""
     if not AVAILABLE:
         return False
-    from .raytrace import Conicoid
+    from .raytrace import (
+        Conicoid, QAsphere, XYPolynomialShape, YToroid, ZernikeShape,
+    )  # fmt: skip
 
+    shapes = (Conicoid, QAsphere, XYPolynomialShape, YToroid, ZernikeShape)
     for s in seq.surfaces:
-        if s.kind in ("stop", "dummy"):
+        if s.kind in ("stop", "dummy", "ideal"):
             continue
-        if s.kind not in ("refract", "reflect") or s.phase is not None:
+        if s.kind not in ("refract", "reflect"):
             return False
-        if type(s.shape) is not Conicoid or s.shape.even or s.shape.odd:
+        if type(s.shape) not in shapes:
             return False
     return True
 
@@ -72,10 +89,68 @@ def _pack(seq):
     ap[:, 0] = -1.0
     n1 = np.zeros(M)
     n2 = np.zeros(M)
+    from .raytrace import (
+        QAsphere, XYPolynomialShape, YToroid, _ideal_object_distances,
+    )  # fmt: skip
+
+    # ideal lenses: the focal length and the paraxial object distance
+    ideal = np.full((M, 2), np.inf)
+    ideal_L = _ideal_object_distances(seq)
+    powered = [s for s in seq.surfaces if s.kind in ("refract", "reflect")]
+
+    def width(get):
+        return max([len(get(s)) for s in powered] + [1])
+
+    def radial_terms(s):  # even terms, or a Q asphere's polynomial
+        return getattr(s.shape, "even", None) or getattr(s.shape, "poly", ())
+
+    # shape kind per surface, then the number of even (or Q), odd, XY and
+    # phase terms; rn is the normalisation radius (a toroid's x curvature)
+    skind = np.zeros(M, dtype=np.int64)
+    cnt = np.zeros((M, 4), dtype=np.int64)
+    even = np.zeros((M, width(radial_terms)))
+    odd = np.zeros((M, width(lambda s: getattr(s.shape, "odd", ()))))
+    n_xy = width(lambda s: getattr(s.shape, "terms", ()))
+    xyij = np.zeros((M, n_xy, 2), dtype=np.int64)
+    xya = np.zeros((M, n_xy))
+    rn = np.ones(M)
+    phase = np.zeros((M, width(lambda s: s.phase[0] if s.phase else ())))
+    pord = np.zeros(M)
+    hasph = np.zeros(M, dtype=np.bool_)
     for j, s in enumerate(seq.surfaces):
-        kind[j] = {"refract": _REFRACT, "reflect": _REFLECT}.get(s.kind, _PLANE)
-        if kind[j] != _PLANE:
+        kind[j] = {"refract": _REFRACT, "reflect": _REFLECT, "ideal": _IDEAL}.get(
+            s.kind, _PLANE
+        )
+        if kind[j] == _IDEAL:
+            ideal[j] = s.focal_length, ideal_L.get(j, np.inf)
+        elif kind[j] != _PLANE and type(s.shape) is YToroid:
+            skind[j] = _TOROID
+            c[j], k[j], rn[j] = s.shape.cy, s.shape.k, s.shape.cx
+        elif kind[j] != _PLANE:
             c[j], k[j] = s.shape.c, s.shape.k
+            if type(s.shape) is QAsphere:
+                skind[j] = _QBFS if s.shape.qbfs else _QCON
+                rn[j] = s.shape.rn
+                cnt[j, 0] = len(s.shape.poly)
+                even[j, : cnt[j, 0]] = s.shape.poly
+            elif isinstance(s.shape, XYPolynomialShape):
+                skind[j] = _XY
+                rn[j] = s.shape.rn
+                cnt[j, 2] = len(s.shape.terms)
+                for m, (pi, pj, a) in enumerate(s.shape.terms):
+                    xyij[j, m] = pi, pj
+                    xya[j, m] = a
+            elif s.shape.even or s.shape.odd:
+                skind[j] = _RADIAL
+                cnt[j, 0], cnt[j, 1] = len(s.shape.even), len(s.shape.odd)
+                even[j, : cnt[j, 0]] = s.shape.even
+                odd[j, : cnt[j, 1]] = s.shape.odd
+        if kind[j] == _REFRACT and s.phase is not None:
+            coeffs, order = s.phase
+            hasph[j] = True
+            cnt[j, 3] = len(coeffs)
+            phase[j, : cnt[j, 3]] = coeffs
+            pord[j] = order
         origin[j] = s.origin
         rot[j] = s.rotation
         ident[j] = bool(np.array_equal(s.rotation, np.eye(3)))
@@ -88,7 +163,10 @@ def _pack(seq):
             ap[j, 1] = 1.0 if shape == "rectangular" else 2.0
             ap[j, 2], ap[j, 3] = hx, hy
         n1[j], n2[j] = s.n_before, s.n_after
-    packed = (kind, c, k, origin, rot, ident, semi, ap, n1, n2)
+    packed = (
+        kind, c, k, origin, rot, ident, semi, ap, n1, n2,
+        skind, cnt, even, odd, xyij, xya, rn, phase, pord, hasph, ideal,
+    )  # fmt: skip
     try:
         seq._fast_pack = packed
     except AttributeError:  # pragma: no cover
@@ -100,6 +178,115 @@ def _pack(seq):
 #: serial kernel avoids thread start-up (about 0.5 ms per call), which
 #: dominates small traces such as ray aiming and optimizer merits.
 PARALLEL_MIN_RAYS = 4096
+
+
+def _sag_grad_impl(sk, cj, kj, x, y, ev, od, ij, xa, rnj, cn):
+    """Sag and its x and y derivatives for a shape that is not a pure
+    conic: the operations of Conicoid._radial, QAsphere._radial,
+    XYPolynomialShape and YToroid in optics.raytrace."""
+    if sk == _TOROID:
+        arg = 1.0 - (1.0 + kj) * cj**2 * y * y
+        root = np.sqrt(arg) if arg >= 0.0 else np.nan
+        zy = cj * y * y / (1.0 + root)
+        zyp = cj * y / root
+        if rnj == 0.0:  # cylinder
+            return zy, 0.0, zyp
+        R = 1.0 / rnj
+        g = (R - zy) ** 2 - x**2
+        sq = np.sqrt(g) if g >= 0.0 else np.nan
+        sgn = 1.0 if R > 0.0 else -1.0
+        return R - sgn * sq, sgn * x / sq, sgn * (R - zy) * zyp / sq
+    r2 = x * x + y * y
+    arg = 1.0 - (1.0 + kj) * cj * cj * r2
+    root = np.sqrt(arg) if arg >= 0.0 else np.nan
+    s = cj * r2 / (1.0 + root)
+    if sk == _RADIAL:
+        r = np.sqrt(r2)
+        ds = cj * r / root
+        for m in range(cn[0]):
+            p = 2 * m + 4
+            s += ev[m] * r**p
+            ds += p * ev[m] * r ** (p - 1)
+        for m in range(cn[1]):
+            p = 2 * m + 1
+            s += od[m] * r**p
+            ds += p * od[m] * r ** (p - 1)
+        if r > 0.0:
+            return s, ds * x / r, ds * y / r
+        return s, 0.0, 0.0
+    if sk == _QBFS or sk == _QCON:
+        r = np.sqrt(r2)
+        ds = cj * r / root
+        if cn[0] > 0:
+            xx = r2 / (rnj * rnj)
+            D = 0.0
+            Dp = 0.0
+            for m in range(cn[0] - 1, -1, -1):  # Horner, with the derivative
+                Dp = Dp * xx + D
+                D = D * xx + ev[m]
+            if sk == _QBFS:
+                arg0 = 1.0 - cj * cj * r2
+                phi = np.sqrt(arg0) if arg0 >= 0.0 else np.nan
+                w = xx * (1.0 - xx)
+                s = s + w / phi * D
+                ds = (
+                    ds
+                    + (2.0 * r / (rnj * rnj)) * ((1.0 - 2.0 * xx) * D + w * Dp) / phi
+                    + w * D * cj * cj * r / (phi * phi * phi)
+                )
+            else:
+                s = s + xx * xx * D
+                ds = ds + (2.0 * r / (rnj * rnj)) * (2.0 * xx * D + xx * xx * Dp)
+        if r > 0.0:
+            return s, ds * x / r, ds * y / r
+        return s, 0.0, 0.0
+    g = cj / root
+    gx, gy = g * x, g * y
+    u, v = x / rnj, y / rnj
+    for m in range(cn[2]):
+        pi, pj, a = ij[m, 0], ij[m, 1], xa[m]
+        s += a * u**pi * v**pj
+        if pi:
+            gx += a * pi * u ** (pi - 1) * v**pj / rnj
+        if pj:
+            gy += a * pj * u**pi * v ** (pj - 1) / rnj
+    return s, gx, gy
+
+
+_sag_grad = _sag_grad_impl
+
+
+def _signed_len(ax, ay, az, bx, by, bz, travel):
+    """Length from a to b, negative when b lies behind a along the travel."""
+    vx, vy, vz = bx - ax, by - ay, bz - az
+    n = np.sqrt(vx * vx + vy * vy + vz * vz)
+    return n if vz * travel >= 0.0 else -n
+
+
+def _ideal_opl_impl(hx, hy, dx, dy, dz, ox, oy, oz, f, L, travel):
+    """Optical path an ideal lens adds per unit index: the operations of
+    optics.raytrace._ideal_lens_opl for one ray (d in, o out)."""
+    if np.isinf(L):
+        inc = -(hx * dx + hy * dy)
+    else:
+        sc = L / abs(dz)
+        px, py, pz = hx - dx * sc, hy - dy * sc, -dz * sc
+        inc = _signed_len(px, py, pz, 0.0, 0.0, 0.0, travel) - _signed_len(
+            px, py, pz, hx, hy, 0.0, travel
+        )
+    inv_lp = 1.0 / f - (0.0 if np.isinf(L) else 1.0 / L)
+    if abs(inv_lp) * abs(f) < 1e-12:
+        out = hx * ox + hy * oy
+    else:
+        sc = (1.0 / inv_lp) / abs(oz)
+        qx, qy, qz = hx + ox * sc, hy + oy * sc, oz * sc
+        out = _signed_len(0.0, 0.0, 0.0, qx, qy, qz, travel) - _signed_len(
+            hx, hy, 0.0, qx, qy, qz, travel
+        )
+    return inc + out
+
+
+_ideal_opl = _ideal_opl_impl
 
 
 def _kernel_impl(
@@ -115,6 +302,18 @@ def _kernel_impl(
     ap,
     n1,
     n2,
+    skind,
+    cnt,
+    even,
+    odd,
+    xyij,
+    xya,
+    rn,
+    phase,
+    pord,
+    hasph,
+    ideal,
+    lam,
     n_start,
     img_o,
     img_R,
@@ -160,9 +359,44 @@ def _kernel_impl(
             ok = np.isfinite(t0)
             qx, qy, qz = lx + t0 * ldx, ly + t0 * ldy, lz + t0 * ldz
             cj, kj = c[j], k[j]
-            if kind[j] == _PLANE or cj == 0.0:
+            sk = skind[j]
+            gxs, gys = 0.0, 0.0
+            if kind[j] >= _PLANE or (sk == _CONIC and cj == 0.0):
                 t = t0
                 hx, hy, hz = qx, qy, qz
+            elif sk != _CONIC:
+                # start on the base conic, then Newton's method on the sag
+                dt = 0.0
+                if cj != 0.0 and sk != _TOROID:
+                    A = cj * (ldx * ldx + ldy * ldy) + cj * (1.0 + kj) * ldz * ldz
+                    B = 2.0 * (cj * (qx * ldx + qy * ldy) - ldz)
+                    C = cj * (qx * qx + qy * qy)
+                    disc = B * B - 4.0 * A * C
+                    if not (disc >= 0.0):
+                        ok = False
+                    sq = np.sqrt(disc) if disc >= 0.0 else 0.0
+                    denom = B + (sq if B >= 0.0 else -sq)
+                    dt = -2.0 * C / denom if abs(denom) > 0.0 else 0.0
+                t = t0 + dt
+                for _ in range(30):
+                    sg, gxs, gys = _sag_grad(
+                        sk, cj, kj, lx + t * ldx, ly + t * ldy,
+                        even[j], odd[j], xyij[j], xya[j], rn[j], cnt[j],
+                    )  # fmt: skip
+                    df = ldz - gxs * ldx - gys * ldy
+                    step = (lz + t * ldz - sg) / df if abs(df) > 1e-300 else 0.0
+                    if not np.isfinite(step):
+                        step = 0.0
+                    t -= step
+                    if abs(step) < 1e-15:
+                        break
+                hx, hy, hz = lx + t * ldx, ly + t * ldy, lz + t * ldz
+                sg, gxs, gys = _sag_grad(
+                    sk, cj, kj, hx, hy,
+                    even[j], odd[j], xyij[j], xya[j], rn[j], cnt[j],
+                )  # fmt: skip
+                if not (np.isfinite(sg) and abs(hz - sg) < 1e-9):
+                    ok = False
             else:
                 A = cj * (ldx * ldx + ldy * ldy) + cj * (1.0 + kj) * ldz * ldz
                 B = 2.0 * (cj * (qx * ldx + qy * ldy) - ldz)
@@ -201,10 +435,28 @@ def _kernel_impl(
                     if ex * ex + ey * ey > (1 + 1e-9) ** 2:
                         ok_all = False
             # direction change
-            if kind[j] != _PLANE:
-                nx = -cj * hx
-                ny = -cj * hy
-                nz = 1.0 - cj * (1.0 + kj) * hz
+            if kind[j] == _IDEAL:
+                fj = ideal[j, 0]
+                if np.isfinite(fj):
+                    travel = 1.0 if ldz > 0.0 else (-1.0 if ldz < 0.0 else 0.0)
+                    az = abs(ldz)
+                    ox = ldx / az - hx / fj
+                    oy = ldy / az - hy / fj
+                    nl = np.sqrt(ox * ox + oy * oy + travel * travel)
+                    ox /= nl
+                    oy /= nl
+                    oz = travel / nl
+                    opl += ncur * _ideal_opl(
+                        hx, hy, ldx, ldy, ldz, ox, oy, oz, fj, ideal[j, 1], travel
+                    )
+                    ldx, ldy, ldz = ox, oy, oz
+            elif kind[j] != _PLANE:
+                if sk == _CONIC:
+                    nx = -cj * hx
+                    ny = -cj * hy
+                    nz = 1.0 - cj * (1.0 + kj) * hz
+                else:
+                    nx, ny, nz = -gxs, -gys, 1.0
                 nl = np.sqrt(nx * nx + ny * ny + nz * nz)
                 nx /= nl
                 ny /= nl
@@ -214,6 +466,36 @@ def _kernel_impl(
                     ldx -= 2.0 * cos_i * nx
                     ldy -= 2.0 * cos_i * ny
                     ldz -= 2.0 * cos_i * nz
+                elif hasph[j]:
+                    # the phase adds (m lambda / 2 pi) grad(phi) to the
+                    # tangential component of n d
+                    rr = np.sqrt(hx * hx + hy * hy)
+                    gm = pord[j] * lam / (2.0 * np.pi)
+                    dphi = 0.0
+                    for m in range(cnt[j, 3]):
+                        pw = 2 * (m + 1)
+                        dphi += pw * phase[j, m] * rr ** (pw - 1)
+                        opl += gm * phase[j, m] * rr**pw
+                    pgx, pgy = 0.0, 0.0
+                    if rr > 0.0:
+                        pgx, pgy = dphi * hx / rr, dphi * hy / rr
+                    if cos_i < 0.0:
+                        nx, ny, nz = -nx, -ny, -nz
+                    kx = n1[j] * ldx + gm * pgx
+                    ky = n1[j] * ldy + gm * pgy
+                    kz = n1[j] * ldz
+                    kn = kx * nx + ky * ny + kz * nz
+                    kx -= kn * nx
+                    ky -= kn * ny
+                    kz -= kn * nz
+                    kn2 = n2[j] * n2[j] - (kx * kx + ky * ky + kz * kz)
+                    if not (kn2 >= 0.0):
+                        ok_all = False
+                    kq = np.sqrt(kn2) if kn2 > 0.0 else 0.0
+                    ldx = (kx + kq * nx) / n2[j]
+                    ldy = (ky + kq * ny) / n2[j]
+                    ldz = (kz + kq * nz) / n2[j]
+                    ncur = n2[j]
                 else:
                     if cos_i < 0.0:
                         nx, ny, nz = -nx, -ny, -nz
@@ -292,13 +574,19 @@ _LOCK = threading.Lock()
 
 if AVAILABLE:  # pragma: no branch
     # prange is an ordinary range in the serial compilation
-    _kernel_serial = numba.njit(cache=_CACHE)(_kernel_impl)
-    _kernel_parallel = numba.njit(parallel=True, cache=_CACHE)(_kernel_impl)
+    # error_model "numpy": a division by zero gives inf or nan, as in the
+    # NumPy trace, where the kernel does not guard it
+    _sag_grad = numba.njit(cache=_CACHE, error_model="numpy")(_sag_grad_impl)
+    _signed_len = numba.njit(cache=_CACHE, error_model="numpy")(_signed_len)
+    _ideal_opl = numba.njit(cache=_CACHE, error_model="numpy")(_ideal_opl_impl)
+    _kernel_serial = numba.njit(cache=_CACHE, error_model="numpy")(_kernel_impl)
+    _kernel_parallel = numba.njit(parallel=True, cache=_CACHE, error_model="numpy")(
+        _kernel_impl
+    )
 
 
 def trace(seq, p0, d0, clip: bool):
     """(points, directions, opl, valid, image, n_image, surface_opl)."""
-    kind, c, k, origin, rot, ident, semi, ap, n1, n2 = _pack(seq)
     p0 = np.ascontiguousarray(p0, dtype=float)
     d0 = np.ascontiguousarray(d0, dtype=float)
     kernel = _kernel_parallel if len(p0) >= PARALLEL_MIN_RAYS else _kernel_serial
@@ -306,16 +594,8 @@ def trace(seq, p0, d0, clip: bool):
         pts, d, opl, valid, img, sopl = kernel(
             p0,
             d0,
-            kind,
-            c,
-            k,
-            origin,
-            rot,
-            ident,
-            semi,
-            ap,
-            n1,
-            n2,
+            *_pack(seq),
+            float(seq.wavelength),
             float(seq.surfaces[0].n_before),
             np.ascontiguousarray(seq.image_origin, dtype=float),
             np.ascontiguousarray(seq.image_rotation, dtype=float),

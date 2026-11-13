@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed (ray trace speed)
+- The compiled ray trace now handles every surface type, on lenses and
+  mirrors: even and odd aspheres, Q aspheres, XY polynomials, Zernike
+  surfaces, toroids, diffractive surfaces and ideal lenses. Before, any
+  surface other than a sphere or conic sent the whole lens to the NumPy
+  trace.
+- Q aspheres, Zernike surfaces and toroids have analytic slopes (they
+  were finite differences), so rays through them are exact to round-off.
+
+### Changed (interface)
+- The original component editor is hidden by default: the component
+  list, the optical bench, the Advanced Optimization tab and the
+  component tolerance, comparison and optimizer panels. The Lens Layout
+  tab opens first. `localStorage.setItem("kestrova.componentEditor",
+  "1")` shows them again.
+
+### Removed
+- `optics/quality.py` and `optics/advanced_opt/`, which nothing used:
+  `image_quality.py` and `global_lens.py` do their work.
+
 ### Added (CAD, layout and editor)
 - STEP and IGES export of the lens (Lens Data Editor, `/api/lens/export`
   formats `step` and `igs`): each element and mirror as a solid of

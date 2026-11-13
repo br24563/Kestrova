@@ -96,6 +96,23 @@ const ANALYSIS_TABS = [
 ] as const;
 type AnalysisTab = (typeof ANALYSIS_TABS)[number]["id"];
 
+// The original component editor is hidden: the component list, the
+// optical bench and its own optimization, tolerance and comparison panels.
+// The Lens Data Editor replaces them. To show them again, run
+//   localStorage.setItem("kestrova.componentEditor", "1")
+// in the developer console and reload.
+const SHOW_COMPONENT_EDITOR = (() => {
+  try {
+    return localStorage.getItem("kestrova.componentEditor") === "1";
+  } catch {
+    return false;
+  }
+})();
+// The Advanced Optimization tab works on the component system.
+const VISIBLE_TABS = ANALYSIS_TABS.filter(
+  (tab) => SHOW_COMPONENT_EDITOR || tab.id !== "optimize",
+);
+
 function App() {
   // Theme
   const { theme, toggleTheme } = useTheme();
@@ -115,7 +132,10 @@ function App() {
   const [projects, setProjects] = useState<SystemMetadata[]>([]);
   const [projectName, setProjectName] = useState<string>("");
   const [presets, setPresets] = useState<PresetInfo[]>([]);
-  const [analysisTab, setAnalysisTab] = useState<AnalysisTab>("ray-fan");
+  // Without the optical bench, the layout tab is the picture of the lens.
+  const [analysisTab, setAnalysisTab] = useState<AnalysisTab>(
+    SHOW_COMPONENT_EDITOR ? "ray-fan" : "layout",
+  );
   // Surface-by-surface prescription shown in the lens data editor
   // Its edits, resolves and optimizations have their own undo history.
   const lensHistory = useHistory<LensData | null>(null);
@@ -763,24 +783,26 @@ function App() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel: Component Editor + Projects */}
         <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-          <ComponentEditor
-            system={system}
-            selectedComponent={selectedComponent ?? null}
-            selectedComponentId={selectedComponentId}
-            displayUnit={displayUnit}
-            onSelectComponent={setSelectedComponentId}
-            onUpdateComponent={updateComponent}
-            onUpdateObject={updateObject}
-            onUpdateImagePlane={updateImagePlane}
-            onUpdateAnalysisSettings={updateAnalysisSettings}
-            onAddLens={addLens}
-            onAddSurface={addSurface}
-            onAddThickLens={addThickLens}
-            onAddAperture={addAperture}
-            onAddMirror={addMirror}
-            onRemoveComponent={removeComponent}
-            onReorderComponent={reorderComponent}
-          />
+          {SHOW_COMPONENT_EDITOR && (
+            <ComponentEditor
+              system={system}
+              selectedComponent={selectedComponent ?? null}
+              selectedComponentId={selectedComponentId}
+              displayUnit={displayUnit}
+              onSelectComponent={setSelectedComponentId}
+              onUpdateComponent={updateComponent}
+              onUpdateObject={updateObject}
+              onUpdateImagePlane={updateImagePlane}
+              onUpdateAnalysisSettings={updateAnalysisSettings}
+              onAddLens={addLens}
+              onAddSurface={addSurface}
+              onAddThickLens={addThickLens}
+              onAddAperture={addAperture}
+              onAddMirror={addMirror}
+              onRemoveComponent={removeComponent}
+              onReorderComponent={reorderComponent}
+            />
+          )}
 
           {/* AI Chat Panel */}
           <AIChatPanel system={system} onSystemUpdate={setSystem} />
@@ -870,18 +892,24 @@ function App() {
               </div>
             )}
           </div>
-          <OpticalBench
-            system={system}
-            rayResult={rayResult}
-            analysis={analysis}
-            displayUnit={displayUnit}
-          />
-          <div className="mx-4 mb-4 bg-white border border-gray-200 rounded-lg">
+          {SHOW_COMPONENT_EDITOR && (
+            <OpticalBench
+              system={system}
+              rayResult={rayResult}
+              analysis={analysis}
+              displayUnit={displayUnit}
+            />
+          )}
+          <div
+            className={`mx-4 mb-4 bg-white border border-gray-200 rounded-lg ${
+              SHOW_COMPONENT_EDITOR ? "" : "mt-4"
+            }`}
+          >
             <div
               className="flex flex-wrap border-b border-gray-200"
               role="tablist"
             >
-              {ANALYSIS_TABS.map((tab) => (
+              {VISIBLE_TABS.map((tab) => (
                 <button
                   key={tab.id}
                   role="tab"
@@ -944,7 +972,7 @@ function App() {
                   />
                 </>
               )}
-              {analysisTab === "optimize" && (
+              {SHOW_COMPONENT_EDITOR && analysisTab === "optimize" && (
                 <AdvancedOptimizationPanel
                   system={system}
                   displayUnit={displayUnit}
@@ -975,13 +1003,17 @@ function App() {
           <SpotDiagram analysis={analysis} displayUnit={displayUnit} />
           <DiffractionPanel system={system} displayUnit={displayUnit} />
           <SeidelPanel system={system} displayUnit={displayUnit} />
-          <TolerancePanel system={system} displayUnit={displayUnit} />
-          <ComparisonPanel system={system} displayUnit={displayUnit} />
-          <OptimizationPanel
-            system={system}
-            displayUnit={displayUnit}
-            onApplyOptimized={setSystem}
-          />
+          {SHOW_COMPONENT_EDITOR && (
+            <>
+              <TolerancePanel system={system} displayUnit={displayUnit} />
+              <ComparisonPanel system={system} displayUnit={displayUnit} />
+              <OptimizationPanel
+                system={system}
+                displayUnit={displayUnit}
+                onApplyOptimized={setSystem}
+              />
+            </>
+          )}
         </div>
       </div>
 

@@ -544,12 +544,27 @@ No small-angle approximation is made in these analyses.
 
 ### Speed
 
-Sequences made only of spheres and conics (refracting or reflecting),
-stops and dummies, in any frames, are traced by a compiled kernel
-(`optics/_fasttrace.py`, Numba) that performs the same operations as the
-NumPy trace ray by ray; small batches run serially and large ones (4096+
-rays) in parallel. Other surfaces use the NumPy trace. Without Numba, or
-with `OPTICS_NO_NUMBA=1`, everything uses NumPy and gives the same results.
+A compiled kernel (`optics/_fasttrace.py`, Numba) traces every surface
+type of the lens data editor, refracting or reflecting and in any frame.
+It performs the same operations as the NumPy trace, ray by ray. Small
+batches run serially and large ones (4096+ rays) in parallel. Without
+Numba, or with `OPTICS_NO_NUMBA=1`, everything uses NumPy and gives the
+same results.
+
+Surface slopes are analytic for every type:
+
+- **Q aspheres:** the departure is the polynomial D(x) = sum a_m Q_m(x),
+  x = (r/R)^2, evaluated with its derivative by Horner's rule.
+- **Zernike surfaces:** held as the equivalent XY polynomial. The
+  expansion is exact: rho^|m| cos(m theta) and rho^|m| sin(|m| theta) are
+  the real and imaginary parts of (u + iv)^|m|.
+- **Toroids:** the derivative of the swept conic in closed form.
+
+`tests/test_fasttrace.py` checks the kernel against the NumPy trace to
+round-off on each surface type. It checks the slopes against
+extrapolated differences of the sag, the Q sag against the Jacobi and
+Forbes-basis evaluation, and the Zernike monomials against the
+polynomials.
 
 ### Ideal (thin) lenses
 

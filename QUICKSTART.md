@@ -59,8 +59,8 @@ http://localhost:8000/docs.
 1. In the **Lens Data Editor**, click **Samples** and pick a published
    lens (the Geiser triplet is a good start), or choose a **Preset**
    from the header.
-2. Click **Resolve**. The optical bench, the analysis panel and the tabs
-   below the bench now show this lens.
+2. Click **Resolve**. The analysis panel and the tabs below the editor
+   now show this lens.
 3. Look at the **Lens Layout**, **Ray Fan**, **MTF** and **PSF** tabs.
 4. Mark radii as variables, add a constraint (for example the focal
    length) and click **Optimize**.
